@@ -1,3 +1,5 @@
 chaingo.exe
+chaingo
+dist/
 .devnet/
 *.seed

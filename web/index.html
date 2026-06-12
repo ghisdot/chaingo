@@ -35,7 +35,7 @@
     background: rgba(11,15,23,.85); backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
   }
-  nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px; }
+  nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
   .logo { font-size: 1.25rem; font-weight: 800; letter-spacing: .5px; }
   .logo span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
   nav a.link { color: var(--muted); font-size: .92rem; }
@@ -45,6 +45,11 @@
     font-size: .78rem; padding: 4px 12px; border-radius: 999px;
     border: 1px solid var(--border); color: var(--amber);
   }
+  #langBtn {
+    cursor: pointer; font-size: .82rem; font-weight: 700; padding: 5px 12px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--cyan);
+  }
+  #langBtn:hover { filter: brightness(1.2); }
 
   header { padding: 90px 0 70px; text-align: center; position: relative; overflow: hidden; }
   header::before {
@@ -81,7 +86,7 @@
     background: var(--card); border: 1px solid var(--border);
     border-radius: 14px; padding: 24px;
   }
-  .card h3 { font-size: 1.08rem; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .card h3 { font-size: 1.08rem; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .card p { color: var(--muted); font-size: .94rem; }
   .ico {
     width: 34px; height: 34px; border-radius: 9px; display: inline-flex;
@@ -154,81 +159,83 @@
 <nav>
   <div class="wrap">
     <div class="logo">Chain<span>GO</span></div>
-    <a class="link" href="#piliers">Piliers</a>
-    <a class="link" href="#fonctionnement">Comment ça marche</a>
-    <a class="link" href="#stats">Chaîne en direct</a>
-    <a class="link" href="#tokenomics">Tokenomics</a>
-    <a class="link" href="#roadmap">Feuille de route</a>
+    <a class="link" href="#piliers" data-i18n="nav1">Piliers</a>
+    <a class="link" href="#fonctionnement" data-i18n="nav2">Comment ça marche</a>
+    <a class="link" href="#stats" data-i18n="nav3">Chaîne en direct</a>
+    <a class="link" href="#tokenomics" data-i18n="nav4">Tokenomics</a>
+    <a class="link" href="#roadmap" data-i18n="nav5">Feuille de route</a>
     <a class="link" href="/v1">API</a>
     <div class="spacer"></div>
+    <button id="langBtn" onclick="toggleLang()">EN</button>
     <span class="pill">devnet v0.1</span>
   </div>
 </nav>
 
 <header>
   <div class="wrap">
-    <h1>La blockchain <span class="grad">post-quantique</span>.<br>Simple. Rapide. Déflationniste.</h1>
-    <p class="sub">
+    <h1 data-i18n="hero.h1">La blockchain <span class="grad">post-quantique</span>.<br>Simple. Rapide. Déflationniste.</h1>
+    <p class="sub" data-i18n="hero.sub">
       ChainGO protège chaque transaction avec <b>ML-DSA-65</b>, le standard de signature
       résistant aux ordinateurs quantiques (NIST FIPS 204). Des frais brûlés automatiquement,
       des tokens créés sans une ligne de code, et un réseau pair-à-pair que n'importe qui peut rejoindre.
     </p>
     <div class="badges">
-      <span class="badge">🛡️ Signatures <b>ML-DSA-65</b> partout</span>
-      <span class="badge">⚡ <b>31 000 TPS</b> mesurés en local</span>
-      <span class="badge">🔥 Burn <b>automatique</b> des frais</span>
-      <span class="badge">🪙 Tokens <b>no-code</b></span>
+      <span class="badge" data-i18n="b1">🛡️ Signatures <b>ML-DSA-65</b> partout</span>
+      <span class="badge" data-i18n="b2">⚡ <b>31 000 TPS</b> mesurés en local</span>
+      <span class="badge" data-i18n="b3">🔥 Burn <b>automatique</b> des frais</span>
+      <span class="badge" data-i18n="b4">🪙 Tokens <b>no-code</b></span>
     </div>
     <div class="ctas">
-      <a class="btn primary" href="#fonctionnement">Comprendre en 2 minutes</a>
-      <a class="btn" href="/v1">Explorer l'API</a>
+      <a class="btn primary" href="#fonctionnement" data-i18n="cta1">Comprendre en 2 minutes</a>
+      <a class="btn" href="/v1" data-i18n="cta2">Explorer l'API</a>
     </div>
   </div>
 </header>
 
 <section id="piliers">
   <div class="wrap">
-    <h2>Le projet que nous portons</h2>
-    <p class="lead">
+    <h2 data-i18n="p.h2">Le projet que nous portons</h2>
+    <p class="lead" data-i18n="p.lead">
       Les blockchains actuelles signent avec une cryptographie (ECDSA, Ed25519) que les
       ordinateurs quantiques sauront casser. ChainGO est conçue dès le premier bloc pour
       ce monde-là — sans sacrifier la vitesse ni la simplicité.
     </p>
     <div class="grid c3">
-      <div class="card">
+      <div class="card" data-i18n="p.c1">
         <h3><span class="ico">🛡️</span> Sécurité post-quantique <span class="tag live">ACTIF</span></h3>
         <p>Chaque wallet, transaction et bloc est signé en ML-DSA-65 (FIPS 204, niveau NIST 3).
         Hachage SHA3-256. Aucune courbe elliptique vulnérable au quantique, nulle part.</p>
       </div>
-      <div class="card">
+      <div class="card" data-i18n="p.c2">
         <h3><span class="ico">⚡</span> Vitesse <span class="tag live">ACTIF</span></h3>
         <p>31 000 transactions/seconde mesurées (vérification + exécution) grâce à la
         vérification parallèle sur tous les cœurs. Blocs toutes les 500 ms, confirmation
         en ~1 seconde. Option <b>tip</b> pour passer en priorité.</p>
       </div>
-      <div class="card">
+      <div class="card" data-i18n="p.c3">
         <h3><span class="ico">🔥</span> Économie déflationniste <span class="tag live">ACTIF</span></h3>
         <p>Les frais de base sont <b>détruits</b> (burn) à chaque transaction, ajustés
         automatiquement à la congestion (modèle EIP-1559). Plus le réseau est utilisé,
         plus le CGO se raréfie.</p>
       </div>
-      <div class="card">
+      <div class="card" data-i18n="p.c4">
         <h3><span class="ico">🪙</span> Tokenisation no-code <span class="tag live">ACTIF</span></h3>
         <p>N'importe qui crée son token en une commande ou un appel API — nom, supply,
         décimales, mintable ou non. 10 CGO brûlés, zéro ligne de code, zéro audit de
         contrat à payer.</p>
       </div>
-      <div class="card">
+      <div class="card" data-i18n="p.c5">
         <h3><span class="ico">🕶️</span> Anonymat renforcé <span class="tag soon">PHASE 3</span></h3>
         <p>Aujourd'hui : pseudonymat (adresses non nominatives, historique public).
         Demain : transferts confidentiels par preuves <b>zk-STARK</b> — la seule famille
         de preuves à divulgation nulle résistante au quantique — et adresses furtives.</p>
       </div>
-      <div class="card">
+      <div class="card" data-i18n="p.c6">
         <h3><span class="ico">🌐</span> Décentralisation <span class="tag live">ACTIF</span></h3>
-        <p>Réseau pair-à-pair : chaque nœud se synchronise et relaie. Devenez validateur
-        en stakant 10 000 CGO — le tirage des blocs est pondéré par le stake, et des
-        rounds de secours garantissent que la chaîne avance même si des validateurs tombent.</p>
+        <p>Réseau pair-à-pair : chaque nœud se synchronise et relaie. Validez avec
+        10 000 CGO ou <b>déléguez dès 1 CGO</b> — le tirage des blocs est pondéré par le
+        stake, et des rounds de secours garantissent que la chaîne avance même si des
+        validateurs tombent.</p>
       </div>
     </div>
   </div>
@@ -236,12 +243,12 @@
 
 <section id="fonctionnement">
   <div class="wrap">
-    <h2>Comment ça marche</h2>
-    <p class="lead">Le cycle de vie d'une transaction, sans jargon.</p>
+    <h2 data-i18n="f.h2">Comment ça marche</h2>
+    <p class="lead" data-i18n="f.lead">Le cycle de vie d'une transaction, sans jargon.</p>
     <div class="steps">
       <div class="step">
         <div class="stepnum"></div>
-        <div>
+        <div data-i18n="f.s1">
           <h3>Un wallet = une paire de clés post-quantiques</h3>
           <p>Votre wallet génère une clé ML-DSA-65. Votre adresse (<code>cg…</code>) est
           l'empreinte SHA3 de la clé publique. La clé privée reste chez vous, chiffrée
@@ -250,17 +257,17 @@
       </div>
       <div class="step">
         <div class="stepnum"></div>
-        <div>
+        <div data-i18n="f.s2">
           <h3>Vous signez votre transaction</h3>
-          <p>Transfert, création de token, stake… Vous fixez votre <b>tip</b> (pourboire
-          au validateur — enchère libre pour la priorité) et votre plafond de frais.
-          La signature prouve que c'est vous, et personne — même avec un ordinateur
+          <p>Transfert, création de token, stake, délégation… Vous fixez votre <b>tip</b>
+          (pourboire au validateur — enchère libre pour la priorité) et votre plafond de
+          frais. La signature prouve que c'est vous, et personne — même avec un ordinateur
           quantique — ne peut la falsifier.</p>
         </div>
       </div>
       <div class="step">
         <div class="stepnum"></div>
-        <div>
+        <div data-i18n="f.s3">
           <h3>Le réseau la propage et la vérifie</h3>
           <p>Votre transaction entre dans la file d'attente (mempool) et se diffuse de
           nœud en nœud. Chaque nœud revérifie la signature en parallèle sur tous ses
@@ -269,21 +276,22 @@
       </div>
       <div class="step">
         <div class="stepnum"></div>
-        <div>
+        <div data-i18n="f.s4">
           <h3>Un validateur la grave dans un bloc</h3>
           <p>Toutes les 500 ms, le consensus <b>Aurora</b> tire au sort un validateur
-          (proportionnellement à son stake) qui assemble le bloc — meilleurs tips d'abord.
-          S'il est hors-ligne, un validateur de secours prend le relais automatiquement.</p>
+          (proportionnellement à son stake + délégations) qui assemble le bloc — meilleurs
+          tips d'abord. S'il est hors-ligne, un validateur de secours prend le relais
+          automatiquement.</p>
         </div>
       </div>
       <div class="step">
         <div class="stepnum"></div>
-        <div>
-          <h3>Les frais brûlent, le validateur est récompensé</h3>
+        <div data-i18n="f.s5">
+          <h3>Les frais brûlent, validateur et délégateurs sont récompensés</h3>
           <p>Le frais de base de chaque transaction est <b>détruit pour toujours</b>
-          (déflation). Le validateur touche les tips + une émission d'environ 3 %/an
-          calculée sur le stake total. Votre transaction est finale : solde mis à jour
-          sur tous les nœuds du monde.</p>
+          (déflation). Le validateur touche les tips + une émission d'environ 3 %/an,
+          partagée au pro-rata avec ses délégateurs. Votre transaction est finale :
+          solde mis à jour sur tous les nœuds du monde.</p>
         </div>
       </div>
     </div>
@@ -292,65 +300,66 @@
 
 <section id="stats">
   <div class="wrap">
-    <h2>La chaîne, en direct</h2>
-    <p class="lead">Données lues en temps réel sur ce nœud via l'API publique.</p>
+    <h2 data-i18n="s.h2">La chaîne, en direct</h2>
+    <p class="lead" data-i18n="s.lead">Données lues en temps réel sur ce nœud via l'API publique.</p>
     <div class="stats">
-      <div class="stat"><div class="v" id="sHeight">—</div><div class="l">Hauteur de bloc</div></div>
-      <div class="stat"><div class="v" id="sSupply">—</div><div class="l">Supply totale (CGO)</div></div>
-      <div class="stat"><div class="v burn" id="sBurned">—</div><div class="l">Brûlé à jamais (CGO)</div></div>
-      <div class="stat"><div class="v" id="sBaseFee">—</div><div class="l">Base fee (CGO)</div></div>
-      <div class="stat"><div class="v" id="sValidators">—</div><div class="l">Validateurs</div></div>
-      <div class="stat"><div class="v" id="sMempool">—</div><div class="l">Tx en attente</div></div>
+      <div class="stat"><div class="v" id="sHeight">—</div><div class="l" data-i18n="s.l1">Hauteur de bloc</div></div>
+      <div class="stat"><div class="v" id="sSupply">—</div><div class="l" data-i18n="s.l2">Supply totale (CGO)</div></div>
+      <div class="stat"><div class="v burn" id="sBurned">—</div><div class="l" data-i18n="s.l3">Brûlé à jamais (CGO)</div></div>
+      <div class="stat"><div class="v" id="sBaseFee">—</div><div class="l" data-i18n="s.l4">Base fee (CGO)</div></div>
+      <div class="stat"><div class="v" id="sValidators">—</div><div class="l" data-i18n="s.l5">Validateurs</div></div>
+      <div class="stat"><div class="v" id="sMempool">—</div><div class="l" data-i18n="s.l6">Tx en attente</div></div>
     </div>
-    <div id="nodeState">Connexion au nœud…</div>
+    <div id="nodeState">…</div>
   </div>
 </section>
 
 <section id="tokenomics">
   <div class="wrap">
-    <h2>Tokenomics du CGO</h2>
-    <p class="lead">Des règles publiques, inscrites dans le bloc de genèse — pas dans du code caché.</p>
+    <h2 data-i18n="t.h2">Tokenomics du CGO</h2>
+    <p class="lead" data-i18n="t.lead">Des règles publiques, inscrites dans le bloc de genèse — pas dans du code caché.</p>
     <table>
-      <tr><th>Règle</th><th>Valeur</th><th>Pourquoi</th></tr>
-      <tr><td>Supply de genèse</td><td>1 000 000 000 CGO</td><td class="muted">9 décimales — granularité fine pour les micro-paiements</td></tr>
-      <tr><td>Max supply</td><td>aucun plafond — supply élastique</td><td class="muted">l'émission rémunère la sécurité, le burn la contrebalance : usage fort = supply qui baisse</td></tr>
-      <tr><td>Distribution (mainnet)</td><td>50 % communauté · 20 % trésorerie · 15 % équipe (vesting 4 ans) · 10 % écosystème · 5 % genèse/liquidité</td><td class="muted">communauté d'abord — pas de chaîne « one-man »</td></tr>
-      <tr><td>Émission</td><td>~3 %/an sur le stake total</td><td class="muted">rémunère ceux qui sécurisent le réseau, et seulement eux</td></tr>
-      <tr><td>Burn</td><td>frais de base + mode private + création de tokens</td><td class="muted">l'usage du réseau raréfie le CGO — contre-pression à l'émission</td></tr>
-      <tr><td>Frais</td><td>dynamiques (EIP-1559), plancher 0.0001 CGO</td><td class="muted">anti-spam auto-régulé, prévisibles via <a href="/v1/fees">/v1/fees</a></td></tr>
-      <tr><td>Staking</td><td>minimum 10 000 CGO pour valider</td><td class="muted">rendement ~3 %/an — l'incitation au holding long terme</td></tr>
-      <tr><td>Délégation</td><td>dès 1 CGO, commission 10 %</td><td class="muted">les petits holders délèguent à un validateur et partagent ses récompenses</td></tr>
-      <tr><td>Unbonding</td><td>21 jours (5 min en devnet)</td><td class="muted">les fonds qui quittent le stake restent saisissables (futur slashing)</td></tr>
+      <tr data-i18n="t.r0"><th>Règle</th><th>Valeur</th><th>Pourquoi</th></tr>
+      <tr data-i18n="t.r1"><td>Supply de genèse</td><td>1 000 000 000 CGO</td><td class="muted">9 décimales — granularité fine pour les micro-paiements</td></tr>
+      <tr data-i18n="t.r2"><td>Max supply</td><td>aucun plafond — supply élastique</td><td class="muted">l'émission rémunère la sécurité, le burn la contrebalance : usage fort = supply qui baisse</td></tr>
+      <tr data-i18n="t.r3"><td>Distribution (mainnet)</td><td>50 % communauté · 20 % trésorerie · 15 % équipe (vesting 4 ans) · 10 % écosystème · 5 % genèse/liquidité</td><td class="muted">communauté d'abord — pas de chaîne « one-man »</td></tr>
+      <tr data-i18n="t.r4"><td>Émission</td><td>~3 %/an sur le stake total</td><td class="muted">rémunère ceux qui sécurisent le réseau, et seulement eux</td></tr>
+      <tr data-i18n="t.r5"><td>Burn</td><td>frais de base + mode private + création de tokens</td><td class="muted">l'usage du réseau raréfie le CGO — contre-pression à l'émission</td></tr>
+      <tr data-i18n="t.r6"><td>Frais</td><td>dynamiques (EIP-1559), plancher 0.0001 CGO</td><td class="muted">anti-spam auto-régulé, prévisibles via <a href="/v1/fees">/v1/fees</a></td></tr>
+      <tr data-i18n="t.r7"><td>Staking</td><td>minimum 10 000 CGO pour valider</td><td class="muted">rendement ~3 %/an — l'incitation au holding long terme</td></tr>
+      <tr data-i18n="t.r8"><td>Délégation</td><td>dès 1 CGO, commission 10 %</td><td class="muted">les petits holders délèguent à un validateur et partagent ses récompenses</td></tr>
+      <tr data-i18n="t.r9"><td>Unbonding</td><td>21 jours (5 min en devnet)</td><td class="muted">les fonds qui quittent le stake restent saisissables (futur slashing)</td></tr>
     </table>
   </div>
 </section>
 
 <section id="roadmap">
   <div class="wrap">
-    <h2>Feuille de route</h2>
-    <p class="lead">Transparente, y compris sur ce qui n'existe pas encore.</p>
+    <h2 data-i18n="r.h2">Feuille de route</h2>
+    <p class="lead" data-i18n="r.lead">Transparente, y compris sur ce qui n'existe pas encore.</p>
     <div class="timeline">
-      <div class="phase done">
+      <div class="phase done" data-i18n="r.p1">
         <h3>Phase 1 — Fondations <span class="tag live">LIVRÉ</span></h3>
         <p>Chaîne post-quantique complète : consensus PoS Aurora avec rounds de secours,
-        frais EIP-1559 brûlés, staking + unbonding, tokens no-code, wallets, P2P, API REST, 31 000 TPS au bench.</p>
+        frais EIP-1559 brûlés, staking + délégation + unbonding, tokens no-code, wallets,
+        P2P, API REST, 31 000 TPS au bench.</p>
       </div>
-      <div class="phase next">
+      <div class="phase next" data-i18n="r.p2">
         <h3>Phase 2 — Consensus BFT &amp; slashing</h3>
         <p>Votes de finalité multi-validateurs (2f+1), pénalités pour validateurs malhonnêtes,
         arbre de Merkle creux, codec binaire compact.</p>
       </div>
-      <div class="phase">
+      <div class="phase" data-i18n="r.p3">
         <h3>Phase 3 — Anonymat fort</h3>
         <p>Transferts confidentiels zk-STARK (résistants au quantique) + adresses furtives.
         Le mode <i>private</i> actuel deviendra un vrai bouclier de confidentialité.</p>
       </div>
-      <div class="phase">
+      <div class="phase" data-i18n="r.p4">
         <h3>Phase 4 — Smart contracts no-code</h3>
         <p>Templates déclaratifs (vesting, escrow, multisig, DAO) déployables en un clic,
         puis VM WASM déterministe pour les développeurs.</p>
       </div>
-      <div class="phase">
+      <div class="phase" data-i18n="r.p5">
         <h3>Phase 5 — Explorateur &amp; SDK</h3>
         <p>Explorateur de blocs public, SDK JavaScript et Python, documentation interactive.</p>
       </div>
@@ -360,9 +369,9 @@
 
 <section id="demarrer">
   <div class="wrap">
-    <h2>Démarrer en 60 secondes</h2>
-    <p class="lead">Un binaire, zéro dépendance.</p>
-<pre>
+    <h2 data-i18n="d.h2">Démarrer en 60 secondes</h2>
+    <p class="lead" data-i18n="d.lead">Un binaire, zéro dépendance — Windows, Linux, macOS (et Docker pour les serveurs).</p>
+<pre data-i18n="d.pre">
 <span class="c"># Lancer un nœud devnet (validateur + faucet inclus)</span>
 <span class="k">chaingo</span> node start --dev
 
@@ -373,44 +382,151 @@
 <span class="k">chaingo</span> faucet --to alice --amount 500
 <span class="k">chaingo</span> send --from alice --to cg… --amount 42.5 --fast
 
-<span class="c"># Créer SON token, sans code</span>
+<span class="c"># Créer SON token, sans code — ou déléguer dès 1 CGO</span>
 <span class="k">chaingo</span> token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000
+<span class="k">chaingo</span> delegate --from alice --to cg… --amount 50
 </pre>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <div class="warn">⚠️ ChainGO est en phase devnet : logiciel expérimental, réseau de test.
+    <div class="warn" data-i18n="ft.warn">⚠️ ChainGO est en phase devnet : logiciel expérimental, réseau de test.
     N'y placez aucune valeur réelle. Le mode « private » est une voie réservée — l'anonymat
     fort (zk-STARK) arrive en Phase 3.</div>
-    <div>ChainGO — blockchain post-quantique open source écrite en Go.
+    <div data-i18n="ft.info">ChainGO — blockchain post-quantique open source (MIT) écrite en Go.
     Signatures ML-DSA-65 (NIST FIPS 204) · SHA3-256 · API REST : <a href="/v1">/v1</a></div>
   </div>
 </footer>
 
 <script>
-const fmt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
-const fmtFee = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 6 });
+// ---------- i18n FR/EN ----------
+// Le français est écrit dans le HTML ; il est capturé au chargement, puis
+// le dictionnaire EN remplace les blocs marqués data-i18n.
+const FR = {};
+document.querySelectorAll('[data-i18n]').forEach(el => { FR[el.dataset.i18n] = el.innerHTML; });
+
+const EN = {
+  nav1: `Pillars`, nav2: `How it works`, nav3: `Live chain`, nav4: `Tokenomics`, nav5: `Roadmap`,
+  'hero.h1': `The <span class="grad">post-quantum</span> blockchain.<br>Simple. Fast. Deflationary.`,
+  'hero.sub': `ChainGO protects every transaction with <b>ML-DSA-65</b>, the quantum-resistant signature standard (NIST FIPS 204). Automatically burned fees, tokens created without a single line of code, and a peer-to-peer network anyone can join.`,
+  b1: `🛡️ <b>ML-DSA-65</b> signatures everywhere`, b2: `⚡ <b>31,000 TPS</b> measured locally`,
+  b3: `🔥 <b>Automatic</b> fee burning`, b4: `🪙 <b>No-code</b> tokens`,
+  cta1: `Understand it in 2 minutes`, cta2: `Explore the API`,
+  'p.h2': `The project we are building`,
+  'p.lead': `Today's blockchains sign with cryptography (ECDSA, Ed25519) that quantum computers will eventually break. ChainGO is designed for that world from block one — without sacrificing speed or simplicity.`,
+  'p.c1': `<h3><span class="ico">🛡️</span> Post-quantum security <span class="tag live">LIVE</span></h3><p>Every wallet, transaction and block is signed with ML-DSA-65 (FIPS 204, NIST level 3). SHA3-256 hashing. No quantum-vulnerable elliptic curves, anywhere.</p>`,
+  'p.c2': `<h3><span class="ico">⚡</span> Speed <span class="tag live">LIVE</span></h3><p>31,000 transactions/second measured (verification + execution) thanks to parallel verification across all cores. Blocks every 500 ms, confirmation in ~1 second. Optional <b>tip</b> to jump the queue.</p>`,
+  'p.c3': `<h3><span class="ico">🔥</span> Deflationary economics <span class="tag live">LIVE</span></h3><p>Base fees are <b>destroyed</b> (burned) on every transaction, automatically adjusted to congestion (EIP-1559 model). The more the network is used, the scarcer CGO becomes.</p>`,
+  'p.c4': `<h3><span class="ico">🪙</span> No-code tokenization <span class="tag live">LIVE</span></h3><p>Anyone can create a token with one command or API call — name, supply, decimals, mintable or not. 10 CGO burned, zero lines of code, zero contract audit to pay for.</p>`,
+  'p.c5': `<h3><span class="ico">🕶️</span> Enhanced anonymity <span class="tag soon">PHASE 3</span></h3><p>Today: pseudonymity (non-nominative addresses, public history). Tomorrow: confidential transfers via <b>zk-STARK</b> proofs — the only quantum-resistant zero-knowledge family — and stealth addresses.</p>`,
+  'p.c6': `<h3><span class="ico">🌐</span> Decentralization <span class="tag live">LIVE</span></h3><p>Peer-to-peer network: every node syncs and relays. Validate with 10,000 CGO or <b>delegate from 1 CGO</b> — block proposers are drawn weighted by stake, and fallback rounds keep the chain moving even when validators go offline.</p>`,
+  'f.h2': `How it works`,
+  'f.lead': `The life of a transaction, without the jargon.`,
+  'f.s1': `<h3>A wallet = a post-quantum key pair</h3><p>Your wallet generates an ML-DSA-65 key. Your address (<code>cg…</code>) is the SHA3 fingerprint of the public key. The private key stays with you, encrypted (scrypt + AES-256-GCM).</p>`,
+  'f.s2': `<h3>You sign your transaction</h3><p>Transfer, token creation, stake, delegation… You set your <b>tip</b> (a free-market bid to the validator for priority) and your fee cap. The signature proves it's you — and nobody, even with a quantum computer, can forge it.</p>`,
+  'f.s3': `<h3>The network spreads and verifies it</h3><p>Your transaction enters the queue (mempool) and gossips from node to node. Each node re-verifies the signature in parallel across all its cores — that's what enables tens of thousands of TPS.</p>`,
+  'f.s4': `<h3>A validator seals it into a block</h3><p>Every 500 ms, the <b>Aurora</b> consensus draws a validator (proportionally to its stake + delegations) who assembles the block — best tips first. If it's offline, a backup validator takes over automatically.</p>`,
+  'f.s5': `<h3>Fees burn, validator and delegators get rewarded</h3><p>The base fee of every transaction is <b>destroyed forever</b> (deflation). The validator earns the tips + an emission of about 3%/year, shared pro-rata with its delegators. Your transaction is final: balances updated on every node in the world.</p>`,
+  's.h2': `The chain, live`,
+  's.lead': `Data read in real time from this node through the public API.`,
+  's.l1': `Block height`, 's.l2': `Total supply (CGO)`, 's.l3': `Burned forever (CGO)`,
+  's.l4': `Base fee (CGO)`, 's.l5': `Validators`, 's.l6': `Pending txs`,
+  't.h2': `CGO tokenomics`,
+  't.lead': `Public rules, written into the genesis block — not hidden in code.`,
+  't.r0': `<th>Rule</th><th>Value</th><th>Why</th>`,
+  't.r1': `<td>Genesis supply</td><td>1,000,000,000 CGO</td><td class="muted">9 decimals — fine granularity for micro-payments</td>`,
+  't.r2': `<td>Max supply</td><td>no hard cap — elastic supply</td><td class="muted">emission pays for security, burning counters it: heavy usage = shrinking supply</td>`,
+  't.r3': `<td>Distribution (mainnet)</td><td>50% community · 20% treasury · 15% team (4-year vesting) · 10% ecosystem · 5% genesis/liquidity</td><td class="muted">community first — not a "one-man chain"</td>`,
+  't.r4': `<td>Emission</td><td>~3%/year on total stake</td><td class="muted">rewards those who secure the network, and only them</td>`,
+  't.r5': `<td>Burn</td><td>base fees + private mode + token creation</td><td class="muted">network usage makes CGO scarcer — counter-pressure to emission</td>`,
+  't.r6': `<td>Fees</td><td>dynamic (EIP-1559), 0.0001 CGO floor</td><td class="muted">self-regulating anti-spam, predictable via <a href="/v1/fees">/v1/fees</a></td>`,
+  't.r7': `<td>Staking</td><td>minimum 10,000 CGO to validate</td><td class="muted">~3%/year yield — the long-term holding incentive</td>`,
+  't.r8': `<td>Delegation</td><td>from 1 CGO, 10% commission</td><td class="muted">small holders delegate to a validator and share its rewards</td>`,
+  't.r9': `<td>Unbonding</td><td>21 days (5 min on devnet)</td><td class="muted">funds leaving the stake remain seizable (future slashing)</td>`,
+  'r.h2': `Roadmap`,
+  'r.lead': `Transparent — including about what doesn't exist yet.`,
+  'r.p1': `<h3>Phase 1 — Foundations <span class="tag live">SHIPPED</span></h3><p>Complete post-quantum chain: Aurora PoS consensus with fallback rounds, burned EIP-1559 fees, staking + delegation + unbonding, no-code tokens, wallets, P2P, REST API, 31,000 TPS benchmarked.</p>`,
+  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing</h3><p>Multi-validator finality votes (2f+1), penalties for dishonest validators, sparse Merkle tree, compact binary codec.</p>`,
+  'r.p3': `<h3>Phase 3 — Strong anonymity</h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield.</p>`,
+  'r.p4': `<h3>Phase 4 — No-code smart contracts</h3><p>Declarative templates (vesting, escrow, multisig, DAO) deployable in one click, then a deterministic WASM VM for developers.</p>`,
+  'r.p5': `<h3>Phase 5 — Explorer &amp; SDKs</h3><p>Public block explorer, JavaScript and Python SDKs, interactive documentation.</p>`,
+  'd.h2': `Get started in 60 seconds`,
+  'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
+  'd.pre': `<span class="c"># Start a devnet node (validator + faucet included)</span>
+<span class="k">chaingo</span> node start --dev
+
+<span class="c"># Create a post-quantum wallet</span>
+<span class="k">chaingo</span> wallet new alice
+
+<span class="c"># Get test CGO, then transfer</span>
+<span class="k">chaingo</span> faucet --to alice --amount 500
+<span class="k">chaingo</span> send --from alice --to cg… --amount 42.5 --fast
+
+<span class="c"># Create YOUR token, no code — or delegate from 1 CGO</span>
+<span class="k">chaingo</span> token create --from alice --symbol MYTOK --name "My Token" --supply 1000000
+<span class="k">chaingo</span> delegate --from alice --to cg… --amount 50`,
+  'ft.warn': `⚠️ ChainGO is in devnet phase: experimental software, test network. Do not put real value in it. The "private" mode is a reserved lane — strong anonymity (zk-STARK) ships in Phase 3.`,
+  'ft.info': `ChainGO — open source (MIT) post-quantum blockchain written in Go. ML-DSA-65 signatures (NIST FIPS 204) · SHA3-256 · REST API: <a href="/v1">/v1</a>`,
+};
+
+const STR = {
+  fr: {
+    title: `ChainGO — La blockchain post-quantique`,
+    connecting: `Connexion au nœud…`,
+    online: (id, sig, dev) => `<span class="ok">● Nœud connecté</span> — chaîne <b>${id}</b>, signatures ${sig}${dev ? ' · mode devnet' : ''}`,
+    offline: `<span class="ko">● Nœud hors-ligne</span> — lancez <code>chaingo node start --dev</code> puis rechargez.`,
+  },
+  en: {
+    title: `ChainGO — The post-quantum blockchain`,
+    connecting: `Connecting to node…`,
+    online: (id, sig, dev) => `<span class="ok">● Node connected</span> — chain <b>${id}</b>, ${sig} signatures${dev ? ' · devnet mode' : ''}`,
+    offline: `<span class="ko">● Node offline</span> — run <code>chaingo node start --dev</code> and reload.`,
+  },
+};
+
+let lang = localStorage.getItem('cg-lang') || (navigator.language && navigator.language.startsWith('fr') ? 'fr' : 'en');
+
+function applyLang() {
+  const dict = lang === 'fr' ? FR : EN;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = dict[el.dataset.i18n];
+    if (v !== undefined) el.innerHTML = v;
+  });
+  document.documentElement.lang = lang;
+  document.title = STR[lang].title;
+  document.getElementById('langBtn').textContent = lang === 'fr' ? 'EN' : 'FR';
+  localStorage.setItem('cg-lang', lang);
+}
+
+function toggleLang() {
+  lang = lang === 'fr' ? 'en' : 'fr';
+  applyLang();
+  refresh();
+}
+
+// ---------- stats live ----------
+const fmt = () => new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 0 });
+const fmtFee = () => new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 6 });
 const base = location.protocol === 'file:' ? 'http://127.0.0.1:8545' : '';
 const $ = id => document.getElementById(id);
 
 async function refresh() {
   try {
     const st = await (await fetch(base + '/v1/status')).json();
-    $('sHeight').textContent = fmt.format(st.height);
-    $('sSupply').textContent = fmt.format(st.supply.total / 1e9);
-    $('sBurned').textContent = fmtFee.format(st.supply.burned / 1e9);
-    $('sBaseFee').textContent = fmtFee.format(st.base_fee / 1e9);
+    $('sHeight').textContent = fmt().format(st.height);
+    $('sSupply').textContent = fmt().format(st.supply.total / 1e9);
+    $('sBurned').textContent = fmtFee().format(st.supply.burned / 1e9);
+    $('sBaseFee').textContent = fmtFee().format(st.base_fee / 1e9);
     $('sValidators').textContent = st.validators;
-    $('sMempool').textContent = fmt.format(st.mempool);
-    $('nodeState').innerHTML = '<span class="ok">● Nœud connecté</span> — chaîne <b>' +
-      st.chain_id + '</b>, signatures ' + st.pq_signature +
-      (st.dev_mode ? ' · mode devnet' : '');
+    $('sMempool').textContent = fmt().format(st.mempool);
+    $('nodeState').innerHTML = STR[lang].online(st.chain_id, st.pq_signature, st.dev_mode);
   } catch (e) {
-    $('nodeState').innerHTML = '<span class="ko">● Nœud hors-ligne</span> — lancez <code>chaingo node start --dev</code> puis rechargez.';
+    $('nodeState').innerHTML = STR[lang].offline;
   }
 }
+
+applyLang();
 refresh();
 setInterval(refresh, 2000);
 </script>

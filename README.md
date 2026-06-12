@@ -1,5 +1,7 @@
 # ChainGO
 
+🇬🇧 [English version](README.en.md)
+
 Blockchain **post-quantique** écrite en Go — toutes les signatures (transactions, blocs, validateurs) utilisent **ML-DSA-65** (FIPS 204, niveau de sécurité NIST 3), le standard de signature résistant au quantique. Hachage SHA3-256.
 
 **Mesuré sur cette machine : ~31 000 TPS bout-en-bout** (vérification PQ parallèle + exécution) — objectif de 1 500 TPS dépassé ×20.
@@ -29,7 +31,18 @@ Les règles économiques vivent dans le **document de genèse** (`params`) : cha
 - **Rounds de secours** : si le proposeur élu ne produit pas dans l'intervalle de bloc (validateur hors-ligne), le round suivant désigne un autre validateur. Testé : la chaîne avance sans accroc avec 29 % du stake mort.
 - Finalité immédiate en devnet ; les votes BFT 2f+1 et le slashing arrivent en Phase 2.
 
+## Documentation
+
+- [Référence API](docs/API.md) — tous les endpoints + comment construire et signer une transaction
+- [Hébergement 24/24](docs/DEPLOYMENT.md) — VPS, systemd, Docker, HTTPS, sauvegardes
+- [Guide validateur & délégateur](docs/VALIDATOR.md)
+- [Feuille de route](ROADMAP.md) · [Contribuer](CONTRIBUTING.md) · [Sécurité](SECURITY.md)
+
 ## Démarrage rapide
+
+Multi-plateforme : le code Go compile nativement sur **Windows, Linux et macOS**
+(`go build ./cmd/chaingo`, ou `.\scripts\build-all.ps1` pour tout compiler dans `dist/`,
+ou Docker — la CI GitHub produit les binaires des 5 plateformes à chaque release).
 
 ```powershell
 go build -o chaingo.exe ./cmd/chaingo
