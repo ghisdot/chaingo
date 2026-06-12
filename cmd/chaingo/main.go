@@ -33,8 +33,10 @@ Usage :
                [--fast | --tip 0.0002] [--private] [--memo TXT] [--pass MDP] [--api URL]
   chaingo token create --from <wallet> --symbol TKN --name "Mon Token"
                --supply 1000000 [--decimals 9] [--mintable] [--pass MDP] [--api URL]
-  chaingo stake --from <wallet> --amount 1000 [--pass MDP] [--api URL]
-  chaingo unstake --from <wallet> --amount 1000 [--pass MDP] [--api URL]
+  chaingo stake --from <wallet> --amount 10000 [--pass MDP] [--api URL]
+  chaingo unstake --from <wallet> --amount 10000 [--pass MDP] [--api URL]
+  chaingo delegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
+  chaingo undelegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo bench [--txs 10000] [--senders 16]
 `
@@ -62,6 +64,10 @@ func main() {
 		err = cmdStake(os.Args[2:], types.TxStake)
 	case "unstake":
 		err = cmdStake(os.Args[2:], types.TxUnstake)
+	case "delegate":
+		err = cmdDelegate(os.Args[2:], types.TxDelegate)
+	case "undelegate":
+		err = cmdDelegate(os.Args[2:], types.TxUndelegate)
 	case "faucet":
 		err = cmdFaucet(os.Args[2:])
 	case "bench":
@@ -187,11 +193,12 @@ func cmdBalance(args []string) error {
 		return err
 	}
 	var acct struct {
-		Address   string            `json:"address"`
-		Balances  map[string]uint64 `json:"balances"`
-		Nonce     uint64            `json:"nonce"`
-		Staked    uint64            `json:"staked"`
-		Unbonding uint64            `json:"unbonding"`
+		Address     string            `json:"address"`
+		Balances    map[string]uint64 `json:"balances"`
+		Nonce       uint64            `json:"nonce"`
+		Staked      uint64            `json:"staked"`
+		Unbonding   uint64            `json:"unbonding"`
+		Delegations map[string]uint64 `json:"delegations"`
 	}
 	if err := getJSON(*api+"/v1/accounts/"+addr, &acct); err != nil {
 		return err
@@ -217,6 +224,9 @@ func cmdBalance(args []string) error {
 	}
 	if acct.Staked > 0 {
 		fmt.Printf("  %-10s %s (staké)\n", "CGO", formatAmount(acct.Staked, types.NativeDecimals))
+	}
+	for vAddr, amt := range acct.Delegations {
+		fmt.Printf("  %-10s %s (délégué à %s…)\n", "CGO", formatAmount(amt, types.NativeDecimals), vAddr[:12])
 	}
 	return nil
 }
@@ -348,6 +358,49 @@ func cmdStake(args []string, typ types.TxType) error {
 		return err
 	}
 	if typ == types.TxUnstake {
+		var fees struct {
+			UnbondingSeconds int64 `json:"unbonding_seconds"`
+		}
+		if getJSON(*api+"/v1/fees", &fees) == nil {
+			fmt.Printf("Fonds en unbonding : liquides dans ~%s (règle de la chaîne)\n",
+				(time.Duration(fees.UnbondingSeconds) * time.Second).String())
+		}
+	}
+	return nil
+}
+
+// ---------- delegate / undelegate ----------
+
+func cmdDelegate(args []string, typ types.TxType) error {
+	fs := flag.NewFlagSet(string(typ), flag.ExitOnError)
+	from := fs.String("from", "", "wallet délégateur")
+	to := fs.String("to", "", "adresse du validateur")
+	amount := fs.String("amount", "", "montant en CGO")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args)
+	if *from == "" || *to == "" || *amount == "" {
+		return fmt.Errorf("--from, --to et --amount sont requis")
+	}
+	kp, err := wallet.Load(*from, *pass)
+	if err != nil {
+		return err
+	}
+	dest, err := resolveAddress(*to)
+	if err != nil {
+		return err
+	}
+	amt, err := parseAmount(*amount, types.NativeDecimals)
+	if err != nil {
+		return err
+	}
+	tx := &types.Transaction{Type: typ, To: dest, Amount: amt}
+	if err := signAndSubmit(*api, kp, tx); err != nil {
+		return err
+	}
+	if typ == types.TxDelegate {
+		fmt.Println("Délégation active : vous touchez votre part des récompenses à chaque bloc proposé par ce validateur (moins sa commission).")
+	} else {
 		var fees struct {
 			UnbondingSeconds int64 `json:"unbonding_seconds"`
 		}

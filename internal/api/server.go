@@ -191,8 +191,8 @@ func (s *Server) Start() error {
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
-		"name":    "ChainGO API v1",
-		"docs":    "https://github.com/chaingo — voir README.md",
+		"name": "ChainGO API v1",
+		"docs": "https://github.com/chaingo — voir README.md",
 		"endpoints": []string{
 			"GET  /v1/status",
 			"GET  /v1/supply",

@@ -16,21 +16,40 @@ type Params struct {
 	TokenCreateFee     uint64 `json:"token_create_fee"`      // brûlé à la création d'un token
 	MinValidatorStake  uint64 `json:"min_validator_stake"`
 	UnbondingSeconds   int64  `json:"unbonding_seconds"`
+	// Délégation : les holders sous le stake minimum délèguent à un
+	// validateur et touchent leur part des récompenses, moins la
+	// commission du validateur.
+	MinDelegation           uint64 `json:"min_delegation"`
+	DelegationCommissionBps uint64 `json:"delegation_commission_bps"` // 1000 = 10 %
 }
 
 func DefaultParams() Params {
 	return Params{
-		BlockIntervalMs:    500,
-		MaxBlockTxs:        2000,
-		InflationRateBps:   300,
-		MinBaseFee:         100_000, // 0.0001 CGO
-		TargetBlockTxs:     1000,
-		BaseFeeChangeDenom: 8,
-		PrivacyFeeMult:     2,
-		TokenCreateFee:     10 * Unit,
-		MinValidatorStake:  10_000 * Unit,
-		UnbondingSeconds:   21 * 24 * 3600, // 21 jours
+		BlockIntervalMs:         500,
+		MaxBlockTxs:             2000,
+		InflationRateBps:        300,
+		MinBaseFee:              100_000, // 0.0001 CGO
+		TargetBlockTxs:          1000,
+		BaseFeeChangeDenom:      8,
+		PrivacyFeeMult:          2,
+		TokenCreateFee:          10 * Unit,
+		MinValidatorStake:       10_000 * Unit,
+		UnbondingSeconds:        21 * 24 * 3600, // 21 jours
+		MinDelegation:           1 * Unit,
+		DelegationCommissionBps: 1000, // 10 % pour le validateur
 	}
+}
+
+// MulDiv : a × b / c sans débordement (big.Int) — utilisé pour les
+// partages de récompenses, qui doivent être identiques sur tous les nœuds.
+func MulDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	r := new(big.Int).SetUint64(a)
+	r.Mul(r, new(big.Int).SetUint64(b))
+	r.Div(r, new(big.Int).SetUint64(c))
+	return r.Uint64()
 }
 
 const msPerYear = int64(365 * 24 * 3600 * 1000)

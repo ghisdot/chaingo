@@ -19,7 +19,8 @@ Les règles économiques vivent dans le **document de genèse** (`params`) : cha
 | Mode `private` | burn supplémentaire = 2 × base fee | v1 : voie réservée — la confidentialité forte (zk-STARK) arrive en Phase 3 |
 | Création de token | 10 CGO brûlés | anti-spam |
 | Validateurs | **stake minimum 10 000 CGO** | en dessous : transaction rejetée |
-| Unbonding | **21 jours** (mainnet) / 5 min (devnet) | les fonds retirés du stake restent gelés ; futurs slashing appliqués dessus (Phase 2) |
+| Délégation | **dès 1 CGO**, commission validateur 10 % | les petits holders délèguent à un validateur et touchent leur part des récompenses au pro-rata, à chaque bloc qu'il propose |
+| Unbonding | **21 jours** (mainnet) / 5 min (devnet) | s'applique au stake ET aux délégations retirées ; futurs slashing appliqués dessus (Phase 2) |
 | Blocs | 500 ms, max 2000 tx | défini dans la genèse, pas par nœud |
 
 ## Consensus « Aurora » (PoS)
@@ -48,10 +49,13 @@ go build -o chaingo.exe ./cmd/chaingo
 # 5. Créer un token SANS CODE
 .\chaingo.exe token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000 --mintable
 
-# 6. Devenir validateur (minimum 10 000 CGO)
+# 6. Devenir validateur (minimum 10 000 CGO)…
 .\chaingo.exe stake --from alice --amount 12000
-# … et en sortir (unbonding : 5 min en devnet, 21 j en mainnet)
+# … ou déléguer dès 1 CGO à un validateur et toucher sa part des récompenses
+.\chaingo.exe delegate --from bob --to <adresse_validateur> --amount 50
+# En sortir (unbonding : 5 min en devnet, 21 j en mainnet)
 .\chaingo.exe unstake --from alice --amount 12000
+.\chaingo.exe undelegate --from bob --to <adresse_validateur> --amount 50
 
 # Mesurer le débit local
 .\chaingo.exe bench --txs 10000

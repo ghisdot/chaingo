@@ -18,7 +18,7 @@ Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** s
 - [x] Persistance bbolt, reprise après redémarrage
 - [x] Bench : 31 078 TPS bout-en-bout (objectif 1 500 dépassé ×20)
 - [x] Site vitrine embarqué avec stats live (servi par le nœud)
-- [ ] **Délégation de stake** : déléguer dès 1 CGO à un validateur, partage des récompenses ← *en cours*
+- [x] **Délégation de stake** : déléguer dès 1 CGO à un validateur, récompenses au pro-rata (commission 10 %), unbonding au retrait
 
 ## Phase 2 — Sécurité de production
 

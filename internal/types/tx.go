@@ -20,6 +20,8 @@ const (
 	TxMint        TxType = "mint"
 	TxStake       TxType = "stake"
 	TxUnstake     TxType = "unstake"
+	TxDelegate    TxType = "delegate"   // To = validateur
+	TxUndelegate  TxType = "undelegate" // To = validateur
 )
 
 const (
@@ -136,6 +138,16 @@ func (tx *Transaction) ValidateBasic() error {
 			return errors.New("amount must be > 0")
 		}
 	case TxStake, TxUnstake:
+		if tx.Amount == 0 {
+			return errors.New("amount must be > 0")
+		}
+	case TxDelegate, TxUndelegate:
+		if !crypto.ValidAddress(tx.To) {
+			return errors.New("to must be a validator address")
+		}
+		if tx.To == tx.From {
+			return errors.New("cannot delegate to yourself (use stake)")
+		}
 		if tx.Amount == 0 {
 			return errors.New("amount must be > 0")
 		}

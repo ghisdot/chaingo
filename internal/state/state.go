@@ -19,9 +19,10 @@ type Account struct {
 	Balances map[string]uint64 `json:"balances"`
 	Nonce    uint64            `json:"nonce"`
 	Staked   uint64            `json:"staked"`
-	// Unbonding : agrégé depuis la file globale, uniquement dans les
-	// copies renvoyées par GetAccount (toujours 0 dans l'état stocké).
-	Unbonding uint64 `json:"unbonding,omitempty"`
+	// Unbonding et Delegations : agrégés depuis l'état global, uniquement
+	// dans les copies renvoyées par GetAccount (vides dans l'état stocké).
+	Unbonding   uint64            `json:"unbonding,omitempty"`
+	Delegations map[string]uint64 `json:"delegations,omitempty"`
 }
 
 type Token struct {
@@ -36,7 +37,13 @@ type Validator struct {
 	Stake          uint64 `json:"stake"`
 	BlocksProposed uint64 `json:"blocks_proposed"`
 	RewardsEarned  uint64 `json:"rewards_earned"`
+	// Délégations reçues : Delegated = somme, Delegators = détail.
+	// Le poids du validateur (tirage + émission) = Stake + Delegated.
+	Delegated  uint64            `json:"delegated,omitempty"`
+	Delegators map[string]uint64 `json:"delegators,omitempty"`
 }
+
+func (v *Validator) weight() uint64 { return v.Stake + v.Delegated }
 
 type Supply struct {
 	Total  uint64 `json:"total"`
@@ -142,6 +149,14 @@ func (s *State) GetAccount(addr string) *Account {
 			cp.Unbonding += u.Amount
 		}
 	}
+	for vAddr, v := range s.Validators {
+		if amt, ok := v.Delegators[addr]; ok {
+			if cp.Delegations == nil {
+				cp.Delegations = map[string]uint64{}
+			}
+			cp.Delegations[vAddr] = amt
+		}
+	}
 	return &cp
 }
 
@@ -203,9 +218,9 @@ func (s *State) SelectProposer(height uint64, prevHash string, round uint32) str
 	var vals []sv
 	var total uint64
 	for _, v := range s.Validators {
-		if v.Stake > 0 {
-			vals = append(vals, sv{v.Address, v.Stake})
-			total += v.Stake
+		if w := v.weight(); w > 0 {
+			vals = append(vals, sv{v.Address, w})
+			total += w
 		}
 	}
 	if total == 0 {
@@ -256,11 +271,7 @@ func (s *State) Execute(txs []*types.Transaction, proposer string, blockTime int
 	if proposer != "" {
 		reward := types.RewardPerBlock(s.totalStakedLocked(), s.Params)
 		if reward > 0 {
-			s.mintLocked(proposer, reward)
-			if v, ok := s.Validators[proposer]; ok {
-				v.BlocksProposed++
-				v.RewardsEarned += reward
-			}
+			s.distributeRewardLocked(proposer, reward)
 		}
 	}
 	s.BaseFee = types.NextBaseFee(s.BaseFee, len(applied), s.Params)
@@ -270,9 +281,48 @@ func (s *State) Execute(txs []*types.Transaction, proposer string, blockTime int
 func (s *State) totalStakedLocked() uint64 {
 	var total uint64
 	for _, v := range s.Validators {
-		total += v.Stake
+		total += v.weight()
 	}
 	return total
+}
+
+// distributeRewardLocked : partage la récompense du bloc entre le
+// validateur proposeur et ses délégateurs, au pro-rata de leur mise,
+// moins la commission du validateur. Ordre d'itération trié — le
+// résultat doit être identique sur tous les nœuds.
+func (s *State) distributeRewardLocked(proposer string, reward uint64) {
+	v, ok := s.Validators[proposer]
+	if !ok || v.Delegated == 0 {
+		s.mintLocked(proposer, reward)
+		if ok {
+			v.BlocksProposed++
+			v.RewardsEarned += reward
+		}
+		return
+	}
+	weight := v.weight()
+	delegShare := types.MulDiv(reward, v.Delegated, weight)
+	commission := types.MulDiv(delegShare, s.Params.DelegationCommissionBps, 10_000)
+	pool := delegShare - commission
+
+	addrs := make([]string, 0, len(v.Delegators))
+	for a := range v.Delegators {
+		addrs = append(addrs, a)
+	}
+	sort.Strings(addrs)
+	distributed := uint64(0)
+	for _, a := range addrs {
+		share := types.MulDiv(pool, v.Delegators[a], v.Delegated)
+		s.acct(a).Balances[types.NativeToken] += share
+		distributed += share
+	}
+	// part du validateur : sa mise propre + commission + poussière d'arrondi
+	validatorPart := reward - delegShare + commission + (pool - distributed)
+	s.acct(proposer).Balances[types.NativeToken] += validatorPart
+	s.Supply.Total += reward
+	s.Supply.Minted += reward
+	v.BlocksProposed++
+	v.RewardsEarned += validatorPart
 }
 
 func (s *State) releaseUnbondedLocked(blockTime int64) {
@@ -312,7 +362,7 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	if tx.Type == types.TxTransfer && tx.TokenID == types.NativeToken {
 		needNative += tx.Amount
 	}
-	if tx.Type == types.TxStake {
+	if tx.Type == types.TxStake || tx.Type == types.TxDelegate {
 		needNative += tx.Amount
 	}
 	if from.Balances[types.NativeToken] < needNative {
@@ -398,7 +448,55 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		})
 		v.Stake = remaining
 		if remaining == 0 {
+			// Le validateur quitte le réseau : ses délégateurs partent
+			// automatiquement en unbonding (ordre trié — déterminisme).
+			dAddrs := make([]string, 0, len(v.Delegators))
+			for a := range v.Delegators {
+				dAddrs = append(dAddrs, a)
+			}
+			sort.Strings(dAddrs)
+			for _, a := range dAddrs {
+				s.Unbonding = append(s.Unbonding, &Unbonding{
+					Address:   a,
+					Amount:    v.Delegators[a],
+					ReleaseAt: blockTime + s.Params.UnbondingSeconds*1000,
+				})
+			}
 			delete(s.Validators, tx.From)
+		}
+	case types.TxDelegate:
+		v, ok := s.Validators[tx.To]
+		if !ok {
+			return fmt.Errorf("%s is not a validator", tx.To)
+		}
+		if v.Delegators[tx.From]+tx.Amount < s.Params.MinDelegation {
+			return fmt.Errorf("delegation below minimum (%d ucgo)", s.Params.MinDelegation)
+		}
+		from.Balances[types.NativeToken] -= tx.Amount
+		if v.Delegators == nil {
+			v.Delegators = map[string]uint64{}
+		}
+		v.Delegators[tx.From] += tx.Amount
+		v.Delegated += tx.Amount
+	case types.TxUndelegate:
+		v, ok := s.Validators[tx.To]
+		if !ok || v.Delegators[tx.From] < tx.Amount {
+			return errors.New("insufficient delegation to this validator")
+		}
+		remaining := v.Delegators[tx.From] - tx.Amount
+		if remaining != 0 && remaining < s.Params.MinDelegation {
+			return fmt.Errorf("either undelegate everything or keep at least %d ucgo", s.Params.MinDelegation)
+		}
+		s.Unbonding = append(s.Unbonding, &Unbonding{
+			Address:   tx.From,
+			Amount:    tx.Amount,
+			ReleaseAt: blockTime + s.Params.UnbondingSeconds*1000,
+		})
+		v.Delegated -= tx.Amount
+		if remaining == 0 {
+			delete(v.Delegators, tx.From)
+		} else {
+			v.Delegators[tx.From] = remaining
 		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)

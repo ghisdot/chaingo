@@ -277,14 +277,16 @@ func (n *Node) Fees() map[string]any {
 	bf := n.st.GetBaseFee()
 	p := n.st.GetParams()
 	return map[string]any{
-		"base_fee":            bf,
-		"suggested_max_base":  bf * 2, // marge contre les hausses entre signature et inclusion
-		"suggested_tip":       types.SuggestedTip,
-		"fast_tip":            types.SuggestedTip * 4,
-		"private_extra_burn":  bf * p.PrivacyFeeMult,
-		"token_create_fee":    p.TokenCreateFee,
-		"min_validator_stake": p.MinValidatorStake,
-		"unbonding_seconds":   p.UnbondingSeconds,
+		"base_fee":                  bf,
+		"suggested_max_base":        bf * 2, // marge contre les hausses entre signature et inclusion
+		"suggested_tip":             types.SuggestedTip,
+		"fast_tip":                  types.SuggestedTip * 4,
+		"private_extra_burn":        bf * p.PrivacyFeeMult,
+		"token_create_fee":          p.TokenCreateFee,
+		"min_validator_stake":       p.MinValidatorStake,
+		"unbonding_seconds":         p.UnbondingSeconds,
+		"min_delegation":            p.MinDelegation,
+		"delegation_commission_bps": p.DelegationCommissionBps,
 	}
 }
 
@@ -338,15 +340,15 @@ func (n *Node) GetTx(hash string) (*types.Transaction, uint64, bool) {
 	return nil, 0, false
 }
 
-func (n *Node) GetAccount(addr string) *state.Account  { return n.st.GetAccount(addr) }
-func (n *Node) Validators() []*state.Validator         { return n.st.ListValidators() }
-func (n *Node) Tokens() []*state.Token                 { return n.st.ListTokens() }
-func (n *Node) GetToken(sym string) *state.Token       { return n.st.GetToken(sym) }
-func (n *Node) MempoolSize() int                       { return n.pool.Size() }
-func (n *Node) SupplyInfo() state.Supply               { return n.st.GetSupply() }
-func (n *Node) Height() uint64                         { return n.st.GetHeight() }
-func (n *Node) IsDev() bool                            { return n.cfg.Dev }
-func (n *Node) GenesisDoc() []byte                     { return n.gen.Bytes() }
+func (n *Node) GetAccount(addr string) *state.Account { return n.st.GetAccount(addr) }
+func (n *Node) Validators() []*state.Validator        { return n.st.ListValidators() }
+func (n *Node) Tokens() []*state.Token                { return n.st.ListTokens() }
+func (n *Node) GetToken(sym string) *state.Token      { return n.st.GetToken(sym) }
+func (n *Node) MempoolSize() int                      { return n.pool.Size() }
+func (n *Node) SupplyInfo() state.Supply              { return n.st.GetSupply() }
+func (n *Node) Height() uint64                        { return n.st.GetHeight() }
+func (n *Node) IsDev() bool                           { return n.cfg.Dev }
+func (n *Node) GenesisDoc() []byte                    { return n.gen.Bytes() }
 
 func (n *Node) FaucetSend(to string, amount uint64) (string, error) {
 	if n.faucet == nil {
