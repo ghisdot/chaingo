@@ -1,0 +1,113 @@
+# ChainGO
+
+Blockchain **post-quantique** écrite en Go — toutes les signatures (transactions, blocs, validateurs) utilisent **ML-DSA-65** (FIPS 204, niveau de sécurité NIST 3), le standard de signature résistant au quantique. Hachage SHA3-256.
+
+**Mesuré sur cette machine : ~31 000 TPS bout-en-bout** (vérification PQ parallèle + exécution) — objectif de 1 500 TPS dépassé ×20.
+
+## Les règles de la chaîne (décidées, pas codées en dur)
+
+Les règles économiques vivent dans le **document de genèse** (`params`) : chaque réseau ChainGO choisit les siennes. Valeurs par défaut (`types.DefaultParams()`) :
+
+| Règle | Valeur | Détail |
+|---|---|---|
+| Supply à la genèse | **1 milliard CGO** | 9 décimales (1 CGO = 10⁹ ucgo) |
+| Max supply | **aucun plafond dur** | supply élastique : l'émission (~3 %/an sur le stake) est contrebalancée par le burn — avec un réseau actif, la supply diminue |
+| Distribution genèse (mainnet) | **communauté d'abord** | 50 % communauté (airdrops testnet, programmes d'adoption), 20 % trésorerie, 15 % créateur/équipe (vesting 4 ans), 10 % écosystème, 5 % validateurs genèse + liquidité |
+| Émission | **~3 %/an sur le stake total** | minté au proposeur de chaque bloc ; le tirage étant pondéré par le stake, le rendement attendu est ~3 %/an pour chaque validateur |
+| Frais | **EIP-1559 dynamiques** | base fee ajusté à la congestion (cible 1000 tx/bloc, ±12.5 % max par bloc, plancher 0.0001 CGO) et **brûlé** ; tip libre au validateur (marché) |
+| Burn | automatique | base fee + surcoût `private` + frais de création de token → la chaîne devient déflationniste quand l'usage dépasse l'émission |
+| Mode `private` | burn supplémentaire = 2 × base fee | v1 : voie réservée — la confidentialité forte (zk-STARK) arrive en Phase 3 |
+| Création de token | 10 CGO brûlés | anti-spam |
+| Validateurs | **stake minimum 10 000 CGO** | en dessous : transaction rejetée |
+| Unbonding | **21 jours** (mainnet) / 5 min (devnet) | les fonds retirés du stake restent gelés ; futurs slashing appliqués dessus (Phase 2) |
+| Blocs | 500 ms, max 2000 tx | défini dans la genèse, pas par nœud |
+
+## Consensus « Aurora » (PoS)
+
+- Proposeur tiré au sort **pondéré par le stake**, seedé par `(hash précédent, hauteur, round)` — déterministe sur tous les nœuds.
+- **Rounds de secours** : si le proposeur élu ne produit pas dans l'intervalle de bloc (validateur hors-ligne), le round suivant désigne un autre validateur. Testé : la chaîne avance sans accroc avec 29 % du stake mort.
+- Finalité immédiate en devnet ; les votes BFT 2f+1 et le slashing arrivent en Phase 2.
+
+## Démarrage rapide
+
+```powershell
+go build -o chaingo.exe ./cmd/chaingo
+
+# 1. Lancer un devnet (génère validateur + faucet)
+.\chaingo.exe node start --dev
+
+# 2. Créer un wallet (clés ML-DSA-65)
+.\chaingo.exe wallet new alice
+
+# 3. Se financer via le faucet devnet
+.\chaingo.exe faucet --to alice --amount 500
+
+# 4. Transférer — tip par défaut, --fast (tip x4) ou --tip libre
+.\chaingo.exe send --from alice --to bob --amount 42.5 --fast --memo "hello"
+
+# 5. Créer un token SANS CODE
+.\chaingo.exe token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000 --mintable
+
+# 6. Devenir validateur (minimum 10 000 CGO)
+.\chaingo.exe stake --from alice --amount 12000
+# … et en sortir (unbonding : 5 min en devnet, 21 j en mainnet)
+.\chaingo.exe unstake --from alice --amount 12000
+
+# Mesurer le débit local
+.\chaingo.exe bench --txs 10000
+```
+
+### Rejoindre un réseau (multi-nœuds)
+
+```powershell
+.\chaingo.exe node start --datadir .\node2 --api 127.0.0.1:8546 --p2p 127.0.0.1:9001 `
+    --genesis-url http://127.0.0.1:8545/v1/genesis --peers 127.0.0.1:9000
+```
+
+Le nouveau nœud récupère la genèse (et donc les règles), se synchronise par lots, puis suit les blocs en gossip. Sans clé validateur il sert l'API et relaie ; avec `--validator-seed` et du stake il propose des blocs.
+
+## API REST (`http://localhost:8545/v1`)
+
+| Méthode | Route | Description |
+|---|---|---|
+| GET | `/v1/status` | hauteur, chain_id, pairs, supply, base fee, **params de la chaîne** |
+| GET | `/v1/fees` | base fee courant, max conseillé, tips suggérés, coûts (token, stake min, unbonding) |
+| GET | `/v1/supply` | total / minté / **brûlé** (+ format lisible) |
+| GET | `/v1/blocks?limit=20` | derniers blocs |
+| GET | `/v1/blocks/{hauteur\|latest}` | un bloc |
+| POST | `/v1/tx` | soumettre une tx signée ML-DSA-65 |
+| GET | `/v1/tx/{hash}` | statut + bloc d'inclusion |
+| GET | `/v1/accounts/{adresse}` | soldes, nonce, stake, **unbonding** |
+| GET | `/v1/validators` | set de validateurs (stake, blocs, récompenses) |
+| GET | `/v1/tokens` · `/v1/tokens/{symbole}` | registre des tokens no-code |
+| GET | `/v1/mempool` | taille de la file |
+| GET | `/v1/genesis` | document de genèse (pour rejoindre le réseau) |
+| POST | `/v1/dev/faucet` | `{address, amount}` — devnet uniquement |
+| POST | `/v1/dev/wallet` | génère un wallet — devnet uniquement |
+
+Construire une tx côté client : `GET /v1/fees` → remplir `max_base_fee` (plafond accepté) et `tip` (enchère), signer en ML-DSA-65, `POST /v1/tx`.
+
+## Architecture
+
+```
+cmd/chaingo/          CLI : node, wallet, send, token, stake, faucet, bench
+internal/crypto/      ML-DSA-65 (cloudflare/circl) + SHA3-256, adresses cg…
+internal/types/       Transaction (5 types), Block, Merkle, Params (règles)
+internal/state/       comptes, tokens, validateurs, unbonding, supply, base fee
+internal/mempool/     file ordonnée par tip (marché), chaînes de nonces
+internal/consensus/   moteur PoS Aurora : production, validation, rounds de secours
+internal/p2p/         gossip TCP : hello/tx/block/get_blocks
+internal/store/       persistance bbolt : blocs, index des tx, état
+internal/api/         serveur REST
+internal/wallet/      keystore scrypt + AES-256-GCM
+internal/genesis/     document de genèse (chain_id, params, allocations)
+```
+
+## Limites v1 assumées & feuille de route
+
+La v1 est un **devnet honnête** : rapide, post-quantique, complet fonctionnellement, mais pas encore prêt pour de la valeur réelle.
+
+- **Phase 2 — consensus BFT complet** : votes de finalité multi-validateurs (2f+1), **slashing** (les fonds en unbonding y sont déjà préparés), fork-choice ; arbre de Merkle creux pour la racine d'état (actuellement O(n) par bloc) ; codec binaire compact (les signatures ML-DSA font 3,3 Ko — le JSON+base64 limite la bande passante réseau).
+- **Phase 3 — confidentialité réelle** : le flag `--private` deviendra des transferts confidentiels à base de preuves **zk-STARK** (résistantes au quantique, contrairement aux ring signatures classiques) + adresses furtives.
+- **Phase 4 — smart contracts no-code** : moteur de templates déclaratifs (vesting, escrow, multisig, DAO) déployables via l'API, puis VM WASM déterministe.
+- **Phase 5 — explorateur web + SDK** JS/Python sur l'API existante.
