@@ -20,6 +20,7 @@ Les règles économiques vivent dans le **document de genèse** (`params`) : cha
 | Burn | automatique | base fee + surcoût `private` + frais de création de token → la chaîne devient déflationniste quand l'usage dépasse l'émission |
 | Mode `private` | burn supplémentaire = 2 × base fee | v1 : voie réservée — la confidentialité forte (zk-STARK) arrive en Phase 3 |
 | Création de token | 10 CGO brûlés | anti-spam |
+| Smart contracts no-code | **vesting + escrow**, 1 CGO brûlé à la création | templates natifs paramétrés — aucun code à écrire ni auditer ; multisig/DAO en Phase 4 |
 | Validateurs | **stake minimum 10 000 CGO** | en dessous : transaction rejetée |
 | Délégation | **dès 1 CGO**, commission validateur 10 % | les petits holders délèguent à un validateur et touchent leur part des récompenses au pro-rata, à chaque bloc qu'il propose |
 | Unbonding | **21 jours** (mainnet) / 5 min (devnet) | s'applique au stake ET aux délégations retirées ; futurs slashing appliqués dessus (Phase 2) |
@@ -61,6 +62,12 @@ go build -o chaingo.exe ./cmd/chaingo
 
 # 5. Créer un token SANS CODE
 .\chaingo.exe token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000 --mintable
+
+# 5bis. Smart contracts SANS CODE : vesting (déblocage progressif) et escrow (séquestre)
+.\chaingo.exe contract vesting --from alice --beneficiary <adresse> --amount 100 --duration 720h
+.\chaingo.exe contract escrow --from alice --seller <adresse> --amount 50 [--arbiter <adresse>]
+.\chaingo.exe contract claim --from bob --id <contrat>      # le bénéficiaire récupère la part débloquée
+.\chaingo.exe contract release --from alice --id <contrat>  # l'acheteur libère le séquestre
 
 # 6. Devenir validateur (minimum 10 000 CGO)…
 .\chaingo.exe stake --from alice --amount 12000

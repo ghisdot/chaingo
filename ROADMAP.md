@@ -39,8 +39,11 @@ Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** s
 
 ## Phase 4 — Smart contracts no-code
 
-- [ ] Templates déclaratifs : vesting, escrow, multisig, DAO
-- [ ] Déploiement en un appel API / une commande
+- [x] **Templates vesting + escrow** (livrés en avance, juin 2026) : fonds verrouillés
+      on-chain, déblocage linéaire à l'horloge des blocs / séquestre acheteur-vendeur
+      avec arbitre optionnel — une commande, zéro code
+- [x] Déploiement en un appel API / une commande (`chaingo contract …`)
+- [ ] Templates multisig et DAO
 - [ ] VM WASM déterministe pour les développeurs
 
 ## Phase 5 — Écosystème

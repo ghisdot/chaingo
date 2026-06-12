@@ -22,7 +22,36 @@ const (
 	TxUnstake     TxType = "unstake"
 	TxDelegate    TxType = "delegate"   // To = validateur
 	TxUndelegate  TxType = "undelegate" // To = validateur
+
+	// Smart contracts no-code : des templates natifs, paramétrés à la
+	// création — aucun code à écrire ni à auditer.
+	TxContractCreate TxType = "contract_create"
+	TxContractExec   TxType = "contract_exec"
 )
+
+// Templates de contrats disponibles.
+const (
+	TemplateVesting = "vesting" // fonds débloqués linéairement vers un bénéficiaire
+	TemplateEscrow  = "escrow"  // séquestre acheteur/vendeur, arbitre optionnel
+)
+
+// Actions exécutables sur un contrat.
+const (
+	ActionClaim   = "claim"   // vesting : le bénéficiaire récupère la part débloquée
+	ActionRelease = "release" // escrow : libère les fonds vers le vendeur
+	ActionRefund  = "refund"  // escrow : rembourse l'acheteur
+)
+
+type ContractParams struct {
+	Template    string `json:"template"`
+	TokenID     string `json:"token_id"`
+	Amount      uint64 `json:"amount"`
+	Beneficiary string `json:"beneficiary,omitempty"` // vesting
+	StartMs     int64  `json:"start_ms,omitempty"`    // vesting : début du déblocage
+	EndMs       int64  `json:"end_ms,omitempty"`      // vesting : 100 % débloqué
+	Seller      string `json:"seller,omitempty"`      // escrow
+	Arbiter     string `json:"arbiter,omitempty"`     // escrow (optionnel)
+}
 
 const (
 	NativeToken    = "CGO"
@@ -58,8 +87,12 @@ type Transaction struct {
 	Private    bool         `json:"private,omitempty"`
 	Memo       string       `json:"memo,omitempty"`
 	Token      *TokenParams `json:"token,omitempty"`
-	Timestamp  int64        `json:"timestamp"`
-	Signature  []byte       `json:"signature,omitempty"`
+	// Smart contracts no-code :
+	Contract   *ContractParams `json:"contract,omitempty"`    // contract_create
+	ContractID string          `json:"contract_id,omitempty"` // contract_exec
+	Action     string          `json:"action,omitempty"`      // contract_exec
+	Timestamp  int64           `json:"timestamp"`
+	Signature  []byte          `json:"signature,omitempty"`
 }
 
 // SigningBytes returns the canonical bytes covered by the signature
@@ -150,6 +183,44 @@ func (tx *Transaction) ValidateBasic() error {
 		}
 		if tx.Amount == 0 {
 			return errors.New("amount must be > 0")
+		}
+	case TxContractCreate:
+		c := tx.Contract
+		if c == nil {
+			return errors.New("contract params required")
+		}
+		if c.TokenID == "" || c.Amount == 0 {
+			return errors.New("contract token_id and amount required")
+		}
+		switch c.Template {
+		case TemplateVesting:
+			if !crypto.ValidAddress(c.Beneficiary) {
+				return errors.New("vesting: invalid beneficiary address")
+			}
+			if c.StartMs <= 0 || c.EndMs <= c.StartMs {
+				return errors.New("vesting: end_ms must be after start_ms (> 0)")
+			}
+		case TemplateEscrow:
+			if !crypto.ValidAddress(c.Seller) {
+				return errors.New("escrow: invalid seller address")
+			}
+			if c.Seller == tx.From {
+				return errors.New("escrow: seller must differ from buyer")
+			}
+			if c.Arbiter != "" && !crypto.ValidAddress(c.Arbiter) {
+				return errors.New("escrow: invalid arbiter address")
+			}
+		default:
+			return fmt.Errorf("unknown contract template %q (vesting|escrow)", c.Template)
+		}
+	case TxContractExec:
+		if tx.ContractID == "" {
+			return errors.New("contract_id required")
+		}
+		switch tx.Action {
+		case ActionClaim, ActionRelease, ActionRefund:
+		default:
+			return fmt.Errorf("unknown action %q (claim|release|refund)", tx.Action)
 		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)

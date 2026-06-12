@@ -37,6 +37,12 @@ Usage :
   chaingo unstake --from <wallet> --amount 10000 [--pass MDP] [--api URL]
   chaingo delegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
   chaingo undelegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
+  chaingo contract vesting --from <wallet> --beneficiary <adresse> --amount 100
+               [--token CGO] [--start +0h] [--duration 720h] [--pass MDP] [--api URL]
+  chaingo contract escrow --from <wallet> --seller <adresse> --amount 100
+               [--token CGO] [--arbiter <adresse>] [--pass MDP] [--api URL]
+  chaingo contract claim|release|refund --from <wallet> --id <contrat> [--pass MDP] [--api URL]
+  chaingo contract list [--api URL]
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo bench [--txs 10000] [--senders 16]
 `
@@ -68,6 +74,8 @@ func main() {
 		err = cmdDelegate(os.Args[2:], types.TxDelegate)
 	case "undelegate":
 		err = cmdDelegate(os.Args[2:], types.TxUndelegate)
+	case "contract":
+		err = cmdContract(os.Args[2:])
 	case "faucet":
 		err = cmdFaucet(os.Args[2:])
 	case "bench":
@@ -410,6 +418,120 @@ func cmdDelegate(args []string, typ types.TxType) error {
 		}
 	}
 	return nil
+}
+
+// ---------- smart contracts no-code ----------
+
+func cmdContract(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage : chaingo contract vesting|escrow|claim|release|refund|list")
+	}
+	sub := args[0]
+	fs := flag.NewFlagSet("contract "+sub, flag.ExitOnError)
+	from := fs.String("from", "", "wallet")
+	amount := fs.String("amount", "", "montant")
+	token := fs.String("token", types.NativeToken, "token verrouillé")
+	beneficiary := fs.String("beneficiary", "", "bénéficiaire (vesting)")
+	start := fs.String("start", "+0h", "début du déblocage, relatif (+24h) — vesting")
+	duration := fs.Duration("duration", 720*time.Hour, "durée du déblocage linéaire — vesting")
+	seller := fs.String("seller", "", "vendeur (escrow)")
+	arbiter := fs.String("arbiter", "", "arbitre optionnel (escrow)")
+	id := fs.String("id", "", "identifiant du contrat (claim/release/refund)")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args[1:])
+
+	switch sub {
+	case "list":
+		var list []map[string]any
+		if err := getJSON(*api+"/v1/contracts", &list); err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			fmt.Println("aucun contrat sur la chaîne")
+			return nil
+		}
+		for _, c := range list {
+			fmt.Printf("%-12s %-8s %-9s %s\n", c["template"], c["token_id"], c["status"], c["id"])
+		}
+		return nil
+
+	case "vesting", "escrow":
+		if *from == "" || *amount == "" {
+			return fmt.Errorf("--from et --amount sont requis")
+		}
+		kp, err := wallet.Load(*from, *pass)
+		if err != nil {
+			return err
+		}
+		dec := uint8(types.NativeDecimals)
+		if *token != types.NativeToken {
+			var t struct {
+				Decimals uint8 `json:"decimals"`
+			}
+			if err := getJSON(*api+"/v1/tokens/"+*token, &t); err != nil {
+				return fmt.Errorf("token %s : %w", *token, err)
+			}
+			dec = t.Decimals
+		}
+		amt, err := parseAmount(*amount, dec)
+		if err != nil {
+			return err
+		}
+		cp := &types.ContractParams{Template: sub, TokenID: *token, Amount: amt}
+		if sub == "vesting" {
+			if *beneficiary == "" {
+				return fmt.Errorf("--beneficiary est requis pour un vesting")
+			}
+			dest, err := resolveAddress(*beneficiary)
+			if err != nil {
+				return err
+			}
+			delay, err := time.ParseDuration(strings.TrimPrefix(*start, "+"))
+			if err != nil {
+				return fmt.Errorf("--start doit être une durée relative (ex : +24h) : %w", err)
+			}
+			cp.Beneficiary = dest
+			cp.StartMs = time.Now().Add(delay).UnixMilli()
+			cp.EndMs = cp.StartMs + duration.Milliseconds()
+			fmt.Printf("Vesting : %s %s vers %s, déblocage linéaire sur %s\n", *amount, *token, dest, *duration)
+		} else {
+			if *seller == "" {
+				return fmt.Errorf("--seller est requis pour un escrow")
+			}
+			dest, err := resolveAddress(*seller)
+			if err != nil {
+				return err
+			}
+			cp.Seller = dest
+			if *arbiter != "" {
+				if cp.Arbiter, err = resolveAddress(*arbiter); err != nil {
+					return err
+				}
+			}
+			fmt.Printf("Escrow : %s %s séquestrés pour %s\n", *amount, *token, dest)
+		}
+		tx := &types.Transaction{Type: types.TxContractCreate, Contract: cp}
+		if err := signAndSubmit(*api, kp, tx); err != nil {
+			return err
+		}
+		fmt.Printf("ID du contrat : %s\n", tx.Hash())
+		return nil
+
+	case "claim", "release", "refund":
+		if *from == "" || *id == "" {
+			return fmt.Errorf("--from et --id sont requis")
+		}
+		kp, err := wallet.Load(*from, *pass)
+		if err != nil {
+			return err
+		}
+		tx := &types.Transaction{Type: types.TxContractExec, ContractID: *id, Action: sub}
+		return signAndSubmit(*api, kp, tx)
+
+	default:
+		return fmt.Errorf("sous-commande inconnue %q (vesting|escrow|claim|release|refund|list)", sub)
+	}
 }
 
 // ---------- faucet ----------

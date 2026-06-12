@@ -23,6 +23,8 @@ type Backend interface {
 	Validators() []*state.Validator
 	Tokens() []*state.Token
 	GetToken(sym string) *state.Token
+	Contracts() []*state.Contract
+	GetContract(id string) *state.Contract
 	MempoolSize() int
 	SupplyInfo() state.Supply
 	Fees() map[string]any
@@ -136,6 +138,17 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/fees", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, s.b.Fees())
 	})
+	mux.HandleFunc("GET /v1/contracts", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, s.b.Contracts())
+	})
+	mux.HandleFunc("GET /v1/contracts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		c := s.b.GetContract(r.PathValue("id"))
+		if c == nil {
+			writeErr(w, 404, "contract not found")
+			return
+		}
+		writeJSON(w, 200, c)
+	})
 	mux.HandleFunc("GET /v1/genesis", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(s.b.GenesisDoc())
@@ -205,6 +218,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			"GET  /v1/tokens",
 			"GET  /v1/tokens/{symbol}",
 			"GET  /v1/fees                     (base fee EIP-1559 + tips suggérés)",
+			"GET  /v1/contracts                (smart contracts no-code)",
+			"GET  /v1/contracts/{id}",
 			"GET  /v1/mempool",
 			"GET  /v1/genesis",
 			"POST /v1/dev/faucet               (devnet)",

@@ -287,6 +287,7 @@ func (n *Node) Fees() map[string]any {
 		"unbonding_seconds":         p.UnbondingSeconds,
 		"min_delegation":            p.MinDelegation,
 		"delegation_commission_bps": p.DelegationCommissionBps,
+		"contract_create_fee":       p.ContractCreateFee,
 	}
 }
 
@@ -344,6 +345,8 @@ func (n *Node) GetAccount(addr string) *state.Account { return n.st.GetAccount(a
 func (n *Node) Validators() []*state.Validator        { return n.st.ListValidators() }
 func (n *Node) Tokens() []*state.Token                { return n.st.ListTokens() }
 func (n *Node) GetToken(sym string) *state.Token      { return n.st.GetToken(sym) }
+func (n *Node) Contracts() []*state.Contract          { return n.st.ListContracts() }
+func (n *Node) GetContract(id string) *state.Contract { return n.st.GetContract(id) }
 func (n *Node) MempoolSize() int                      { return n.pool.Size() }
 func (n *Node) SupplyInfo() state.Supply              { return n.st.GetSupply() }
 func (n *Node) Height() uint64                        { return n.st.GetHeight() }

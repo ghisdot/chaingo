@@ -59,11 +59,31 @@ type Unbonding struct {
 	ReleaseAt int64  `json:"release_at"` // ms epoch
 }
 
+// Contract : instance d'un template no-code. Les fonds sont verrouillés
+// dans le contrat à la création (déduits du créateur) et libérés par les
+// actions — jamais par du code arbitraire.
+type Contract struct {
+	ID          string `json:"id"` // hash de la tx de création
+	Template    string `json:"template"`
+	Creator     string `json:"creator"`
+	TokenID     string `json:"token_id"`
+	Amount      uint64 `json:"amount"`   // total verrouillé
+	Released    uint64 `json:"released"` // déjà libéré
+	Beneficiary string `json:"beneficiary,omitempty"`
+	StartMs     int64  `json:"start_ms,omitempty"`
+	EndMs       int64  `json:"end_ms,omitempty"`
+	Seller      string `json:"seller,omitempty"`
+	Arbiter     string `json:"arbiter,omitempty"`
+	Status      string `json:"status"` // active | completed | refunded
+	CreatedAt   uint64 `json:"created_at_height"`
+}
+
 type State struct {
 	mu         sync.RWMutex
 	Accounts   map[string]*Account   `json:"accounts"`
 	Tokens     map[string]*Token     `json:"tokens"`
 	Validators map[string]*Validator `json:"validators"`
+	Contracts  map[string]*Contract  `json:"contracts"`
 	Unbonding  []*Unbonding          `json:"unbonding"`
 	Supply     Supply                `json:"supply"`
 	Params     types.Params          `json:"params"`
@@ -77,6 +97,7 @@ func New() *State {
 		Accounts:   map[string]*Account{},
 		Tokens:     map[string]*Token{},
 		Validators: map[string]*Validator{},
+		Contracts:  map[string]*Contract{},
 	}
 }
 
@@ -188,6 +209,29 @@ func (s *State) ListTokens() []*Token {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Symbol < out[j].Symbol })
 	return out
+}
+
+func (s *State) ListContracts() []*Contract {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Contract, 0, len(s.Contracts))
+	for _, c := range s.Contracts {
+		cp := *c
+		out = append(out, &cp)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+func (s *State) GetContract(id string) *Contract {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.Contracts[id]
+	if !ok {
+		return nil
+	}
+	cp := *c
+	return &cp
 }
 
 func (s *State) GetToken(sym string) *Token {
@@ -357,6 +401,9 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	if tx.Type == types.TxCreateToken {
 		burn += s.Params.TokenCreateFee
 	}
+	if tx.Type == types.TxContractCreate {
+		burn += s.Params.ContractCreateFee
+	}
 	fee := burn + tx.Tip
 	needNative := fee
 	if tx.Type == types.TxTransfer && tx.TokenID == types.NativeToken {
@@ -364,6 +411,9 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	}
 	if tx.Type == types.TxStake || tx.Type == types.TxDelegate {
 		needNative += tx.Amount
+	}
+	if tx.Type == types.TxContractCreate && tx.Contract.TokenID == types.NativeToken {
+		needNative += tx.Contract.Amount
 	}
 	if from.Balances[types.NativeToken] < needNative {
 		return errors.New("insufficient CGO balance for amount + fees")
@@ -498,6 +548,81 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		} else {
 			v.Delegators[tx.From] = remaining
 		}
+	case types.TxContractCreate:
+		c := tx.Contract
+		if c.TokenID != types.NativeToken {
+			if _, ok := s.Tokens[c.TokenID]; !ok {
+				return fmt.Errorf("unknown token %q", c.TokenID)
+			}
+			if from.Balances[c.TokenID] < c.Amount {
+				return fmt.Errorf("insufficient %s balance to lock", c.TokenID)
+			}
+		}
+		// Les fonds quittent le créateur et sont verrouillés dans le contrat.
+		from.Balances[c.TokenID] -= c.Amount
+		id := tx.Hash()
+		s.Contracts[id] = &Contract{
+			ID:          id,
+			Template:    c.Template,
+			Creator:     tx.From,
+			TokenID:     c.TokenID,
+			Amount:      c.Amount,
+			Beneficiary: c.Beneficiary,
+			StartMs:     c.StartMs,
+			EndMs:       c.EndMs,
+			Seller:      c.Seller,
+			Arbiter:     c.Arbiter,
+			Status:      "active",
+			CreatedAt:   s.Height + 1,
+		}
+	case types.TxContractExec:
+		c, ok := s.Contracts[tx.ContractID]
+		if !ok {
+			return fmt.Errorf("unknown contract %q", tx.ContractID)
+		}
+		if c.Status != "active" {
+			return fmt.Errorf("contract is %s", c.Status)
+		}
+		switch {
+		case c.Template == types.TemplateVesting && tx.Action == types.ActionClaim:
+			if tx.From != c.Beneficiary {
+				return errors.New("only the beneficiary can claim")
+			}
+			// Déblocage linéaire entre StartMs et EndMs, à l'horloge des blocs.
+			var vested uint64
+			switch {
+			case blockTime <= c.StartMs:
+				vested = 0
+			case blockTime >= c.EndMs:
+				vested = c.Amount
+			default:
+				vested = types.MulDiv(c.Amount, uint64(blockTime-c.StartMs), uint64(c.EndMs-c.StartMs))
+			}
+			claimable := vested - c.Released
+			if claimable == 0 {
+				return errors.New("nothing vested yet")
+			}
+			s.acct(c.Beneficiary).Balances[c.TokenID] += claimable
+			c.Released += claimable
+			if c.Released == c.Amount {
+				c.Status = "completed"
+			}
+		case c.Template == types.TemplateEscrow && tx.Action == types.ActionRelease:
+			if tx.From != c.Creator && tx.From != c.Arbiter {
+				return errors.New("only the buyer or the arbiter can release")
+			}
+			s.acct(c.Seller).Balances[c.TokenID] += c.Amount
+			c.Released = c.Amount
+			c.Status = "completed"
+		case c.Template == types.TemplateEscrow && tx.Action == types.ActionRefund:
+			if tx.From != c.Seller && tx.From != c.Arbiter {
+				return errors.New("only the seller or the arbiter can refund")
+			}
+			s.acct(c.Creator).Balances[c.TokenID] += c.Amount
+			c.Status = "refunded"
+		default:
+			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
+		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)
 	}
@@ -562,11 +687,12 @@ func (s *State) rootLocked() string {
 		Accounts   map[string]*Account   `json:"accounts"`
 		Tokens     map[string]*Token     `json:"tokens"`
 		Validators map[string]*Validator `json:"validators"`
+		Contracts  map[string]*Contract  `json:"contracts"`
 		Unbonding  []*Unbonding          `json:"unbonding"`
 		Supply     Supply                `json:"supply"`
 		Params     types.Params          `json:"params"`
 		BaseFee    uint64                `json:"base_fee"`
-	}{s.Accounts, s.Tokens, s.Validators, s.Unbonding, s.Supply, s.Params, s.BaseFee})
+	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.Unbonding, s.Supply, s.Params, s.BaseFee})
 	return crypto.HashHex(b)
 }
 
@@ -593,6 +719,7 @@ func (s *State) Restore(data []byte) error {
 	s.Accounts = tmp.Accounts
 	s.Tokens = tmp.Tokens
 	s.Validators = tmp.Validators
+	s.Contracts = tmp.Contracts
 	s.Unbonding = tmp.Unbonding
 	s.Supply = tmp.Supply
 	s.Params = tmp.Params

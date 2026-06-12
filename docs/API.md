@@ -17,6 +17,7 @@ des signatures ML-DSA-65 des transactions.
 | `GET /v1/accounts/{adresse}` | `{balances, nonce, staked, unbonding, delegations}` |
 | `GET /v1/validators` | set actif : stake, délégations, blocs proposés, récompenses |
 | `GET /v1/tokens` · `GET /v1/tokens/{symbole}` | registre des tokens no-code |
+| `GET /v1/contracts` · `GET /v1/contracts/{id}` | smart contracts no-code (vesting, escrow) : statut, montants verrouillés/libérés |
 | `GET /v1/mempool` | taille de la file |
 | `GET /v1/genesis` | document de genèse — sert à rejoindre le réseau |
 
@@ -59,6 +60,14 @@ Corps = transaction **signée**. Tous les montants en ucgo (1 CGO = 10⁹ ucgo).
     "symbol": "MONTOK", "name": "Mon Token",
     "decimals": 9, "supply": 1000000000000000, "mintable": true
   },
+  "contract": {                       // contract_create uniquement :
+    "template": "vesting",            // vesting | escrow
+    "token_id": "CGO", "amount": 100000000000,
+    "beneficiary": "cg…", "start_ms": 1781300000000, "end_ms": 1783900000000,
+    "seller": "cg…", "arbiter": "cg…" // escrow
+  },
+  "contract_id": "9066d8ac…",         // contract_exec : hash de la tx de création
+  "action": "claim",                  // contract_exec : claim | release | refund
   "timestamp": 1781234567890,
   "signature": "<base64>"             // ML-DSA-65 sur le JSON canonique sans `signature`
 }
