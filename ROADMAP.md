@@ -1,6 +1,6 @@
 # Feuille de route ChainGO
 
-Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** sur le devnet.
+Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = première tranche livrée, suite en cours ; `[ ]` = à faire.
 
 ## Phase 1 — Fondations ✅ (juin 2026)
 
@@ -22,12 +22,16 @@ Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** s
 
 ## Phase 2 — Sécurité de production
 
-- [ ] Votes de finalité BFT multi-validateurs (2f+1) — [#6](https://github.com/ghisdot/chaingo/issues/6)
+- [~] Votes de finalité BFT multi-validateurs (2f+1) — [#6](https://github.com/ghisdot/chaingo/issues/6)
+      **1re tranche livrée** : précommits signés ML-DSA-65, comptage pondéré par le
+      stake, quorum strict > 2/3, gossip P2P des votes, `finalized_height` exposé,
+      commande `chaingo keygen`. Vérifié (tests Go déterministes + réseau 3 nœuds).
+      Reste : verrouillage type Tendermint complet (prevote + locking), set figé par hauteur.
 - [ ] Slashing : double-signature et inactivité (sur stake + fonds en unbonding) — [#7](https://github.com/ghisdot/chaingo/issues/7)
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
 - [ ] Codec binaire compact (remplace JSON+base64 sur le réseau) — [#8](https://github.com/ghisdot/chaingo/issues/8)
-- [ ] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)), fuzzing des entrées réseau
+- [~] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)) — démarré (paquet consensus : finalité), à étendre ; fuzzing réseau à faire
 - [x] Mode `--testnet` (chain_id `chaingo-testnet-1`, faucet ouvert, unbonding 24 h) — prêt à héberger
 - [ ] Testnet public multi-validateurs en ligne 24/24 (nécessite un serveur)
 - [ ] Audit de sécurité externe

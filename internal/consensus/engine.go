@@ -46,7 +46,13 @@ type Engine struct {
 	// Sert d'horloge pour le round de secours courant.
 	lastProgress time.Time
 	OnBlock      func(*types.Block) // hook broadcast p2p
-	stopCh       chan struct{}
+
+	// Finalité BFT (Phase 2) : pool de précommits + hauteur finalisée.
+	votes     *votePool
+	finalized uint64
+	chainID   string
+	OnVote    func(*types.Vote) // hook broadcast p2p des votes
+	stopCh    chan struct{}
 }
 
 func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.KeyPair, interval time.Duration, maxTxs int) *Engine {
@@ -59,12 +65,23 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		maxTxs:       maxTxs,
 		heartbeat:    20,
 		lastProgress: time.Now(),
+		votes:        newVotePool(),
 		stopCh:       make(chan struct{}),
 	}
 	if key != nil {
 		e.addr = key.Address()
 	}
 	return e
+}
+
+// SetChainID renseigne le chain_id utilisé pour signer/vérifier les votes.
+func (e *Engine) SetChainID(id string) { e.chainID = id }
+
+// FinalizedHeight : dernière hauteur finalisée par ≥ 2/3 du stake.
+func (e *Engine) FinalizedHeight() uint64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.finalized
 }
 
 func (e *Engine) Start() {
@@ -148,6 +165,7 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	if e.OnBlock != nil {
 		e.OnBlock(b)
 	}
+	e.castVote(height, b.Hash)
 	return b
 }
 
@@ -207,7 +225,81 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		e.pool.Drop(tx.Hash())
 	}
 	log.Printf("[consensus] block #%d accepted from peer: %d tx(s)", b.Header.Height, len(b.Txs))
+	e.castVote(b.Header.Height, b.Hash)
 	return nil
+}
+
+// ---- finalité BFT (Phase 2) ----
+
+var errWrongVoteChain = errors.New("vote on wrong chain")
+
+// castVote : ce nœud, s'il est validateur, précommit le bloc qu'il vient
+// de committer, l'ajoute au pool et le diffuse. Suppose e.mu détenu.
+func (e *Engine) castVote(height uint64, hash string) {
+	if e.key == nil {
+		return
+	}
+	v := &types.Vote{ChainID: e.chainID, Height: height, BlockHash: hash}
+	v.SignWith(e.key)
+	e.votes.add(v, e.st.PowerOf(e.addr))
+	if e.OnVote != nil {
+		e.OnVote(v)
+	}
+	e.checkFinalityLocked(height, hash)
+}
+
+// AddVote : précommit reçu d'un pair. Renvoie true s'il est nouveau (à
+// re-diffuser). Valide la signature et le statut de validateur du votant.
+func (e *Engine) AddVote(v *types.Vote) (bool, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.chainID != "" && v.ChainID != e.chainID {
+		return false, errWrongVoteChain
+	}
+	if v.Height <= e.finalized {
+		return false, nil // hauteur déjà finalisée
+	}
+	power := e.st.PowerOf(v.Voter)
+	if power == 0 {
+		return false, errors.New("voter is not an active validator")
+	}
+	if err := v.Verify(); err != nil {
+		return false, err
+	}
+	isNew, _ := e.votes.add(v, power)
+	if !isNew {
+		return false, nil
+	}
+	e.checkFinalityLocked(v.Height, e.localHash(v.Height))
+	return true, nil
+}
+
+// checkFinalityLocked : si le pouvoir cumulé des précommits sur NOTRE bloc
+// à `height` dépasse 2/3 du stake, la hauteur est finalisée. Suppose e.mu détenu.
+func (e *Engine) checkFinalityLocked(height uint64, localHash string) {
+	if height <= e.finalized || localHash == "" {
+		return
+	}
+	power := e.votes.power(height, localHash)
+	total := e.st.TotalPower()
+	if hasQuorum(power, total) {
+		e.finalized = height
+		e.votes.prune(height)
+		log.Printf("[consensus] hauteur #%d FINALISÉE (%d%% du stake a précommit)", height, power*100/total)
+	}
+}
+
+// localHash : hash du bloc local à une hauteur (db, ou état courant).
+func (e *Engine) localHash(height uint64) string {
+	if e.db != nil {
+		if b, _ := e.db.GetBlock(height); b != nil {
+			return b.Hash
+		}
+	}
+	if height == e.st.GetHeight() {
+		return e.st.GetLastHash()
+	}
+	return ""
 }
 
 func (e *Engine) persist(b *types.Block) {

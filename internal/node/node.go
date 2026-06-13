@@ -100,6 +100,7 @@ func New(cfg Config) (*Node, error) {
 	params := n.st.GetParams()
 	n.engine = consensus.New(n.st, n.pool, n.db, n.key,
 		time.Duration(params.BlockIntervalMs)*time.Millisecond, int(params.MaxBlockTxs))
+	n.engine.SetChainID(n.gen.ChainID)
 
 	n.p2p = p2p.NewServer(cfg.P2PAddr, n.gen.ChainID, p2p.Handlers{
 		OnTx: func(tx *types.Transaction) bool {
@@ -117,6 +118,10 @@ func New(cfg Config) (*Node, error) {
 			}
 			return true, false
 		},
+		OnVote: func(v *types.Vote) bool {
+			isNew, err := n.engine.AddVote(v)
+			return err == nil && isNew
+		},
 		Height: n.st.GetHeight,
 		Block: func(h uint64) *types.Block {
 			b, _ := n.db.GetBlock(h)
@@ -124,6 +129,7 @@ func New(cfg Config) (*Node, error) {
 		},
 	})
 	n.engine.OnBlock = func(b *types.Block) { n.p2p.Broadcast("block", b, nil) }
+	n.engine.OnVote = func(v *types.Vote) { n.p2p.Broadcast("vote", v, nil) }
 	return n, nil
 }
 
@@ -276,20 +282,21 @@ func (n *Node) acceptTx(tx *types.Transaction) (bool, error) {
 
 func (n *Node) Status() map[string]any {
 	return map[string]any{
-		"version":      Version,
-		"chain_id":     n.gen.ChainID,
-		"height":       n.st.GetHeight(),
-		"last_hash":    n.st.GetLastHash(),
-		"mempool":      n.pool.Size(),
-		"peers":        n.p2p.PeerCount(),
-		"validators":   len(n.st.ListValidators()),
-		"supply":       n.st.GetSupply(),
-		"base_fee":     n.st.GetBaseFee(),
-		"params":       n.st.GetParams(),
-		"pq_signature": crypto.Scheme.Name(),
-		"dev_mode":     n.cfg.Dev,
-		"network":      n.network(),
-		"uptime_s":     int(time.Since(n.start).Seconds()),
+		"version":          Version,
+		"chain_id":         n.gen.ChainID,
+		"height":           n.st.GetHeight(),
+		"finalized_height": n.engine.FinalizedHeight(),
+		"last_hash":        n.st.GetLastHash(),
+		"mempool":          n.pool.Size(),
+		"peers":            n.p2p.PeerCount(),
+		"validators":       len(n.st.ListValidators()),
+		"supply":           n.st.GetSupply(),
+		"base_fee":         n.st.GetBaseFee(),
+		"params":           n.st.GetParams(),
+		"pq_signature":     crypto.Scheme.Name(),
+		"dev_mode":         n.cfg.Dev,
+		"network":          n.network(),
+		"uptime_s":         int(time.Since(n.start).Seconds()),
 	}
 }
 

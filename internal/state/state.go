@@ -245,6 +245,25 @@ func (s *State) GetToken(sym string) *Token {
 	return &cp
 }
 
+// ---- pouvoir de vote (finalité BFT) ----
+
+// PowerOf : pouvoir de vote d'un validateur = stake propre + délégations.
+func (s *State) PowerOf(addr string) uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if v, ok := s.Validators[addr]; ok {
+		return v.weight()
+	}
+	return 0
+}
+
+// TotalPower : somme des pouvoirs de vote de tous les validateurs actifs.
+func (s *State) TotalPower() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.totalStakedLocked()
+}
+
 // ---- sélection du proposeur ----
 
 // SelectProposer picks the block proposer deterministically, weighted by

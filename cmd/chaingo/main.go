@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -44,6 +45,7 @@ Usage :
   chaingo contract claim|release|refund --from <wallet> --id <contrat> [--pass MDP] [--api URL]
   chaingo contract list [--api URL]
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
+  chaingo keygen [--out validator.seed]      (génère une seed de validateur ML-DSA-65)
   chaingo bench [--txs 10000] [--senders 16]
 `
 
@@ -78,6 +80,8 @@ func main() {
 		err = cmdContract(os.Args[2:])
 	case "faucet":
 		err = cmdFaucet(os.Args[2:])
+	case "keygen":
+		err = cmdKeygen(os.Args[2:])
 	case "bench":
 		err = cmdBench(os.Args[2:])
 	case "help", "-h", "--help":
@@ -563,6 +567,34 @@ func cmdFaucet(args []string) error {
 		return err
 	}
 	fmt.Printf("Faucet → %s : %s CGO (tx %s)\n", addr, *amount, resp.Hash)
+	return nil
+}
+
+// ---------- keygen ----------
+
+func cmdKeygen(args []string) error {
+	fs := flag.NewFlagSet("keygen", flag.ExitOnError)
+	out := fs.String("out", "", "fichier de sortie de la seed (défaut : affichage seul)")
+	fs.Parse(args)
+	kp, err := crypto.GenerateKeyPair()
+	if err != nil {
+		return err
+	}
+	seedHex := hex.EncodeToString(kp.Seed)
+	fmt.Printf("Adresse   : %s\n", kp.Address())
+	if *out == "" {
+		fmt.Printf("Seed (hex): %s\n", seedHex)
+		fmt.Println("⚠ Conservez cette seed en lieu sûr : elle EST la clé du validateur.")
+		fmt.Println("  Pour la stocker dans un fichier : chaingo keygen --out validator.seed")
+		return nil
+	}
+	if _, err := os.Stat(*out); err == nil {
+		return fmt.Errorf("%s existe déjà — refus d'écraser une clé existante", *out)
+	}
+	if err := os.WriteFile(*out, []byte(seedHex), 0o600); err != nil {
+		return err
+	}
+	fmt.Printf("Seed écrite dans %s (à utiliser avec --validator-seed)\n", *out)
 	return nil
 }
 

@@ -32,8 +32,10 @@ type Handlers struct {
 	OnTx func(*types.Transaction) bool
 	// OnBlock returns (accepted, needSync).
 	OnBlock func(*types.Block) (bool, bool)
-	Height  func() uint64
-	Block   func(h uint64) *types.Block
+	// OnVote returns true if the precommit was new (=> re-gossip).
+	OnVote func(*types.Vote) bool
+	Height func() uint64
+	Block  func(h uint64) *types.Block
 }
 
 type peer struct {
@@ -161,6 +163,14 @@ func (s *Server) handle(conn net.Conn) {
 				s.Broadcast("block", &b, p)
 			} else if needSync {
 				s.requestBlocks(p)
+			}
+		case "vote":
+			var v types.Vote
+			if json.Unmarshal(m.Data, &v) != nil {
+				continue
+			}
+			if s.h.OnVote != nil && s.h.OnVote(&v) {
+				s.Broadcast("vote", &v, p)
 			}
 		case "get_blocks":
 			var g GetBlocks
