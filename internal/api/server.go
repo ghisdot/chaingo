@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"chaingo/internal/state"
 	"chaingo/internal/types"
@@ -194,7 +195,15 @@ func (s *Server) Start() error {
 	// Site web servi à la racine — les routes /v1/* restent prioritaires
 	// (le mux choisit toujours le motif le plus spécifique).
 	if s.webDir != "" {
-		mux.Handle("GET /", http.FileServer(http.Dir(s.webDir)))
+		fs := http.FileServer(http.Dir(s.webDir))
+		mux.Handle("GET /", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Content-Type explicite pour le wasm : WebAssembly.instantiateStreaming
+			// l'exige, et mime.TypeByExtension n'est pas fiable sur Windows.
+			if strings.HasSuffix(r.URL.Path, ".wasm") {
+				w.Header().Set("Content-Type", "application/wasm")
+			}
+			fs.ServeHTTP(w, r)
+		}))
 		log.Printf("[api] website served from %s at http://%s/", s.webDir, s.addr)
 	}
 

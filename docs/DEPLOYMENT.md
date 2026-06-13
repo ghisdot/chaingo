@@ -3,6 +3,34 @@
 Objectif : un serveur qui fait tourner **le nœud ChainGO en continu** et sert **le site
 vitrine** (avec stats live) sur ton domaine, en HTTPS.
 
+## Option 100 % gratuite (recommandée pour démarrer)
+
+Deux pièces, deux hébergeurs gratuits :
+
+1. **Le site + le wallet web → GitHub Pages (gratuit, illimité).** Le workflow
+   `.github/workflows/pages.yml` reconstruit le wallet WASM et publie `web/` à chaque
+   push sur `main`. Une fois Pages activé (Settings → Pages → Source : *GitHub Actions*),
+   le site est en ligne sur `https://ghisdot.github.io/chaingo/`. Le wallet web y demande
+   l'URL d'un nœud (champ « Nœud ») — pointe-le vers le nœud ci-dessous.
+
+2. **Le nœud → un hébergeur avec offre gratuite persistante.** Un nœud blockchain doit
+   tourner 24/24 avec stockage persistant et un port P2P ouvert — ce que les « free tiers
+   qui s'endorment » (Render free, etc.) ne permettent pas. Options réellement viables :
+
+   | Hébergeur | Gratuit ? | Notes |
+   |---|---|---|
+   | **Oracle Cloud — Always Free** | Oui, permanent | VM ARM 4 cœurs / 24 Go : large pour un nœud. Le meilleur choix gratuit 24/24. |
+   | **Fly.io** | Allocation gratuite limitée | Simple avec le `Dockerfile` fourni ; surveille le quota. |
+   | **Google Cloud / AWS free tier** | 12 mois | Petite VM e2-micro/t2.micro suffisante pour un nœud léger. |
+
+   ⚠️ Ces hébergeurs demandent **ta propre inscription** (carte bancaire pour vérification
+   même sur l'offre gratuite). Je ne peux pas créer ces comptes à ta place.
+
+> 🔴 **Avant de parler de « mainnet » :** la v1 n'a pas encore la finalité BFT
+> multi-validateurs, le slashing ni l'audit (Phase 2). Mettre en ligne un **réseau de test
+> public (testnet)** est la bonne étape maintenant — même binaire, mais aucune valeur réelle
+> promise. Le mainnet viendra après la Phase 2. La suite de ce guide marche pour les deux.
+
 ## 1. Le serveur
 
 Un petit VPS suffit largement (le nœud est léger) :

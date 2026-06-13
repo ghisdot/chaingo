@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainGO Wallet</title>
+<style>
+  :root{--bg:#0b0f17;--bg2:#0f1522;--card:#131b2c;--border:#1f2a40;--text:#e6edf6;--muted:#8b9bb4;--cyan:#22d3ee;--violet:#8b5cf6;--green:#34d399;--amber:#fbbf24;--red:#f87171;--grad:linear-gradient(90deg,var(--cyan),var(--violet));}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;line-height:1.55;}
+  a{color:var(--cyan);text-decoration:none;}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px;}
+  nav{border-bottom:1px solid var(--border);background:rgba(11,15,23,.85);backdrop-filter:blur(10px);}
+  nav .wrap{display:flex;align-items:center;gap:18px;height:58px;}
+  .logo{font-weight:800;font-size:1.2rem;}.logo span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .spacer{flex:1;}
+  nav a.link{color:var(--muted);font-size:.9rem;} nav a.link:hover{color:var(--text);}
+  #langBtn{cursor:pointer;font-size:.8rem;font-weight:700;padding:5px 11px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--cyan);}
+  h1{font-size:1.5rem;margin:26px 0 4px;}
+  .muted{color:var(--muted);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin:16px 0;}
+  .card h2{font-size:1.05rem;margin-bottom:14px;}
+  label{display:block;font-size:.82rem;color:var(--muted);margin:10px 0 4px;}
+  input,select{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:.95rem;font-family:inherit;}
+  input:focus,select:focus{outline:none;border-color:var(--cyan);}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}.row>div{flex:1;min-width:140px;}
+  button{cursor:pointer;padding:11px 18px;border-radius:9px;font-weight:700;font-size:.93rem;border:1px solid var(--border);background:var(--card);color:var(--text);margin-top:14px;}
+  button.primary{background:var(--grad);color:#06121a;border:none;}
+  button.ghost{background:transparent;}
+  button:hover{filter:brightness(1.15);} button:disabled{opacity:.5;cursor:not-allowed;}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;}
+  .warn{border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.07);color:var(--amber);border-radius:11px;padding:12px 15px;font-size:.86rem;margin:14px 0;}
+  .danger{border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08);color:var(--red);}
+  .ok{color:var(--green);} .ko{color:var(--red);}
+  .addr{font-family:ui-monospace,monospace;font-size:.82rem;word-break:break-all;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;}
+  .bal{font-size:1.8rem;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums;}
+  .baltok{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:.92rem;}
+  .baltok:last-child{border-bottom:none;}
+  .hidden{display:none;}
+  .seedbox{font-family:ui-monospace,monospace;font-size:.78rem;word-break:break-all;background:#1a1206;border:1px solid var(--amber);border-radius:9px;padding:12px;color:var(--amber);}
+  #status{font-size:.86rem;margin-top:8px;min-height:1.2em;}
+  .pill{font-size:.72rem;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
+  .nodecfg{display:flex;gap:8px;align-items:center;font-size:.8rem;}
+  .nodecfg input{padding:6px 9px;font-size:.8rem;}
+  footer{color:var(--muted);font-size:.8rem;text-align:center;padding:30px 0;}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <div class="logo">Chain<span>GO</span> <span style="font-weight:400;font-size:.8rem;color:var(--muted)" data-i18n="navwallet">Wallet</span></div>
+  <div class="spacer"></div>
+  <a class="link" href="/" data-i18n="navsite">Accueil</a>
+  <a class="link" href="/v1" >API</a>
+  <button id="langBtn" onclick="toggleLang()">EN</button>
+</div></nav>
+
+<div class="wrap">
+  <h1 data-i18n="title">Mon wallet ChainGO</h1>
+  <p class="muted" data-i18n="subtitle">Clés post-quantiques ML-DSA-65 générées et conservées dans votre navigateur. Rien n'est envoyé à un serveur.</p>
+
+  <div class="warn" id="wasmWarn" data-i18n="loading">Chargement du moteur cryptographique post-quantique…</div>
+
+  <div class="card">
+    <div class="nodecfg">
+      <span class="muted" data-i18n="nodelabel">Nœud :</span>
+      <input id="nodeUrl" placeholder="http://127.0.0.1:8545" style="flex:1">
+      <button style="margin:0;padding:6px 12px" onclick="saveNode()" data-i18n="save">OK</button>
+      <span id="netState" class="pill">…</span>
+    </div>
+  </div>
+
+  <!-- ÉTAT 1 : pas de wallet -->
+  <div id="setup" class="hidden">
+    <div class="card">
+      <h2 data-i18n="create.h">Créer un nouveau wallet</h2>
+      <p class="muted" style="font-size:.86rem" data-i18n="create.p">Un mot de passe chiffre votre clé (AES-256-GCM) dans ce navigateur. Il ne peut pas être récupéré : notez-le.</p>
+      <label data-i18n="pwd">Mot de passe</label>
+      <input id="newPass" type="password" autocomplete="new-password">
+      <label data-i18n="pwd2">Confirmer le mot de passe</label>
+      <input id="newPass2" type="password" autocomplete="new-password">
+      <button class="primary" onclick="createWallet()" data-i18n="create.btn">Générer mon wallet</button>
+    </div>
+    <div class="card">
+      <h2 data-i18n="import.h">Importer depuis une seed</h2>
+      <label data-i18n="import.seed">Seed (hex)</label>
+      <input id="impSeed" placeholder="ex : 9f3a…">
+      <label data-i18n="pwd">Mot de passe</label>
+      <input id="impPass" type="password" autocomplete="new-password">
+      <button onclick="importWallet()" data-i18n="import.btn">Importer</button>
+    </div>
+  </div>
+
+  <!-- ÉTAT 2 : wallet verrouillé -->
+  <div id="locked" class="hidden">
+    <div class="card">
+      <h2 data-i18n="unlock.h">Déverrouiller</h2>
+      <p class="addr" id="lockedAddr"></p>
+      <label data-i18n="pwd">Mot de passe</label>
+      <input id="unlockPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')unlock()">
+      <div class="btnrow">
+        <button class="primary" onclick="unlock()" data-i18n="unlock.btn">Déverrouiller</button>
+        <button class="ghost ko" onclick="forgetWallet()" data-i18n="forget">Oublier ce wallet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÉTAT 3 : wallet ouvert -->
+  <div id="open" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="margin:0" data-i18n="account">Compte</h2>
+        <button class="ghost" style="margin:0;padding:6px 12px" onclick="lock()" data-i18n="lock">Verrouiller</button>
+      </div>
+      <p class="addr" id="myAddr" style="margin-top:12px" onclick="copyAddr()" title="Copier"></p>
+      <div class="bal" id="cgoBal" style="margin-top:14px">—</div>
+      <div id="otherBals"></div>
+      <div class="btnrow">
+        <button class="ghost" onclick="refreshAccount()" data-i18n="refresh">Rafraîchir</button>
+        <button class="ghost amber" onclick="showSeed()" data-i18n="backup">Sauvegarder la seed</button>
+      </div>
+      <div id="seedReveal" class="hidden">
+        <div class="warn danger" data-i18n="seedwarn">⚠️ Quiconque détient cette seed contrôle vos fonds. Ne la partagez jamais, conservez-la hors ligne.</div>
+        <div class="seedbox" id="seedText"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="send.h">Envoyer</h2>
+      <label data-i18n="send.to">Adresse destinataire</label>
+      <input id="sendTo" placeholder="cg…">
+      <div class="row">
+        <div><label data-i18n="send.amount">Montant</label><input id="sendAmount" placeholder="1.5"></div>
+        <div><label data-i18n="send.token">Token</label><input id="sendToken" value="CGO"></div>
+      </div>
+      <label data-i18n="send.memo">Mémo (optionnel)</label>
+      <input id="sendMemo" maxlength="256">
+      <div style="display:flex;gap:18px;margin-top:12px;font-size:.88rem">
+        <label style="margin:0"><input type="checkbox" id="sendFast" style="width:auto"> <span data-i18n="send.fast">Rapide (tip ×4)</span></label>
+        <label style="margin:0"><input type="checkbox" id="sendPriv" style="width:auto"> <span data-i18n="send.priv">Privé</span></label>
+      </div>
+      <button class="primary" onclick="sendTx()" id="sendBtn" data-i18n="send.btn">Signer &amp; envoyer</button>
+      <div id="status"></div>
+    </div>
+  </div>
+
+  <footer>
+    <p data-i18n="footer">ChainGO Wallet — open source (MIT). Clés post-quantiques ML-DSA-65, signature 100 % côté navigateur.</p>
+  </footer>
+</div>
+
+<script src="wasm_exec.js"></script>
+<script>
+// ---------------- i18n ----------------
+const I18N = {
+  fr:{navwallet:"Wallet",navsite:"Accueil",title:"Mon wallet ChainGO",
+    subtitle:"Clés post-quantiques ML-DSA-65 générées et conservées dans votre navigateur. Rien n'est envoyé à un serveur.",
+    loading:"Chargement du moteur cryptographique post-quantique…",ready:"Moteur post-quantique prêt ✓",
+    nodelabel:"Nœud :",save:"OK",
+    "create.h":"Créer un nouveau wallet","create.p":"Un mot de passe chiffre votre clé (AES-256-GCM) dans ce navigateur. Il ne peut pas être récupéré : notez-le.",
+    "create.btn":"Générer mon wallet",pwd:"Mot de passe",pwd2:"Confirmer le mot de passe",
+    "import.h":"Importer depuis une seed","import.seed":"Seed (hex)","import.btn":"Importer",
+    "unlock.h":"Déverrouiller","unlock.btn":"Déverrouiller",forget:"Oublier ce wallet",
+    account:"Compte",lock:"Verrouiller",refresh:"Rafraîchir",backup:"Sauvegarder la seed",
+    seedwarn:"⚠️ Quiconque détient cette seed contrôle vos fonds. Ne la partagez jamais, conservez-la hors ligne.",
+    "send.h":"Envoyer","send.to":"Adresse destinataire","send.amount":"Montant","send.token":"Token",
+    "send.memo":"Mémo (optionnel)","send.fast":"Rapide (tip ×4)","send.priv":"Privé","send.btn":"Signer & envoyer",
+    footer:"ChainGO Wallet — open source (MIT). Clés post-quantiques ML-DSA-65, signature 100 % côté navigateur."},
+  en:{navwallet:"Wallet",navsite:"Home",title:"My ChainGO wallet",
+    subtitle:"Post-quantum ML-DSA-65 keys generated and kept in your browser. Nothing is sent to a server.",
+    loading:"Loading the post-quantum crypto engine…",ready:"Post-quantum engine ready ✓",
+    nodelabel:"Node:",save:"OK",
+    "create.h":"Create a new wallet","create.p":"A password encrypts your key (AES-256-GCM) in this browser. It cannot be recovered: write it down.",
+    "create.btn":"Generate my wallet",pwd:"Password",pwd2:"Confirm password",
+    "import.h":"Import from a seed","import.seed":"Seed (hex)","import.btn":"Import",
+    "unlock.h":"Unlock","unlock.btn":"Unlock",forget:"Forget this wallet",
+    account:"Account",lock:"Lock",refresh:"Refresh",backup:"Back up the seed",
+    seedwarn:"⚠️ Anyone holding this seed controls your funds. Never share it, keep it offline.",
+    "send.h":"Send","send.to":"Recipient address","send.amount":"Amount","send.token":"Token",
+    "send.memo":"Memo (optional)","send.fast":"Fast (tip ×4)","send.priv":"Private","send.btn":"Sign & send",
+    footer:"ChainGO Wallet — open source (MIT). Post-quantum ML-DSA-65 keys, 100% in-browser signing."}
+};
+let lang = localStorage.getItem("cg-lang") || ((navigator.language||"").startsWith("fr") ? "fr" : "en");
+if(!["fr","en"].includes(lang)) lang="fr";
+function applyLang(){
+  const d=I18N[lang];
+  document.querySelectorAll("[data-i18n]").forEach(e=>{const v=d[e.dataset.i18n];if(v!==undefined)e.textContent=v;});
+  document.documentElement.lang=lang;
+  document.getElementById("langBtn").textContent = lang==="fr"?"EN":"FR";
+  if(wasmReady){document.getElementById("wasmWarn").textContent=d.ready;document.getElementById("wasmWarn").classList.add("ok");}
+}
+function toggleLang(){lang=lang==="fr"?"en":"fr";localStorage.setItem("cg-lang",lang);applyLang();}
+function t(k){return I18N[lang][k]||k;}
+
+// ---------------- état & helpers ----------------
+const KEY="chaingo_wallet_v1", $=id=>document.getElementById(id);
+let wasmReady=false, seedHex=null, myAddress=null, nodeUrl=null;
+const UNIT=1e9;
+
+function defaultNode(){
+  if(location.protocol==="file:") return "http://127.0.0.1:8545";
+  // servi par un nœud => même origine ; sinon (GitHub Pages) champ à remplir
+  return localStorage.getItem("chaingo_node_url") || (location.origin.includes("github.io")? "" : location.origin);
+}
+function saveNode(){nodeUrl=$("nodeUrl").value.trim().replace(/\/$/,"");localStorage.setItem("chaingo_node_url",nodeUrl);pingNode();}
+async function api(path,opts){const r=await fetch(nodeUrl+path,opts);if(!r.ok){let e;try{e=(await r.json()).error;}catch{} throw new Error(e||("HTTP "+r.status));}return r.json();}
+async function pingNode(){
+  try{const s=await api("/v1/status");$("netState").innerHTML='<span class="ok">● '+s.chain_id+' #'+s.height+'</span>';return s;}
+  catch(e){$("netState").innerHTML='<span class="ko">● hors-ligne</span>';return null;}
+}
+
+// ---------------- chiffrement (WebCrypto) ----------------
+const enc=new TextEncoder(), dec=new TextDecoder();
+function b64(buf){return btoa(String.fromCharCode(...new Uint8Array(buf)));}
+function unb64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0));}
+async function deriveKey(pass,salt){
+  const base=await crypto.subtle.importKey("raw",enc.encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function encryptSeed(seed,pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(pass,salt);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,enc.encode(seed));
+  return {salt:b64(salt),iv:b64(iv),ct:b64(ct)};
+}
+async function decryptSeed(blob,pass){
+  const key=await deriveKey(pass,unb64(blob.salt));
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(blob.iv)},key,unb64(blob.ct));
+  return dec.decode(pt);
+}
+
+// ---------------- cycle de vie wallet ----------------
+function stored(){try{return JSON.parse(localStorage.getItem(KEY));}catch{return null;}}
+function show(state){["setup","locked","open"].forEach(s=>$(s).classList.toggle("hidden",s!==state));}
+
+function route(){
+  const w=stored();
+  if(!w){show("setup");}
+  else{$("lockedAddr").textContent=w.address;show("locked");}
+}
+
+async function createWallet(){
+  const p1=$("newPass").value,p2=$("newPass2").value;
+  if(p1.length<6) return alert(lang==="fr"?"Mot de passe trop court (min 6).":"Password too short (min 6).");
+  if(p1!==p2) return alert(lang==="fr"?"Les mots de passe diffèrent.":"Passwords differ.");
+  const res=chaingoNewWallet(); if(res.error) return alert(res.error);
+  const blob=await encryptSeed(res.seedHex,p1);
+  localStorage.setItem(KEY,JSON.stringify({address:res.address,...blob}));
+  seedHex=res.seedHex; myAddress=res.address;
+  alert(lang==="fr"?"Wallet créé. Pensez à sauvegarder votre seed (bouton dans le compte).":"Wallet created. Remember to back up your seed (button in the account).");
+  openWallet();
+}
+async function importWallet(){
+  const s=$("impSeed").value.trim(),p=$("impPass").value;
+  if(p.length<6) return alert(lang==="fr"?"Mot de passe trop court (min 6).":"Password too short (min 6).");
+  const res=chaingoAddressFromSeed(s); if(res.error) return alert(lang==="fr"?"Seed invalide.":"Invalid seed.");
+  const blob=await encryptSeed(s,p);
+  localStorage.setItem(KEY,JSON.stringify({address:res.address,...blob}));
+  seedHex=s; myAddress=res.address; openWallet();
+}
+async function unlock(){
+  const w=stored(); if(!w) return route();
+  try{seedHex=await decryptSeed(w,$("unlockPass").value);}
+  catch{return alert(lang==="fr"?"Mot de passe incorrect.":"Wrong password.");}
+  myAddress=w.address; $("unlockPass").value=""; openWallet();
+}
+function lock(){seedHex=null;$("seedReveal").classList.add("hidden");route();}
+function forgetWallet(){
+  if(!confirm(lang==="fr"?"Supprimer ce wallet de ce navigateur ? Assurez-vous d'avoir la seed.":"Remove this wallet from this browser? Make sure you have the seed."))return;
+  localStorage.removeItem(KEY);seedHex=null;route();
+}
+function openWallet(){
+  $("myAddr").textContent=myAddress;show("open");refreshAccount();
+}
+function copyAddr(){navigator.clipboard.writeText(myAddress);$("netState").textContent="copié ✓";setTimeout(pingNode,1000);}
+function showSeed(){
+  if(!seedHex)return;
+  const box=$("seedReveal");box.classList.toggle("hidden");
+  $("seedText").textContent=seedHex;
+}
+
+function fmt(u){return (u/UNIT).toLocaleString(lang==="fr"?"fr-FR":"en-US",{maximumFractionDigits:9});}
+async function refreshAccount(){
+  if(!await pingNode())return;
+  try{
+    const a=await api("/v1/accounts/"+myAddress);
+    $("cgoBal").textContent=fmt(a.balances?.CGO||0)+" CGO";
+    let html="";
+    for(const[k,v]of Object.entries(a.balances||{})){if(k!=="CGO")html+=`<div class="baltok"><span>${k}</span><span>${v}</span></div>`;}
+    if(a.staked)html+=`<div class="baltok"><span>CGO ${lang==="fr"?"staké":"staked"}</span><span>${fmt(a.staked)}</span></div>`;
+    if(a.unbonding)html+=`<div class="baltok"><span>CGO unbonding</span><span>${fmt(a.unbonding)}</span></div>`;
+    for(const[v,amt]of Object.entries(a.delegations||{}))html+=`<div class="baltok"><span>CGO ${lang==="fr"?"délégué":"delegated"} → ${v.slice(0,12)}…</span><span>${fmt(amt)}</span></div>`;
+    $("otherBals").innerHTML=html;
+  }catch(e){$("status").innerHTML='<span class="ko">'+e.message+'</span>';}
+}
+
+function parseAmount(s,dec){
+  const[w,f=""]=String(s).split(".");
+  if(f.length>dec)throw new Error(lang==="fr"?"trop de décimales":"too many decimals");
+  return BigInt(w||"0")*(10n**BigInt(dec))+BigInt((f+"0".repeat(dec)).slice(0,dec)||"0");
+}
+
+async function sendTx(){
+  if(!seedHex)return;
+  const st=$("status");st.innerHTML=lang==="fr"?"Préparation…":"Preparing…";
+  try{
+    const to=$("sendTo").value.trim(),token=($("sendToken").value.trim()||"CGO").toUpperCase();
+    if(!to.startsWith("cg"))throw new Error(lang==="fr"?"adresse invalide":"invalid address");
+    let dec=9;
+    if(token!=="CGO"){const tk=await api("/v1/tokens/"+token);dec=tk.decimals;}
+    const amount=parseAmount($("sendAmount").value,dec);
+    if(amount<=0n)throw new Error(lang==="fr"?"montant invalide":"invalid amount");
+    const status=await api("/v1/status");
+    const acct=await api("/v1/accounts/"+myAddress);
+    const fees=await api("/v1/fees");
+    const tip=$("sendFast").checked?fees.fast_tip:fees.suggested_tip;
+    const tx={chain_id:status.chain_id,type:"transfer",to,token_id:token,
+      amount:Number(amount),nonce:acct.nonce,max_base_fee:fees.suggested_max_base,
+      tip,private:$("sendPriv").checked,memo:$("sendMemo").value,timestamp:Date.now()};
+    st.innerHTML=lang==="fr"?"Signature post-quantique…":"Post-quantum signing…";
+    const signed=chaingoSignTransaction(seedHex,JSON.stringify(tx));
+    if(signed.error)throw new Error(signed.error);
+    const res=await api("/v1/tx",{method:"POST",headers:{"Content-Type":"application/json"},body:signed.signed});
+    st.innerHTML=`<span class="ok">${lang==="fr"?"Envoyée":"Sent"} ✓</span> tx ${res.hash.slice(0,16)}…`;
+    // suivi confirmation
+    for(let i=0;i<15;i++){await new Promise(r=>setTimeout(r,500));
+      try{const c=await api("/v1/tx/"+res.hash);if(c.status==="confirmed"){st.innerHTML=`<span class="ok">${lang==="fr"?"Confirmée bloc":"Confirmed block"} #${c.block_height} ✓</span>`;refreshAccount();return;}}catch{}}
+    st.innerHTML+=` — ${lang==="fr"?"en attente":"pending"}`;refreshAccount();
+  }catch(e){st.innerHTML='<span class="ko">'+e.message+'</span>';}
+}
+
+// ---------------- init ----------------
+nodeUrl=defaultNode(); $("nodeUrl").value=nodeUrl;
+const go=new Go();
+// Chargement robuste : instantiateStreaming exige Content-Type application/wasm,
+// que tous les serveurs ne renvoient pas (Windows notamment) — on retombe sur
+// un fetch ArrayBuffer classique en cas d'échec.
+async function loadWasm(){
+  try{
+    const r=await WebAssembly.instantiateStreaming(fetch("chaingo.wasm"),go.importObject);
+    return r.instance;
+  }catch(e){
+    const buf=await (await fetch("chaingo.wasm")).arrayBuffer();
+    const r=await WebAssembly.instantiate(buf,go.importObject);
+    return r.instance;
+  }
+}
+loadWasm().then(inst=>{
+  go.run(inst);wasmReady=true;
+  const wn=$("wasmWarn");wn.textContent=t("ready");wn.classList.add("ok");
+  applyLang();pingNode();route();
+}).catch(e=>{$("wasmWarn").innerHTML='<span class="ko">Erreur de chargement WASM : '+e.message+'</span>';});
+applyLang();
+</script>
+</body>
+</html>

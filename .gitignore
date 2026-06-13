@@ -3,3 +3,8 @@ chaingo
 dist/
 .devnet/
 *.seed
+# Artefacts WASM du wallet : construits par la CI (workflow Pages) ou
+# localement via scripts/build-wasm.ps1 — jamais versionnés.
+web/wallet/chaingo.wasm
+web/wallet/wasm_exec.js
+_wasmtest.cjs

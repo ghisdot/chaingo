@@ -164,6 +164,7 @@
     <a class="link" href="#stats" data-i18n="nav3">Chaîne en direct</a>
     <a class="link" href="#tokenomics" data-i18n="nav4">Tokenomics</a>
     <a class="link" href="#roadmap" data-i18n="nav5">Feuille de route</a>
+    <a class="link" href="/wallet/" data-i18n="navwallet">Wallet</a>
     <a class="link" href="/v1">API</a>
     <div class="spacer"></div>
     <button id="langBtn" onclick="toggleLang()">EN</button>
@@ -186,7 +187,8 @@
       <span class="badge" data-i18n="b4">🪙 Tokens <b>no-code</b></span>
     </div>
     <div class="ctas">
-      <a class="btn primary" href="#fonctionnement" data-i18n="cta1">Comprendre en 2 minutes</a>
+      <a class="btn primary" href="/wallet/" data-i18n="cta0">Créer mon wallet</a>
+      <a class="btn" href="#fonctionnement" data-i18n="cta1">Comprendre en 2 minutes</a>
       <a class="btn" href="/v1" data-i18n="cta2">Explorer l'API</a>
     </div>
   </div>
@@ -387,6 +389,11 @@
 <span class="k">chaingo</span> token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000
 <span class="k">chaingo</span> delegate --from alice --to cg… --amount 50
 </pre>
+    <p class="lead" style="margin-top:22px" data-i18n="d.links">
+      Pas envie de ligne de commande ? <a href="/wallet/">Crée ton wallet dans le navigateur</a>.
+      Tu veux faire tourner ton propre nœud ? <a href="https://github.com/ghisdot/chaingo/blob/main/docs/DEPLOYMENT.md">Guide d'hébergement 24/24</a>
+      et <a href="https://github.com/ghisdot/chaingo/blob/main/docs/VALIDATOR.md">guide validateur/délégateur</a>.
+    </p>
   </div>
 </section>
 
@@ -408,7 +415,8 @@ const FR = {};
 document.querySelectorAll('[data-i18n]').forEach(el => { FR[el.dataset.i18n] = el.innerHTML; });
 
 const EN = {
-  nav1: `Pillars`, nav2: `How it works`, nav3: `Live chain`, nav4: `Tokenomics`, nav5: `Roadmap`,
+  nav1: `Pillars`, nav2: `How it works`, nav3: `Live chain`, nav4: `Tokenomics`, nav5: `Roadmap`, navwallet: `Wallet`,
+  cta0: `Create my wallet`,
   'hero.h1': `The <span class="grad">post-quantum</span> blockchain.<br>Simple. Fast. Deflationary.`,
   'hero.sub': `ChainGO protects every transaction with <b>ML-DSA-65</b>, the quantum-resistant signature standard (NIST FIPS 204). Automatically burned fees, tokens created without a single line of code, and a peer-to-peer network anyone can join.`,
   b1: `🛡️ <b>ML-DSA-65</b> signatures everywhere`, b2: `⚡ <b>31,000 TPS</b> measured locally`,
@@ -454,6 +462,7 @@ const EN = {
   'r.p5': `<h3>Phase 5 — Explorer &amp; SDKs</h3><p>Public block explorer, JavaScript and Python SDKs, interactive documentation.</p>`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
+  'd.links': `Don't want the command line? <a href="/wallet/">Create your wallet in the browser</a>. Want to run your own node? <a href="https://github.com/ghisdot/chaingo/blob/main/docs/DEPLOYMENT.md">24/7 hosting guide</a> and <a href="https://github.com/ghisdot/chaingo/blob/main/docs/VALIDATOR.md">validator/delegator guide</a>.`,
   'd.pre': `<span class="c"># Start a devnet node (validator + faucet included)</span>
 <span class="k">chaingo</span> node start --dev
 

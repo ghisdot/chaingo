@@ -64,6 +64,10 @@ go build -o chaingo.exe ./cmd/chaingo
 # 4. Transférer — tip par défaut, --fast (tip x4) ou --tip libre
 .\chaingo.exe send --from alice --to bob --amount 42.5 --fast --memo "hello"
 
+# 4bis. Wallet web (signature ML-DSA-65 dans le navigateur) — construire le WASM une fois :
+.\scripts\build-wasm.ps1
+# puis ouvrir http://localhost:8545/wallet/
+
 # 5. Créer un token SANS CODE
 .\chaingo.exe token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000 --mintable
 
