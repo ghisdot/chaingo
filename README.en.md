@@ -1,5 +1,9 @@
 # ChainGO
 
+[![CI](https://github.com/ghisdot/chaingo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghisdot/chaingo/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
+
 🇫🇷 [Version française](README.md)
 
 **Post-quantum blockchain** written in Go — every signature (transactions, blocks,

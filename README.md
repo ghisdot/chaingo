@@ -1,5 +1,9 @@
 # ChainGO
 
+[![CI](https://github.com/ghisdot/chaingo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghisdot/chaingo/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
+
 🇬🇧 [English version](README.en.md)
 
 Blockchain **post-quantique** écrite en Go — toutes les signatures (transactions, blocs, validateurs) utilisent **ML-DSA-65** (FIPS 204, niveau de sécurité NIST 3), le standard de signature résistant au quantique. Hachage SHA3-256.
