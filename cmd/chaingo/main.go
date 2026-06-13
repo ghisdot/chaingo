@@ -22,7 +22,7 @@ import (
 const usage = `ChainGO — blockchain post-quantique (ML-DSA-65 / FIPS 204)
 
 Usage :
-  chaingo node start [--dev] [--api :8545] [--p2p :9000] [--peers host:port,...]
+  chaingo node start [--dev | --testnet] [--api :8545] [--p2p :9000] [--peers host:port,...]
                      [--datadir DIR] [--genesis FILE | --genesis-url URL]
                      [--validator-seed FILE]
   chaingo wallet new <name> [--pass MDP]
@@ -101,6 +101,7 @@ func cmdNode(args []string) error {
 	fs := flag.NewFlagSet("node start", flag.ExitOnError)
 	home, _ := os.UserHomeDir()
 	dev := fs.Bool("dev", false, "devnet : génère validateur + faucet, active /v1/dev/*")
+	testnet := fs.Bool("testnet", false, "testnet public : chain_id chaingo-testnet-1, faucet ouvert, unbonding 24 h")
 	api := fs.String("api", ":8545", "adresse d'écoute API REST")
 	p2pAddr := fs.String("p2p", ":9000", "adresse d'écoute P2P (vide = désactivé)")
 	peers := fs.String("peers", "", "pairs à joindre, séparés par des virgules")
@@ -117,6 +118,7 @@ func cmdNode(args []string) error {
 		P2PAddr:       *p2pAddr,
 		Peers:         strings.Split(*peers, ","),
 		Dev:           *dev,
+		Testnet:       *testnet,
 		GenesisPath:   *genesisPath,
 		GenesisURL:    *genesisURL,
 		ValidatorSeed: *seed,

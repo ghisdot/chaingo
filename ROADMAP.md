@@ -28,7 +28,8 @@ Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** s
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
 - [ ] Codec binaire compact (remplace JSON+base64 sur le réseau) — [#8](https://github.com/ghisdot/chaingo/issues/8)
 - [ ] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)), fuzzing des entrées réseau
-- [ ] Testnet public multi-validateurs
+- [x] Mode `--testnet` (chain_id `chaingo-testnet-1`, faucet ouvert, unbonding 24 h) — prêt à héberger
+- [ ] Testnet public multi-validateurs en ligne 24/24 (nécessite un serveur)
 - [ ] Audit de sécurité externe
 
 ## Phase 3 — Anonymat fort

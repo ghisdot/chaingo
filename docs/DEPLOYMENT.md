@@ -66,8 +66,9 @@ git clone https://github.com/<ton-compte>/chaingo && cd chaingo
 docker build -t chaingo .
 docker run -d --name chaingo --restart unless-stopped \
   -p 127.0.0.1:8545:8545 -p 9000:9000 -v chaingo-data:/data \
-  chaingo node start --dev --datadir /data --web /web
+  chaingo
 ```
+(L'image lance par défaut un nœud **testnet public**, voir le `CMD` du Dockerfile.)
 
 ## 3. Service systemd (option A) — redémarre tout seul, survit aux reboots
 
@@ -81,7 +82,7 @@ Wants=network-online.target
 
 [Service]
 User=chaingo
-ExecStart=/usr/local/bin/chaingo node start --dev \
+ExecStart=/usr/local/bin/chaingo node start --testnet \
   --datadir /var/lib/chaingo \
   --api 127.0.0.1:8545 --p2p :9000 \
   --web /opt/chaingo/web
@@ -98,8 +99,10 @@ sudo systemctl enable --now chaingo
 journalctl -u chaingo -f        # suivre les logs
 ```
 
-> ⚠️ `--dev` lance la chaîne de développement (faucet ouvert). Pour le futur testnet
-> public on remplacera par `--genesis testnet.json --validator-seed …` — même service.
+> ℹ️ `--testnet` lance un **réseau de test public** (chain_id `chaingo-testnet-1`, faucet
+> ouvert, unbonding 24 h, mais l'endpoint qui révèle une seed reste désactivé). C'est ce
+> nœud-ci que le wallet web (sur GitHub Pages) interrogera : indique-lui son URL HTTPS dans
+> le champ « Nœud ». Le mainnet viendra après la Phase 2.
 
 ## 4. Domaine + HTTPS : Caddy (2 lignes, certificat automatique)
 

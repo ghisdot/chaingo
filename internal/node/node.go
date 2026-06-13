@@ -36,6 +36,7 @@ type Config struct {
 	P2PAddr       string
 	Peers         []string
 	Dev           bool
+	Testnet       bool   // réseau de test public (faucet ouvert, chain_id chaingo-testnet-1)
 	GenesisPath   string // fichier genesis.json
 	GenesisURL    string // ou URL http(s)://host:port/v1/genesis
 	ValidatorSeed string // fichier contenant la seed hex du validateur
@@ -73,8 +74,9 @@ func New(cfg Config) (*Node, error) {
 	}
 	n.db = db
 
-	// Clé validateur : --dev en génère une, sinon fichier seed optionnel.
-	if cfg.Dev {
+	// Clé validateur : --dev/--testnet en génèrent une (+ un faucet),
+	// sinon fichier seed optionnel.
+	if cfg.Dev || cfg.Testnet {
 		n.key, err = loadOrCreateKey(filepath.Join(cfg.DataDir, "validator.seed"))
 		if err != nil {
 			return nil, err
@@ -183,8 +185,26 @@ func (n *Node) initChain() error {
 		}
 		// On écrit aussi genesis.json pour pouvoir le partager avec d'autres nœuds.
 		os.WriteFile(filepath.Join(n.cfg.DataDir, "genesis.json"), g.Bytes(), 0o600)
+	case n.cfg.Testnet:
+		// Testnet public : règles mainnet (DefaultParams) sauf l'unbonding,
+		// raccourci à 24 h pour le confort des testeurs. Faucet ouvert.
+		tParams := types.DefaultParams()
+		tParams.UnbondingSeconds = 24 * 3600
+		g = &genesis.Genesis{
+			ChainID:   "chaingo-testnet-1",
+			Timestamp: time.Now().UnixMilli(),
+			Params:    &tParams,
+			Alloc: map[string]uint64{
+				n.faucet.Address(): 1_000_000_000 * types.Unit, // faucet testnet
+				n.key.Address():    1_000 * types.Unit,
+			},
+			Stakes: map[string]uint64{
+				n.key.Address(): 1_000_000 * types.Unit,
+			},
+		}
+		os.WriteFile(filepath.Join(n.cfg.DataDir, "genesis.json"), g.Bytes(), 0o600)
 	default:
-		return errors.New("no existing chain and no genesis: use --dev, --genesis or --genesis-url")
+		return errors.New("no existing chain and no genesis: use --dev, --testnet, --genesis or --genesis-url")
 	}
 
 	gb := g.Apply(n.st)
@@ -199,9 +219,9 @@ func (n *Node) initChain() error {
 		return err
 	}
 	log.Printf("[node] chain %s initialized, genesis %s…", g.ChainID, gb.Hash[:12])
-	if n.cfg.Dev {
-		log.Printf("[node] DEV validator: %s", n.key.Address())
-		log.Printf("[node] DEV faucet:    %s (1,000,000,000 CGO)", n.faucet.Address())
+	if n.cfg.Dev || n.cfg.Testnet {
+		log.Printf("[node] validator: %s", n.key.Address())
+		log.Printf("[node] faucet:    %s (1,000,000,000 CGO)", n.faucet.Address())
 	}
 	return nil
 }
@@ -268,9 +288,24 @@ func (n *Node) Status() map[string]any {
 		"params":       n.st.GetParams(),
 		"pq_signature": crypto.Scheme.Name(),
 		"dev_mode":     n.cfg.Dev,
+		"network":      n.network(),
 		"uptime_s":     int(time.Since(n.start).Seconds()),
 	}
 }
+
+func (n *Node) network() string {
+	switch {
+	case n.cfg.Dev:
+		return "dev"
+	case n.cfg.Testnet:
+		return "testnet"
+	default:
+		return "custom"
+	}
+}
+
+// FaucetEnabled : le faucet est ouvert sur dev et testnet, jamais ailleurs.
+func (n *Node) FaucetEnabled() bool { return n.cfg.Dev || n.cfg.Testnet }
 
 // Fees : tout ce qu'un client doit savoir pour construire une tx.
 func (n *Node) Fees() map[string]any {

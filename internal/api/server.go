@@ -31,6 +31,7 @@ type Backend interface {
 	Fees() map[string]any
 	Height() uint64
 	IsDev() bool
+	FaucetEnabled() bool
 	FaucetSend(to string, amount uint64) (string, error)
 	DevNewWallet() (map[string]any, error)
 	GenesisDoc() []byte
@@ -157,8 +158,8 @@ func (s *Server) Start() error {
 
 	// ---- endpoints devnet uniquement ----
 	mux.HandleFunc("POST /v1/dev/faucet", func(w http.ResponseWriter, r *http.Request) {
-		if !s.b.IsDev() {
-			writeErr(w, 403, "faucet only available in --dev mode")
+		if !s.b.FaucetEnabled() {
+			writeErr(w, 403, "faucet only available on dev/testnet")
 			return
 		}
 		var req struct {
