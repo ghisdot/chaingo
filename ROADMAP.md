@@ -49,7 +49,11 @@ Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** s
 
 ## Phase 5 — Écosystème
 
+- [x] **Wallet web** : génération de clés + signature ML-DSA-65 dans le navigateur (WASM),
+      seed chiffrée AES-256-GCM côté client — créer/importer, solde, envoyer
+- [x] **Hébergement gratuit** du site + wallet sur GitHub Pages (CI rebuild du WASM)
+- [x] Site bilingue FR/EN (README EN + bascule de langue sur le site et le wallet)
 - [ ] Explorateur de blocs public (sur le site embarqué)
-- [ ] SDK JavaScript et Python
-- [ ] Version anglaise du site et de la documentation
+- [ ] SDK JavaScript et Python ([#4](https://github.com/ghisdot/chaingo/issues/4))
+- [ ] Documentation (docs/) traduite en anglais
 - [ ] Programme de distribution genèse mainnet (« communauté d'abord » : 50/20/15/10/5)
