@@ -22,12 +22,12 @@ Suivi public de l'avancement. Une case cochée = implémenté **et vérifié** s
 
 ## Phase 2 — Sécurité de production
 
-- [ ] Votes de finalité BFT multi-validateurs (2f+1)
-- [ ] Slashing : double-signature et inactivité (sur stake + fonds en unbonding)
+- [ ] Votes de finalité BFT multi-validateurs (2f+1) — [#6](https://github.com/ghisdot/chaingo/issues/6)
+- [ ] Slashing : double-signature et inactivité (sur stake + fonds en unbonding) — [#7](https://github.com/ghisdot/chaingo/issues/7)
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
-- [ ] Codec binaire compact (remplace JSON+base64 sur le réseau)
-- [ ] Tests unitaires et d'intégration systématiques, fuzzing des entrées réseau
+- [ ] Codec binaire compact (remplace JSON+base64 sur le réseau) — [#8](https://github.com/ghisdot/chaingo/issues/8)
+- [ ] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)), fuzzing des entrées réseau
 - [ ] Testnet public multi-validateurs
 - [ ] Audit de sécurité externe
 
