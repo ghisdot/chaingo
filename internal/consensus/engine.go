@@ -48,11 +48,11 @@ type Engine struct {
 	lastProgress time.Time
 	OnBlock      func(*types.Block) // hook broadcast p2p
 
-	// Finalité BFT (Phase 2) : pool de précommits + hauteur finalisée.
-	votes     *votePool
-	finalized uint64
-	chainID   string
-	OnVote    func(*types.Vote) // hook broadcast p2p des votes
+	// Finalité BFT (Phase 2) : pool de précommits. La hauteur finalisée vit
+	// dans l'état (persistée), avancée quand un bloc porte un commit ≥ 2/3.
+	votes   *votePool
+	chainID string
+	OnVote  func(*types.Vote) // hook broadcast p2p des votes
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -86,12 +86,8 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 // SetChainID renseigne le chain_id utilisé pour signer/vérifier les votes.
 func (e *Engine) SetChainID(id string) { e.chainID = id }
 
-// FinalizedHeight : dernière hauteur finalisée par ≥ 2/3 du stake.
-func (e *Engine) FinalizedHeight() uint64 {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.finalized
-}
+// FinalizedHeight : dernière hauteur finalisée (depuis l'état, persistée).
+func (e *Engine) FinalizedHeight() uint64 { return e.st.GetFinalized() }
 
 func (e *Engine) Start() {
 	if e.key == nil {
@@ -147,6 +143,8 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	// Le timestamp est fixé AVANT l'exécution : il fait partie des règles
 	// (déblocage des unbondings) et doit être identique chez les suiveurs.
 	blockTime := time.Now().UnixMilli()
+	// Commit du bloc parent : les précommits ≥ 2/3 connus pour (height-1, prev).
+	lastCommit := e.buildLastCommit(height-1, prev)
 	absent := e.absentProposers(height, prev, round, e.addr)
 	applied, failed, root, _ := e.st.Execute(txs, evid, absent, e.addr, blockTime, false)
 	for h, err := range failed {
@@ -161,22 +159,28 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	}
 	b := &types.Block{
 		Header: types.BlockHeader{
-			Height:       height,
-			PrevHash:     prev,
-			Timestamp:    blockTime,
-			Proposer:     e.addr,
-			Round:        round,
-			TxRoot:       types.TxRoot(applied),
-			EvidenceRoot: types.EvidenceRoot(evid),
-			StateRoot:    root,
+			Height:         height,
+			PrevHash:       prev,
+			Timestamp:      blockTime,
+			Proposer:       e.addr,
+			Round:          round,
+			TxRoot:         types.TxRoot(applied),
+			EvidenceRoot:   types.EvidenceRoot(evid),
+			LastCommitRoot: types.CommitRoot(lastCommit),
+			StateRoot:      root,
 		},
-		Txs:      applied,
-		Evidence: evid,
+		Txs:        applied,
+		Evidence:   evid,
+		LastCommit: lastCommit,
 	}
 	b.Hash = b.ComputeHash()
 	b.ProposerPubKey = e.key.PubBytes()
 	b.ProposerSignature = e.key.Sign(b.SigningBytes())
 	e.st.Commit(height, b.Hash)
+	if len(lastCommit) > 0 {
+		e.st.SetFinalized(height - 1)
+		e.votes.prune(height - 1)
+	}
 	e.lastProgress = time.Now()
 	e.persist(b)
 	if e.OnBlock != nil {
@@ -227,6 +231,22 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 			return fmt.Errorf("invalid double-sign evidence: %w", err)
 		}
 	}
+	// Commit du parent : si présent, il doit représenter ≥ 2/3 du stake actif
+	// sur le bloc parent (height-1, prevHash). C'est ce qui finalise.
+	if types.CommitRoot(b.LastCommit) != b.Header.LastCommitRoot {
+		return errors.New("last commit root mismatch")
+	}
+	finalizesParent := false
+	if len(b.LastCommit) > 0 {
+		power, cerr := e.verifyCommit(b.LastCommit, b.Header.Height-1, b.Header.PrevHash)
+		if cerr != nil {
+			return fmt.Errorf("invalid last commit: %w", cerr)
+		}
+		if !hasQuorum(power, e.st.TotalPower()) {
+			return errors.New("last commit below 2/3 of active stake")
+		}
+		finalizesParent = true
+	}
 	if err := types.VerifyAll(b.Txs); err != nil {
 		return err
 	}
@@ -241,6 +261,10 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		return err
 	}
 	e.st.Commit(b.Header.Height, b.Hash)
+	if finalizesParent {
+		e.st.SetFinalized(b.Header.Height - 1)
+		e.votes.prune(b.Header.Height - 1)
+	}
 	e.lastProgress = time.Now()
 	e.persist(b)
 	for _, tx := range b.Txs {
@@ -259,18 +283,19 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 var errWrongVoteChain = errors.New("vote on wrong chain")
 
 // castVote : ce nœud, s'il est validateur, précommit le bloc qu'il vient
-// de committer, l'ajoute au pool et le diffuse. Suppose e.mu détenu.
+// de committer, l'ajoute au pool et le diffuse. Suppose e.mu détenu. La
+// finalité n'est PAS décidée ici : elle l'est quand un bloc ultérieur porte
+// le commit ≥ 2/3 (buildLastCommit / verifyCommit).
 func (e *Engine) castVote(height uint64, hash string) {
 	if e.key == nil {
 		return
 	}
 	v := &types.Vote{ChainID: e.chainID, Height: height, BlockHash: hash}
 	v.SignWith(e.key)
-	e.votes.add(v, e.st.PowerOf(e.addr))
+	e.votes.add(v)
 	if e.OnVote != nil {
 		e.OnVote(v)
 	}
-	e.checkFinalityLocked(height, hash)
 }
 
 // recordEquivocation : transforme un vote conflictuel en preuve à inclure
@@ -294,40 +319,70 @@ func (e *Engine) AddVote(v *types.Vote) (bool, error) {
 	if e.chainID != "" && v.ChainID != e.chainID {
 		return false, errWrongVoteChain
 	}
-	if v.Height <= e.finalized {
+	if v.Height <= e.st.GetFinalized() {
 		return false, nil // hauteur déjà finalisée
 	}
-	power := e.st.PowerOf(v.Voter)
-	if power == 0 {
+	if e.st.PowerOf(v.Voter) == 0 {
 		return false, errors.New("voter is not an active validator")
 	}
 	if err := v.Verify(); err != nil {
 		return false, err
 	}
-	isNew, _, equiv := e.votes.add(v, power)
+	isNew, equiv := e.votes.add(v)
 	if !isNew {
 		return false, nil
 	}
 	if equiv != nil {
 		e.recordEquivocation(equiv, v)
 	}
-	e.checkFinalityLocked(v.Height, e.localHash(v.Height))
 	return true, nil
 }
 
-// checkFinalityLocked : si le pouvoir cumulé des précommits sur NOTRE bloc
-// à `height` dépasse 2/3 du stake, la hauteur est finalisée. Suppose e.mu détenu.
-func (e *Engine) checkFinalityLocked(height uint64, localHash string) {
-	if height <= e.finalized || localHash == "" {
-		return
+// buildLastCommit : reconstruit le commit du bloc (height, hash) à partir des
+// précommits connus, s'il atteint ≥ 2/3 du stake actif ; sinon nil (le bloc
+// ne finalisera pas son parent — la finalité rattrapera plus tard).
+func (e *Engine) buildLastCommit(height uint64, hash string) []*types.Vote {
+	if height == 0 {
+		return nil // la genèse n'a pas de précommits
 	}
-	power := e.votes.power(height, localHash)
-	total := e.st.TotalPower()
-	if hasQuorum(power, total) {
-		e.finalized = height
-		e.votes.prune(height)
-		log.Printf("[consensus] hauteur #%d FINALISÉE (%d%% du stake a précommit)", height, power*100/total)
+	cand := e.votes.commitVotes(height, hash)
+	if len(cand) == 0 {
+		return nil
 	}
+	power, err := e.verifyCommit(cand, height, hash)
+	if err != nil || !hasQuorum(power, e.st.TotalPower()) {
+		return nil
+	}
+	return cand
+}
+
+// verifyCommit valide un ensemble de précommits sur (height, hash) et renvoie
+// le pouvoir actif cumulé des votants distincts. Sert au proposeur (build) et
+// aux suiveurs (validation du LastCommit reçu).
+func (e *Engine) verifyCommit(votes []*types.Vote, height uint64, hash string) (uint64, error) {
+	seen := map[string]bool{}
+	var power uint64
+	for _, v := range votes {
+		if e.chainID != "" && v.ChainID != e.chainID {
+			return 0, errors.New("commit vote on wrong chain")
+		}
+		if v.Height != height || v.BlockHash != hash {
+			return 0, errors.New("commit vote height/hash mismatch")
+		}
+		if seen[v.Voter] {
+			return 0, errors.New("duplicate voter in commit")
+		}
+		seen[v.Voter] = true
+		p := e.st.PowerOf(v.Voter)
+		if p == 0 {
+			return 0, errors.New("commit voter is not an active validator")
+		}
+		if err := v.Verify(); err != nil {
+			return 0, err
+		}
+		power += p
+	}
+	return power, nil
 }
 
 // absentProposers : les validateurs élus des rounds de secours sautés
@@ -372,19 +427,6 @@ func (e *Engine) drainEvidenceLocked() []*types.DoubleSignEvidence {
 		out = append(out, ev)
 	}
 	return out
-}
-
-// localHash : hash du bloc local à une hauteur (db, ou état courant).
-func (e *Engine) localHash(height uint64) string {
-	if e.db != nil {
-		if b, _ := e.db.GetBlock(height); b != nil {
-			return b.Hash
-		}
-	}
-	if height == e.st.GetHeight() {
-		return e.st.GetLastHash()
-	}
-	return ""
 }
 
 func (e *Engine) persist(b *types.Block) {

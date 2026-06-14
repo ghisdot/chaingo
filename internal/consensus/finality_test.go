@@ -30,8 +30,7 @@ func TestQuorumThreshold(t *testing.T) {
 	}
 }
 
-// TestVoteSignVerify : aller-retour de signature ML-DSA-65 + détection
-// d'altération.
+// TestVoteSignVerify : aller-retour ML-DSA-65 + détection d'altération.
 func TestVoteSignVerify(t *testing.T) {
 	kp, _ := crypto.GenerateKeyPair()
 	v := &types.Vote{ChainID: "test", Height: 7, BlockHash: "abc"}
@@ -39,7 +38,7 @@ func TestVoteSignVerify(t *testing.T) {
 	if err := v.Verify(); err != nil {
 		t.Fatalf("vote valide rejeté: %v", err)
 	}
-	v.BlockHash = "def" // altération
+	v.BlockHash = "def"
 	if v.Verify() == nil {
 		t.Fatal("vote altéré accepté")
 	}
@@ -54,69 +53,76 @@ func mkValidators(st *state.State, n int) []*crypto.KeyPair {
 	return ks
 }
 
-func voteFrom(e *Engine, kp *crypto.KeyPair, height uint64, hash string) (bool, error) {
-	v := &types.Vote{ChainID: "test", Height: height, BlockHash: hash}
+func addVote(e *Engine, kp *crypto.KeyPair, h uint64, hash string) {
+	v := &types.Vote{ChainID: "test", Height: h, BlockHash: hash}
 	v.SignWith(kp)
-	return e.AddVote(v)
+	e.AddVote(v)
 }
 
-// TestFinalityNeedsSupermajority : avec 4 validateurs égaux, la finalité
-// n'avance qu'à partir de 3 précommits (3/4 > 2/3), pas à 2/4.
-func TestFinalityNeedsSupermajority(t *testing.T) {
+func newEngine(st *state.State, key *crypto.KeyPair) *Engine {
+	e := New(st, mempool.New(10), nil, key, time.Hour, 10)
+	e.SetChainID("test")
+	return e
+}
+
+// TestCommitNeedsSupermajority : un commit ne se forme (et ne finalisera donc
+// le parent) qu'à partir de > 2/3 du stake actif.
+func TestCommitNeedsSupermajority(t *testing.T) {
 	st := state.New()
 	st.SetParams(types.DefaultParams())
 	vs := mkValidators(st, 4)
-	e := New(st, mempool.New(10), nil, vs[0], time.Hour, 10)
-	e.SetChainID("test")
+	e := newEngine(st, vs[0])
+	const h, hash = uint64(1), "HASH1"
 
-	// Bloc local committé à la hauteur 1.
-	st.Commit(1, "HASH1")
-
-	// 2 précommits (2/4 = 50 %) → pas de finalité.
-	for i := 0; i < 2; i++ {
-		if ok, err := voteFrom(e, vs[i], 1, "HASH1"); !ok || err != nil {
-			t.Fatalf("vote %d refusé: ok=%v err=%v", i, ok, err)
-		}
+	for i := 0; i < 2; i++ { // 2/4 = 50 %
+		addVote(e, vs[i], h, hash)
 	}
-	if e.FinalizedHeight() != 0 {
-		t.Fatalf("finalité à 2/4 ne devrait pas avancer, got %d", e.FinalizedHeight())
+	if c := e.buildLastCommit(h, hash); c != nil {
+		t.Fatalf("2/4 ne doit pas former de commit, got %d votes", len(c))
 	}
 
-	// 3e précommit (3/4 = 75 %) → finalité hauteur 1.
-	if _, err := voteFrom(e, vs[2], 1, "HASH1"); err != nil {
-		t.Fatalf("3e vote refusé: %v", err)
+	addVote(e, vs[2], h, hash) // 3/4 = 75 %
+	c := e.buildLastCommit(h, hash)
+	if len(c) != 3 {
+		t.Fatalf("commit attendu (3 votes), got %v", c)
 	}
-	if e.FinalizedHeight() != 1 {
-		t.Fatalf("finalité devrait atteindre 1 à 3/4, got %d", e.FinalizedHeight())
+	power, err := e.verifyCommit(c, h, hash)
+	if err != nil || !hasQuorum(power, st.TotalPower()) {
+		t.Fatalf("le commit 3/4 devrait être valide et atteindre le quorum (err=%v)", err)
 	}
 }
 
-// TestVoteRulesRejectAndDedup : doublons, non-validateurs et hash divergent.
-func TestVoteRulesRejectAndDedup(t *testing.T) {
+// TestCommitRejectsBadVotes : doublon de votant, hash divergent, non-validateur.
+func TestCommitRejectsBadVotes(t *testing.T) {
 	st := state.New()
 	st.SetParams(types.DefaultParams())
 	vs := mkValidators(st, 4)
-	e := New(st, mempool.New(10), nil, vs[0], time.Hour, 10)
-	e.SetChainID("test")
-	st.Commit(1, "HASH1")
+	e := newEngine(st, vs[0])
+	const h, hash = uint64(1), "HASH1"
 
-	// Doublon : le même vote compté une seule fois.
-	voteFrom(e, vs[0], 1, "HASH1")
-	if ok, _ := voteFrom(e, vs[0], 1, "HASH1"); ok {
-		t.Fatal("doublon de vote accepté comme nouveau")
+	v0 := &types.Vote{ChainID: "test", Height: h, BlockHash: hash}
+	v0.SignWith(vs[0])
+	// Doublon du même votant dans un commit → rejet.
+	if _, err := e.verifyCommit([]*types.Vote{v0, v0}, h, hash); err == nil {
+		t.Fatal("doublon de votant dans le commit devrait être rejeté")
 	}
-
-	// Non-validateur : rejeté.
+	// Hash divergent → rejet.
+	if _, err := e.verifyCommit([]*types.Vote{v0}, h, "AUTRE"); err == nil {
+		t.Fatal("commit sur un hash divergent devrait être rejeté")
+	}
+	// Non-validateur → pouvoir 0 → rejet.
 	stranger, _ := crypto.GenerateKeyPair()
-	if _, err := voteFrom(e, stranger, 1, "HASH1"); err == nil {
-		t.Fatal("vote d'un non-validateur accepté")
+	vs1 := &types.Vote{ChainID: "test", Height: h, BlockHash: hash}
+	vs1.SignWith(stranger)
+	if _, err := e.verifyCommit([]*types.Vote{vs1}, h, hash); err == nil {
+		t.Fatal("vote d'un non-validateur devrait être rejeté")
 	}
 
-	// Quorum sur un AUTRE hash (fork) ne finalise pas notre bloc local.
+	// Quorum sur un AUTRE hash ne forme pas de commit pour NOTRE hash.
 	for i := 0; i < 4; i++ {
-		voteFrom(e, vs[i], 1, "FORKHASH")
+		addVote(e, vs[i], h, "FORK")
 	}
-	if e.FinalizedHeight() != 0 {
-		t.Fatalf("un quorum sur un hash divergent ne doit pas finaliser notre chaîne, got %d", e.FinalizedHeight())
+	if c := e.buildLastCommit(h, hash); c != nil {
+		t.Fatal("un quorum sur un hash divergent ne doit pas former le commit de notre bloc")
 	}
 }

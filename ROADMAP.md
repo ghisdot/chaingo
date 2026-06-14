@@ -23,10 +23,12 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 ## Phase 2 — Sécurité de production
 
 - [~] Votes de finalité BFT multi-validateurs (2f+1) — [#6](https://github.com/ghisdot/chaingo/issues/6)
-      **1re tranche livrée** : précommits signés ML-DSA-65, comptage pondéré par le
-      stake, quorum strict > 2/3, gossip P2P des votes, `finalized_height` exposé,
-      commande `chaingo keygen`. Vérifié (tests Go déterministes + réseau 3 nœuds).
-      Reste : verrouillage type Tendermint complet (prevote + locking), set figé par hauteur.
+      Livré : précommits signés ML-DSA-65, quorum strict > 2/3, gossip P2P,
+      `chaingo keygen`. **Finalité persistante & vérifiable** : chaque bloc porte le
+      *commit* (≥ 2/3) du bloc parent (`LastCommit` + `LastCommitRoot` au header) →
+      `finalized_height` dérivé de la chaîne, survit au redémarrage (vérifié) et
+      n'est plus recalculé localement. Reste : verrouillage type Tendermint complet
+      (prevote + locking), set de validateurs figé par hauteur.
 - [x] Slashing — [#7](https://github.com/ghisdot/chaingo/issues/7) : **double-signature**
       (preuve d'équivocation dans le bloc, slash 5 % stake+délégations, idempotent) **et
       inactivité (downtime)** : round inscrit dans l'en-tête (déterministe), comptage des

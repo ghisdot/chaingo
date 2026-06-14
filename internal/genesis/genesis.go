@@ -75,13 +75,14 @@ func (g *Genesis) Apply(st *state.State) *types.Block {
 	}
 	b := &types.Block{
 		Header: types.BlockHeader{
-			Height:       0,
-			PrevHash:     "",
-			Timestamp:    g.Timestamp,
-			Proposer:     "",
-			TxRoot:       types.TxRoot(nil),
-			EvidenceRoot: types.EvidenceRoot(nil),
-			StateRoot:    st.Root(),
+			Height:         0,
+			PrevHash:       "",
+			Timestamp:      g.Timestamp,
+			Proposer:       "",
+			TxRoot:         types.TxRoot(nil),
+			EvidenceRoot:   types.EvidenceRoot(nil),
+			LastCommitRoot: types.CommitRoot(nil),
+			StateRoot:      st.Root(),
 		},
 	}
 	b.Hash = b.ComputeHash()

@@ -132,6 +132,10 @@ type State struct {
 	BaseFee   uint64          `json:"base_fee"` // base fee courant (EIP-1559)
 	Height    uint64          `json:"height"`
 	LastHash  string          `json:"last_hash"`
+	// FinalizedHeight : dernière hauteur finalisée par un commit ≥ 2/3 porté
+	// dans un bloc. Persistée (survit au redémarrage), mais HORS de la racine
+	// d'état (déjà couverte par les blocs via LastCommitRoot).
+	FinalizedHeight uint64 `json:"finalized_height"`
 }
 
 func New() *State {
@@ -312,6 +316,22 @@ func (s *State) IsSlashed(voter string, height uint64) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.Slashed[slashKey(voter, height)]
+}
+
+// SetFinalized avance la hauteur finalisée (monotone). Appelé après
+// vérification d'un commit ≥ 2/3 porté par un bloc.
+func (s *State) SetFinalized(height uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if height > s.FinalizedHeight {
+		s.FinalizedHeight = height
+	}
+}
+
+func (s *State) GetFinalized() uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.FinalizedHeight
 }
 
 // ---- sélection du proposeur ----
@@ -980,5 +1000,6 @@ func (s *State) Restore(data []byte) error {
 	s.BaseFee = tmp.BaseFee
 	s.Height = tmp.Height
 	s.LastHash = tmp.LastHash
+	s.FinalizedHeight = tmp.FinalizedHeight
 	return nil
 }

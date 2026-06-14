@@ -15,16 +15,23 @@ type BlockHeader struct {
 	Round        uint32 `json:"round"` // round de secours (0 = nominal) — déterministe, vérifiable
 	TxRoot       string `json:"tx_root"`
 	EvidenceRoot string `json:"evidence_root"`
-	StateRoot    string `json:"state_root"`
+	// LastCommitRoot : empreinte des précommits du bloc PARENT inclus dans
+	// ce bloc (LastCommit). Rend la finalité persistante et vérifiable
+	// depuis la chaîne : un bloc qui porte un commit ≥ 2/3 du parent finalise
+	// ce parent pour tous les nœuds, même après redémarrage.
+	LastCommitRoot string `json:"last_commit_root"`
+	StateRoot      string `json:"state_root"`
 }
 
 type Block struct {
-	Header            BlockHeader           `json:"header"`
-	Txs               []*Transaction        `json:"txs"`
-	Evidence          []*DoubleSignEvidence `json:"evidence,omitempty"`
-	Hash              string                `json:"hash"`
-	ProposerPubKey    []byte                `json:"proposer_pub_key,omitempty"`
-	ProposerSignature []byte                `json:"proposer_signature,omitempty"`
+	Header   BlockHeader           `json:"header"`
+	Txs      []*Transaction        `json:"txs"`
+	Evidence []*DoubleSignEvidence `json:"evidence,omitempty"`
+	// LastCommit : précommits (≥ 2/3 du stake actif) sur le bloc PARENT.
+	LastCommit        []*Vote `json:"last_commit,omitempty"`
+	Hash              string  `json:"hash"`
+	ProposerPubKey    []byte  `json:"proposer_pub_key,omitempty"`
+	ProposerSignature []byte  `json:"proposer_signature,omitempty"`
 }
 
 // TxRoot computes a Merkle root over the transaction hashes.

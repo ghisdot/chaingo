@@ -40,3 +40,16 @@ func (v *Vote) Verify() error {
 	}
 	return crypto.Verify(v.VoterPub, v.SigningBytes(), v.Signature)
 }
+
+// CommitRoot : empreinte d'un ensemble de précommits (LastCommit d'un bloc),
+// couverte par le hash du bloc via le header.
+func CommitRoot(votes []*Vote) string {
+	if len(votes) == 0 {
+		return crypto.HashHex(nil)
+	}
+	acc := crypto.Hash([]byte(votes[0].Hash()))
+	for i := 1; i < len(votes); i++ {
+		acc = crypto.Hash(acc, []byte(votes[i].Hash()))
+	}
+	return crypto.HashHex(acc)
+}

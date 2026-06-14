@@ -1,42 +1,42 @@
 package consensus
 
 import (
+	"sort"
 	"sync"
 
 	"chaingo/internal/types"
 )
 
-// votePool accumule les précommits par (hauteur, hash de bloc) et calcule
-// le pouvoir de vote cumulé. Pondération et seuil 2/3 sont décidés par
-// l'appelant (l'Engine), qui connaît le pouvoir de chaque validateur.
+// votePool accumule les précommits par (hauteur, hash de bloc). Il stocke les
+// votes eux-mêmes pour pouvoir reconstruire le COMMIT (≥ 2/3) inclus dans le
+// bloc suivant — c'est lui qui rend la finalité persistante et vérifiable.
 type votePool struct {
 	mu sync.Mutex
-	// height -> blockHash -> voterAddr -> power
-	votes map[uint64]map[string]map[string]uint64
+	// height -> blockHash -> voterAddr -> vote
+	votes map[uint64]map[string]map[string]*types.Vote
 	seen  map[string]bool // hash de vote -> déjà vu (déduplication)
-	// height -> voterAddr -> premier Vote vu (pour détecter l'équivocation
-	// : un même votant signant deux hash différents à la même hauteur).
+	// height -> voterAddr -> premier Vote vu (détection d'équivocation :
+	// un même votant signant deux hash différents à la même hauteur).
 	first map[uint64]map[string]*types.Vote
 }
 
 func newVotePool() *votePool {
 	return &votePool{
-		votes: map[uint64]map[string]map[string]uint64{},
+		votes: map[uint64]map[string]map[string]*types.Vote{},
 		seen:  map[string]bool{},
 		first: map[uint64]map[string]*types.Vote{},
 	}
 }
 
-// add enregistre un vote avec le pouvoir du votant. Renvoie (nouveau,
-// pouvoir cumulé, équivocation). Si le votant avait déjà précommit un
-// AUTRE hash à cette hauteur, `equiv` contient le vote conflictuel
-// précédent (preuve de double-signature).
-func (p *votePool) add(v *types.Vote, power uint64) (isNew bool, cumPower uint64, equiv *types.Vote) {
+// add enregistre un vote. Renvoie (nouveau, équivocation). Si le votant avait
+// déjà précommit un AUTRE hash à cette hauteur, `equiv` contient le vote
+// conflictuel précédent (preuve de double-signature).
+func (p *votePool) add(v *types.Vote) (isNew bool, equiv *types.Vote) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	h := v.Hash()
 	if p.seen[h] {
-		return false, p.powerLocked(v.Height, v.BlockHash), nil
+		return false, nil
 	}
 	p.seen[h] = true
 
@@ -45,34 +45,41 @@ func (p *votePool) add(v *types.Vote, power uint64) (isNew bool, cumPower uint64
 	}
 	if prev, ok := p.first[v.Height][v.Voter]; ok {
 		if prev.BlockHash != v.BlockHash {
-			equiv = prev // équivocation détectée
+			equiv = prev
 		}
 	} else {
 		p.first[v.Height][v.Voter] = v
 	}
 
 	if p.votes[v.Height] == nil {
-		p.votes[v.Height] = map[string]map[string]uint64{}
+		p.votes[v.Height] = map[string]map[string]*types.Vote{}
 	}
 	if p.votes[v.Height][v.BlockHash] == nil {
-		p.votes[v.Height][v.BlockHash] = map[string]uint64{}
+		p.votes[v.Height][v.BlockHash] = map[string]*types.Vote{}
 	}
-	p.votes[v.Height][v.BlockHash][v.Voter] = power
-	return true, p.powerLocked(v.Height, v.BlockHash), equiv
+	p.votes[v.Height][v.BlockHash][v.Voter] = v
+	return true, equiv
 }
 
-func (p *votePool) powerLocked(height uint64, hash string) uint64 {
-	var total uint64
-	for _, power := range p.votes[height][hash] {
-		total += power
-	}
-	return total
-}
-
-func (p *votePool) power(height uint64, hash string) uint64 {
+// commitVotes renvoie les précommits connus pour (hauteur, hash), triés par
+// votant (ordre déterministe pour la racine de commit).
+func (p *votePool) commitVotes(height uint64, hash string) []*types.Vote {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.powerLocked(height, hash)
+	m := p.votes[height][hash]
+	if len(m) == 0 {
+		return nil
+	}
+	addrs := make([]string, 0, len(m))
+	for a := range m {
+		addrs = append(addrs, a)
+	}
+	sort.Strings(addrs)
+	out := make([]*types.Vote, 0, len(m))
+	for _, a := range addrs {
+		out = append(out, m[a])
+	}
+	return out
 }
 
 // prune supprime les votes des hauteurs déjà finalisées.
