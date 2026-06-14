@@ -23,6 +23,12 @@ type Params struct {
 	DelegationCommissionBps uint64 `json:"delegation_commission_bps"` // 1000 = 10 %
 	ContractCreateFee       uint64 `json:"contract_create_fee"`       // brûlé à la création d'un contrat no-code
 	SlashDoubleSignBps      uint64 `json:"slash_double_sign_bps"`     // 500 = 5 % du poids slashé en cas d'équivocation
+	// Inactivité (downtime) : un validateur élu proposeur qui ne produit pas
+	// accumule des « slots manqués ». Au seuil, il est jailé (sorti du set
+	// actif) et légèrement slashé. Il rejoint via une tx unjail après le délai.
+	DowntimeJailThreshold uint64 `json:"downtime_jail_threshold"` // slots manqués consécutifs avant jail
+	SlashDowntimeBps      uint64 `json:"slash_downtime_bps"`      // 10 = 0,1 % slashé au jail
+	JailSeconds           int64  `json:"jail_seconds"`            // durée minimale du jail
 }
 
 func DefaultParams() Params {
@@ -41,6 +47,9 @@ func DefaultParams() Params {
 		DelegationCommissionBps: 1000, // 10 % pour le validateur
 		ContractCreateFee:       1 * Unit,
 		SlashDoubleSignBps:      500, // 5 %
+		DowntimeJailThreshold:   50,  // 50 slots manqués consécutifs
+		SlashDowntimeBps:        10,  // 0,1 %
+		JailSeconds:             600, // 10 min (réglable par réseau)
 	}
 }
 

@@ -12,6 +12,7 @@ type BlockHeader struct {
 	PrevHash     string `json:"prev_hash"`
 	Timestamp    int64  `json:"timestamp"`
 	Proposer     string `json:"proposer"`
+	Round        uint32 `json:"round"` // round de secours (0 = nominal) — déterministe, vérifiable
 	TxRoot       string `json:"tx_root"`
 	EvidenceRoot string `json:"evidence_root"`
 	StateRoot    string `json:"state_root"`

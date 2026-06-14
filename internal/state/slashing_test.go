@@ -32,7 +32,7 @@ func TestSlashDoubleSign(t *testing.T) {
 	}
 
 	// Exécution d'un bloc portant la preuve.
-	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, "", 1000, true); err != nil {
+	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, nil, "", 1000, true); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 
@@ -50,7 +50,7 @@ func TestSlashDoubleSign(t *testing.T) {
 	}
 
 	// Idempotence : rejouer la même preuve ne re-slashe pas.
-	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, "", 2000, true); err != nil {
+	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, nil, "", 2000, true); err != nil {
 		t.Fatalf("execute 2: %v", err)
 	}
 	if st.PowerOf(val.Address()) != stake-wantCut {
@@ -71,7 +71,7 @@ func TestSlashHitsDelegations(t *testing.T) {
 	st.Mint(del.Address(), 200_000*types.Unit)
 	dtx := &types.Transaction{Type: types.TxDelegate, To: val.Address(), TokenID: types.NativeToken, Amount: 100_000 * types.Unit, MaxBaseFee: 1 * types.Unit}
 	dtx.SignWith(del)
-	if _, _, _, err := st.Execute([]*types.Transaction{dtx}, nil, "", 1000, true); err != nil {
+	if _, _, _, err := st.Execute([]*types.Transaction{dtx}, nil, nil, "", 1000, true); err != nil {
 		t.Fatalf("delegate: %v", err)
 	}
 
@@ -86,7 +86,7 @@ func TestSlashHitsDelegations(t *testing.T) {
 	v2 := &types.Vote{ChainID: "c", Height: 9, BlockHash: "Y"}
 	v2.SignWith(val)
 	ev := &types.DoubleSignEvidence{Height: 9, Voter: val.Address(), VoteA: v1, VoteB: v2}
-	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, "", 2000, true); err != nil {
+	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, nil, "", 2000, true); err != nil {
 		t.Fatalf("slash: %v", err)
 	}
 

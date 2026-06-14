@@ -147,7 +147,8 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	// Le timestamp est fixé AVANT l'exécution : il fait partie des règles
 	// (déblocage des unbondings) et doit être identique chez les suiveurs.
 	blockTime := time.Now().UnixMilli()
-	applied, failed, root, _ := e.st.Execute(txs, evid, e.addr, blockTime, false)
+	absent := e.absentProposers(height, prev, round, e.addr)
+	applied, failed, root, _ := e.st.Execute(txs, evid, absent, e.addr, blockTime, false)
 	for h, err := range failed {
 		log.Printf("[consensus] tx %s… rejected: %v", h[:12], err)
 		e.pool.Drop(h)
@@ -164,6 +165,7 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 			PrevHash:     prev,
 			Timestamp:    blockTime,
 			Proposer:     e.addr,
+			Round:        round,
 			TxRoot:       types.TxRoot(applied),
 			EvidenceRoot: types.EvidenceRoot(evid),
 			StateRoot:    root,
@@ -199,18 +201,14 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	if b.Header.PrevHash != prev {
 		return fmt.Errorf("prev hash mismatch at height %d", b.Header.Height)
 	}
-	// Le proposeur doit être l'élu d'un des rounds de la hauteur (le
-	// round 0 en temps normal, un round de secours si des validateurs
-	// étaient hors-ligne).
-	validProposer := false
-	for r := uint32(0); r < MaxRounds; r++ {
-		if e.st.SelectProposer(b.Header.Height, prev, r) == b.Header.Proposer {
-			validProposer = true
-			break
-		}
+	// Le proposeur doit être EXACTEMENT l'élu du round inscrit dans l'en-tête
+	// (round 0 nominal, sinon un round de secours). Le round explicite lève
+	// toute ambiguïté et rend le comptage d'inactivité déterministe.
+	if b.Header.Round >= MaxRounds {
+		return fmt.Errorf("round %d out of range", b.Header.Round)
 	}
-	if !validProposer {
-		return fmt.Errorf("proposer %s not elected for any round at height %d", b.Header.Proposer, b.Header.Height)
+	if want := e.st.SelectProposer(b.Header.Height, prev, b.Header.Round); want != b.Header.Proposer {
+		return fmt.Errorf("wrong proposer at height %d round %d: got %s, want %s", b.Header.Height, b.Header.Round, b.Header.Proposer, want)
 	}
 	if b.ComputeHash() != b.Hash {
 		return errors.New("invalid block hash")
@@ -232,8 +230,9 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	if err := types.VerifyAll(b.Txs); err != nil {
 		return err
 	}
+	absent := e.absentProposers(b.Header.Height, prev, b.Header.Round, b.Header.Proposer)
 	snapshot := e.st.Bytes()
-	_, _, root, err := e.st.Execute(b.Txs, b.Evidence, b.Header.Proposer, b.Header.Timestamp, true)
+	_, _, root, err := e.st.Execute(b.Txs, b.Evidence, absent, b.Header.Proposer, b.Header.Timestamp, true)
 	if err != nil || root != b.Header.StateRoot {
 		e.st.Restore(snapshot)
 		if err == nil {
@@ -329,6 +328,27 @@ func (e *Engine) checkFinalityLocked(height uint64, localHash string) {
 		e.votes.prune(height)
 		log.Printf("[consensus] hauteur #%d FINALISÉE (%d%% du stake a précommit)", height, power*100/total)
 	}
+}
+
+// absentProposers : les validateurs élus des rounds de secours sautés
+// (0..round-1) qui n'ont donc pas produit ce bloc — déterministe à partir de
+// (height, prev, round), identique chez le proposeur et chez les suiveurs.
+// On exclut le proposeur effectif (il a produit) et on déduplique.
+func (e *Engine) absentProposers(height uint64, prev string, round uint32, proposer string) []string {
+	if round == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for r := uint32(0); r < round; r++ {
+		a := e.st.SelectProposer(height, prev, r)
+		if a == "" || a == proposer || seen[a] {
+			continue
+		}
+		seen[a] = true
+		out = append(out, a)
+	}
+	return out
 }
 
 // drainEvidenceLocked : retire et renvoie les preuves en attente (ordre

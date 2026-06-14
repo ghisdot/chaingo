@@ -9,7 +9,7 @@ import (
 
 func exec(t *testing.T, st *State, txs ...*types.Transaction) {
 	t.Helper()
-	if _, _, _, err := st.Execute(txs, nil, "", 1000, true); err != nil {
+	if _, _, _, err := st.Execute(txs, nil, nil, "", 1000, true); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 }
@@ -87,7 +87,7 @@ func TestMultisigGuards(t *testing.T) {
 	bad := &types.Transaction{Type: types.TxContractExec, ContractID: cid, Action: types.ActionApprove,
 		Proposal: 0, MaxBaseFee: 1 * types.Unit}
 	bad.SignWith(stranger)
-	if _, _, _, err := st.Execute([]*types.Transaction{bad}, nil, "", 1000, true); err == nil {
+	if _, _, _, err := st.Execute([]*types.Transaction{bad}, nil, nil, "", 1000, true); err == nil {
 		t.Fatal("approbation par un non-signataire devrait échouer")
 	}
 
@@ -95,7 +95,7 @@ func TestMultisigGuards(t *testing.T) {
 	dup := &types.Transaction{Type: types.TxContractExec, ContractID: cid, Action: types.ActionApprove,
 		Proposal: 0, Nonce: 2, MaxBaseFee: 1 * types.Unit}
 	dup.SignWith(a)
-	if _, _, _, err := st.Execute([]*types.Transaction{dup}, nil, "", 1000, true); err == nil {
+	if _, _, _, err := st.Execute([]*types.Transaction{dup}, nil, nil, "", 1000, true); err == nil {
 		t.Fatal("double approbation du même signataire devrait échouer")
 	}
 }

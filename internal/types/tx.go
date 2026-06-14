@@ -22,6 +22,7 @@ const (
 	TxUnstake     TxType = "unstake"
 	TxDelegate    TxType = "delegate"   // To = validateur
 	TxUndelegate  TxType = "undelegate" // To = validateur
+	TxUnjail      TxType = "unjail"     // un validateur jailé pour inactivité rejoint le set
 
 	// Smart contracts no-code : des templates natifs, paramétrés à la
 	// création — aucun code à écrire ni à auditer.
@@ -180,6 +181,8 @@ func (tx *Transaction) ValidateBasic() error {
 		if tx.Amount == 0 {
 			return errors.New("amount must be > 0")
 		}
+	case TxUnjail:
+		// rien à valider hors signature : le compte doit être un validateur jailé (vérifié à l'exécution)
 	case TxDelegate, TxUndelegate:
 		if !crypto.ValidAddress(tx.To) {
 			return errors.New("to must be a validator address")

@@ -73,7 +73,7 @@ func TestGenesisSupplyAndVesting(t *testing.T) {
 	cid := st.ListContracts()[0].ID
 	claim := &types.Transaction{Type: types.TxContractExec, ContractID: cid, Action: types.ActionClaim, MaxBaseFee: 1 * types.Unit}
 	claim.SignWith(team)
-	if _, _, _, err := st.Execute([]*types.Transaction{claim}, nil, "", mid, true); err != nil {
+	if _, _, _, err := st.Execute([]*types.Transaction{claim}, nil, nil, "", mid, true); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	got := st.GetAccount(team.Address()).Balances[types.NativeToken]

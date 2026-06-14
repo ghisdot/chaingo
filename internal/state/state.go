@@ -42,9 +42,24 @@ type Validator struct {
 	// Le poids du validateur (tirage + émission) = Stake + Delegated.
 	Delegated  uint64            `json:"delegated,omitempty"`
 	Delegators map[string]uint64 `json:"delegators,omitempty"`
+	// Inactivité : Missed = slots de proposeur manqués consécutifs (remis à
+	// 0 dès qu'il produit). Jailed = exclu du set actif jusqu'à JailedUntil.
+	Missed      uint64 `json:"missed,omitempty"`
+	Jailed      bool   `json:"jailed,omitempty"`
+	JailedUntil int64  `json:"jailed_until,omitempty"`
 }
 
+// weight : poids brut (stake + délégations).
 func (v *Validator) weight() uint64 { return v.Stake + v.Delegated }
+
+// activeWeight : poids comptant pour le consensus — 0 si jailé (ni tirage
+// proposeur, ni pouvoir de finalité tant que jailé).
+func (v *Validator) activeWeight() uint64 {
+	if v.Jailed {
+		return 0
+	}
+	return v.Stake + v.Delegated
+}
 
 type Supply struct {
 	Total  uint64 `json:"total"`
@@ -280,7 +295,7 @@ func (s *State) PowerOf(addr string) uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if v, ok := s.Validators[addr]; ok {
-		return v.weight()
+		return v.activeWeight()
 	}
 	return 0
 }
@@ -316,7 +331,7 @@ func (s *State) SelectProposer(height uint64, prevHash string, round uint32) str
 	var vals []sv
 	var total uint64
 	for _, v := range s.Validators {
-		if w := v.weight(); w > 0 {
+		if w := v.activeWeight(); w > 0 {
 			vals = append(vals, sv{v.Address, w})
 			total += w
 		}
@@ -348,7 +363,7 @@ func (s *State) SelectProposer(height uint64, prevHash string, round uint32) str
 // block) drops failing txs; strict=true (follower replaying a received
 // block) reports the first failure — caller restores the snapshot.
 // blockTime is the block header timestamp (ms) — never the local clock.
-func (s *State) Execute(txs []*types.Transaction, evidence []*types.DoubleSignEvidence, proposer string, blockTime int64, strict bool) (applied []*types.Transaction, failed map[string]error, root string, err error) {
+func (s *State) Execute(txs []*types.Transaction, evidence []*types.DoubleSignEvidence, absent []string, proposer string, blockTime int64, strict bool) (applied []*types.Transaction, failed map[string]error, root string, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -359,6 +374,10 @@ func (s *State) Execute(txs []*types.Transaction, evidence []*types.DoubleSignEv
 	// le résultat est indépendant de l'ordre (chaque slash est isolé).
 	for _, ev := range evidence {
 		s.slashLocked(ev.Voter, ev.Height, blockTime)
+	}
+	// Inactivité : comptage déterministe des slots manqués (jail au seuil).
+	if proposer != "" {
+		s.applyDowntimeLocked(proposer, absent, blockTime)
 	}
 
 	failed = map[string]error{}
@@ -383,10 +402,12 @@ func (s *State) Execute(txs []*types.Transaction, evidence []*types.DoubleSignEv
 	return applied, failed, s.rootLocked(), nil
 }
 
+// totalStakedLocked : poids actif total (jailés exclus) — base du quorum
+// de finalité et de l'émission.
 func (s *State) totalStakedLocked() uint64 {
 	var total uint64
 	for _, v := range s.Validators {
-		total += v.weight()
+		total += v.activeWeight()
 	}
 	return total
 }
@@ -413,22 +434,32 @@ func (s *State) slashLocked(voter string, height uint64, blockTime int64) {
 	if !ok {
 		return // validateur déjà sorti — rien à slasher
 	}
-	bps := s.Params.SlashDoubleSignBps
-	burn := uint64(0)
+	s.slashWeightLocked(v, s.Params.SlashDoubleSignBps)
 
-	// Stake propre.
+	// Validateur entièrement slashé (bps=100 %) : on le sort et on libère
+	// le reliquat des délégations en unbonding.
+	if v.Stake == 0 {
+		for a, amt := range v.Delegators {
+			s.Unbonding = append(s.Unbonding, &Unbonding{Address: a, Amount: amt, ReleaseAt: blockTime + s.Params.UnbondingSeconds*1000})
+		}
+		delete(s.Validators, voter)
+	}
+}
+
+// slashWeightLocked brûle `bps` du stake propre ET de chaque délégation du
+// validateur (déterministe, ordre trié). Réutilisé par le slash de
+// double-signature et celui d'inactivité.
+func (s *State) slashWeightLocked(v *Validator, bps uint64) {
 	cut := types.MulDiv(v.Stake, bps, 10_000)
 	v.Stake -= cut
-	if a, ok := s.Accounts[voter]; ok {
+	if a, ok := s.Accounts[v.Address]; ok {
 		if a.Staked >= cut {
 			a.Staked -= cut
 		} else {
 			a.Staked = 0
 		}
 	}
-	burn += cut
-
-	// Délégations (ordre trié — déterminisme).
+	burn := cut
 	if len(v.Delegators) > 0 {
 		addrs := make([]string, 0, len(v.Delegators))
 		for a := range v.Delegators {
@@ -442,17 +473,29 @@ func (s *State) slashLocked(voter string, height uint64, blockTime int64) {
 			burn += dcut
 		}
 	}
-
 	s.Supply.Total -= burn
 	s.Supply.Burned += burn
+}
 
-	// Validateur entièrement slashé (bps=100 %) : on le sort et on libère
-	// le reliquat des délégations en unbonding.
-	if v.Stake == 0 {
-		for a, amt := range v.Delegators {
-			s.Unbonding = append(s.Unbonding, &Unbonding{Address: a, Amount: amt, ReleaseAt: blockTime + s.Params.UnbondingSeconds*1000})
+// applyDowntimeLocked : compte les slots de proposeur manqués. Le proposeur
+// effectif voit son compteur remis à zéro ; chaque proposeur élu d'un round
+// de secours sauté (`absent`) prend une absence. Au seuil → jail + slash.
+func (s *State) applyDowntimeLocked(proposer string, absent []string, blockTime int64) {
+	if v, ok := s.Validators[proposer]; ok {
+		v.Missed = 0
+	}
+	for _, addr := range absent {
+		v, ok := s.Validators[addr]
+		if !ok || v.Jailed {
+			continue
 		}
-		delete(s.Validators, voter)
+		v.Missed++
+		if v.Missed >= s.Params.DowntimeJailThreshold {
+			s.slashWeightLocked(v, s.Params.SlashDowntimeBps)
+			v.Jailed = true
+			v.JailedUntil = blockTime + s.Params.JailSeconds*1000
+			v.Missed = 0
+		}
 	}
 }
 
@@ -605,6 +648,16 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			s.Validators[tx.From] = v
 		}
 		v.Stake += tx.Amount
+	case types.TxUnjail:
+		v, ok := s.Validators[tx.From]
+		if !ok || !v.Jailed {
+			return errors.New("not a jailed validator")
+		}
+		if blockTime < v.JailedUntil {
+			return fmt.Errorf("still jailed for %d ms", v.JailedUntil-blockTime)
+		}
+		v.Jailed = false
+		v.Missed = 0
 	case types.TxUnstake:
 		v, ok := s.Validators[tx.From]
 		if !ok || from.Staked < tx.Amount {

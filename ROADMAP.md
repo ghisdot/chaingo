@@ -27,9 +27,11 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       stake, quorum strict > 2/3, gossip P2P des votes, `finalized_height` exposé,
       commande `chaingo keygen`. Vérifié (tests Go déterministes + réseau 3 nœuds).
       Reste : verrouillage type Tendermint complet (prevote + locking), set figé par hauteur.
-- [~] Slashing — [#7](https://github.com/ghisdot/chaingo/issues/7) : **double-signature livrée** —
-      preuve d'équivocation transportée dans le bloc, slash déterministe de 5 % du stake
-      ET des délégations (brûlé), idempotent. Reste : slashing d'inactivité (downtime) + jail.
+- [x] Slashing — [#7](https://github.com/ghisdot/chaingo/issues/7) : **double-signature**
+      (preuve d'équivocation dans le bloc, slash 5 % stake+délégations, idempotent) **et
+      inactivité (downtime)** : round inscrit dans l'en-tête (déterministe), comptage des
+      slots de proposeur manqués, jail au seuil + slash 0,1 %, exclusion du pouvoir/tirage
+      tant que jailé, sortie via `chaingo unjail` après le délai.
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
 - [ ] Codec binaire compact (remplace JSON+base64 sur le réseau) — [#8](https://github.com/ghisdot/chaingo/issues/8)

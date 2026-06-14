@@ -14,9 +14,13 @@ Deux façons de sécuriser ChainGO et de gagner des récompenses (~3 %/an sur le
    (stake + délégations reçues). À chaque bloc que tu proposes : récompense d'émission
    + tips des transactions.
 
-**Hors-ligne ?** Les *rounds de secours* donnent ta place à un autre validateur après
-500 ms — la chaîne ne t'attend pas, mais tu ne gagnes rien pendant ce temps. Le slashing
-d'inactivité (downtime) est prévu ; l'inactivité prolongée pénalisera le stake.
+**Hors-ligne = jail + slash.** Les *rounds de secours* donnent ta place à un autre
+validateur, et chaque tour de proposeur que tu rates compte comme une absence. Au seuil
+(`downtime_jail_threshold` slots manqués), tu es **jailé** : sorti du set actif (plus de
+tirage, plus de récompenses, plus de pouvoir de finalité) et **slashé de 0,1 %**
+(`slash_downtime_bps`). Tu rejoins avec `chaingo unjail --from monwallet` une fois le délai
+écoulé (`jail_seconds`). Vise un bon uptime — un nœud qui produit régulièrement voit son
+compteur d'absences remis à zéro et n'est jamais jailé.
 
 **Double-signature = slash immédiat.** Si ton nœud précommit deux blocs différents à la
 même hauteur (équivocation — typiquement deux instances avec la même clé), la preuve est

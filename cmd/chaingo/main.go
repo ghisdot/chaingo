@@ -40,6 +40,7 @@ Usage :
   chaingo unstake --from <wallet> --amount 10000 [--pass MDP] [--api URL]
   chaingo delegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
   chaingo undelegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
+  chaingo unjail --from <wallet>             (validateur jailé pour inactivité)
   chaingo contract vesting --from <wallet> --beneficiary <adresse> --amount 100
                [--token CGO] [--start +0h] [--duration 720h] [--pass MDP] [--api URL]
   chaingo contract escrow --from <wallet> --seller <adresse> --amount 100
@@ -84,6 +85,8 @@ func main() {
 		err = cmdDelegate(os.Args[2:], types.TxDelegate)
 	case "undelegate":
 		err = cmdDelegate(os.Args[2:], types.TxUndelegate)
+	case "unjail":
+		err = cmdUnjail(os.Args[2:])
 	case "contract":
 		err = cmdContract(os.Args[2:])
 	case "faucet":
@@ -434,6 +437,26 @@ func cmdDelegate(args []string, typ types.TxType) error {
 		}
 	}
 	return nil
+}
+
+// ---------- unjail ----------
+
+func cmdUnjail(args []string) error {
+	fs := flag.NewFlagSet("unjail", flag.ExitOnError)
+	from := fs.String("from", "", "wallet du validateur jailé")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args)
+	if *from == "" {
+		return fmt.Errorf("--from est requis")
+	}
+	kp, err := wallet.Load(*from, *pass)
+	if err != nil {
+		return err
+	}
+	tx := &types.Transaction{Type: types.TxUnjail}
+	fmt.Println("Demande de sortie de jail (échoue si le délai n'est pas écoulé).")
+	return signAndSubmit(*api, kp, tx)
 }
 
 // ---------- smart contracts no-code ----------
