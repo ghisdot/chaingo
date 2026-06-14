@@ -44,6 +44,10 @@ Usage :
                [--token CGO] [--start +0h] [--duration 720h] [--pass MDP] [--api URL]
   chaingo contract escrow --from <wallet> --seller <adresse> --amount 100
                [--token CGO] [--arbiter <adresse>] [--pass MDP] [--api URL]
+  chaingo contract multisig --from <wallet> --signers a,b,c --threshold 2 --amount 100
+               [--pass MDP] [--api URL]
+  chaingo contract propose --from <wallet> --id <coffre> --to <adresse> --amount 50 [--api URL]
+  chaingo contract approve --from <wallet> --id <coffre> [--proposal 0] [--api URL]
   chaingo contract claim|release|refund --from <wallet> --id <contrat> [--pass MDP] [--api URL]
   chaingo contract list [--api URL]
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
@@ -448,7 +452,11 @@ func cmdContract(args []string) error {
 	duration := fs.Duration("duration", 720*time.Hour, "durée du déblocage linéaire — vesting")
 	seller := fs.String("seller", "", "vendeur (escrow)")
 	arbiter := fs.String("arbiter", "", "arbitre optionnel (escrow)")
-	id := fs.String("id", "", "identifiant du contrat (claim/release/refund)")
+	signers := fs.String("signers", "", "signataires multisig, séparés par des virgules (adresses ou wallets)")
+	threshold := fs.Uint("threshold", 0, "nb d'approbations requis (multisig)")
+	to := fs.String("to", "", "destinataire du paiement (multisig propose)")
+	proposal := fs.Uint("proposal", 0, "index de la proposition (multisig approve)")
+	id := fs.String("id", "", "identifiant du contrat (claim/release/refund/propose/approve)")
 	pass := fs.String("pass", "", "mot de passe du wallet")
 	api := fs.String("api", defaultAPI, "URL de l'API")
 	fs.Parse(args[1:])
@@ -530,6 +538,71 @@ func cmdContract(args []string) error {
 		fmt.Printf("ID du contrat : %s\n", tx.Hash())
 		return nil
 
+	case "multisig":
+		if *from == "" || *amount == "" || *signers == "" || *threshold == 0 {
+			return fmt.Errorf("--from, --amount, --signers et --threshold sont requis")
+		}
+		kp, err := wallet.Load(*from, *pass)
+		if err != nil {
+			return err
+		}
+		var addrs []string
+		for _, s := range strings.Split(*signers, ",") {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			a, err := resolveAddress(s)
+			if err != nil {
+				return err
+			}
+			addrs = append(addrs, a)
+		}
+		amt, err := parseAmount(*amount, types.NativeDecimals)
+		if err != nil {
+			return err
+		}
+		cp := &types.ContractParams{Template: types.TemplateMultisig, TokenID: types.NativeToken,
+			Amount: amt, Signers: addrs, Threshold: uint64(*threshold)}
+		tx := &types.Transaction{Type: types.TxContractCreate, Contract: cp}
+		fmt.Printf("Coffre multisig %d-of-%d : %s CGO verrouillés\n", *threshold, len(addrs), *amount)
+		if err := signAndSubmit(*api, kp, tx); err != nil {
+			return err
+		}
+		fmt.Printf("ID du contrat : %s\n", tx.Hash())
+		return nil
+
+	case "propose":
+		if *from == "" || *id == "" || *to == "" || *amount == "" {
+			return fmt.Errorf("--from, --id, --to et --amount sont requis")
+		}
+		kp, err := wallet.Load(*from, *pass)
+		if err != nil {
+			return err
+		}
+		dest, err := resolveAddress(*to)
+		if err != nil {
+			return err
+		}
+		amt, err := parseAmount(*amount, types.NativeDecimals)
+		if err != nil {
+			return err
+		}
+		tx := &types.Transaction{Type: types.TxContractExec, ContractID: *id, Action: types.ActionPropose, To: dest, Amount: amt}
+		fmt.Printf("Proposition de paiement : %s CGO vers %s (à approuver par les autres signataires)\n", *amount, dest)
+		return signAndSubmit(*api, kp, tx)
+
+	case "approve":
+		if *from == "" || *id == "" {
+			return fmt.Errorf("--from et --id sont requis")
+		}
+		kp, err := wallet.Load(*from, *pass)
+		if err != nil {
+			return err
+		}
+		tx := &types.Transaction{Type: types.TxContractExec, ContractID: *id, Action: types.ActionApprove, Proposal: uint64(*proposal)}
+		return signAndSubmit(*api, kp, tx)
+
 	case "claim", "release", "refund":
 		if *from == "" || *id == "" {
 			return fmt.Errorf("--from et --id sont requis")
@@ -542,7 +615,7 @@ func cmdContract(args []string) error {
 		return signAndSubmit(*api, kp, tx)
 
 	default:
-		return fmt.Errorf("sous-commande inconnue %q (vesting|escrow|claim|release|refund|list)", sub)
+		return fmt.Errorf("sous-commande inconnue %q (vesting|escrow|multisig|propose|approve|claim|release|refund|list)", sub)
 	}
 }
 

@@ -60,6 +60,15 @@ type Unbonding struct {
 	ReleaseAt int64  `json:"release_at"` // ms epoch
 }
 
+// MultisigProposal : un paiement proposé depuis un coffre multisig, exécuté
+// dès que `Threshold` signataires distincts l'ont approuvé.
+type MultisigProposal struct {
+	To        string   `json:"to"`
+	Amount    uint64   `json:"amount"`
+	Approvals []string `json:"approvals"`
+	Executed  bool     `json:"executed"`
+}
+
 // Contract : instance d'un template no-code. Les fonds sont verrouillés
 // dans le contrat à la création (déduits du créateur) et libérés par les
 // actions — jamais par du code arbitraire.
@@ -75,8 +84,21 @@ type Contract struct {
 	EndMs       int64  `json:"end_ms,omitempty"`
 	Seller      string `json:"seller,omitempty"`
 	Arbiter     string `json:"arbiter,omitempty"`
-	Status      string `json:"status"` // active | completed | refunded
-	CreatedAt   uint64 `json:"created_at_height"`
+	// multisig :
+	Signers   []string            `json:"signers,omitempty"`
+	Threshold uint64              `json:"threshold,omitempty"`
+	Proposals []*MultisigProposal `json:"proposals,omitempty"`
+	Status    string              `json:"status"` // active | completed | refunded
+	CreatedAt uint64              `json:"created_at_height"`
+}
+
+func (c *Contract) isSigner(addr string) bool {
+	for _, s := range c.Signers {
+		if s == addr {
+			return true
+		}
+	}
+	return false
 }
 
 type State struct {
@@ -676,6 +698,8 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			EndMs:       c.EndMs,
 			Seller:      c.Seller,
 			Arbiter:     c.Arbiter,
+			Signers:     c.Signers,
+			Threshold:   c.Threshold,
 			Status:      "active",
 			CreatedAt:   s.Height + 1,
 		}
@@ -724,6 +748,34 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			}
 			s.acct(c.Creator).Balances[c.TokenID] += c.Amount
 			c.Status = "refunded"
+		case c.Template == types.TemplateMultisig && tx.Action == types.ActionPropose:
+			if !c.isSigner(tx.From) {
+				return errors.New("multisig: only a signer can propose")
+			}
+			if c.Amount-c.Released < tx.Amount {
+				return errors.New("multisig: proposed amount exceeds the vault balance")
+			}
+			p := &MultisigProposal{To: tx.To, Amount: tx.Amount, Approvals: []string{tx.From}}
+			c.Proposals = append(c.Proposals, p)
+			s.maybeExecuteMultisig(c, p)
+		case c.Template == types.TemplateMultisig && tx.Action == types.ActionApprove:
+			if !c.isSigner(tx.From) {
+				return errors.New("multisig: only a signer can approve")
+			}
+			if tx.Proposal >= uint64(len(c.Proposals)) {
+				return fmt.Errorf("multisig: unknown proposal %d", tx.Proposal)
+			}
+			p := c.Proposals[tx.Proposal]
+			if p.Executed {
+				return errors.New("multisig: proposal already executed")
+			}
+			for _, a := range p.Approvals {
+				if a == tx.From {
+					return errors.New("multisig: already approved")
+				}
+			}
+			p.Approvals = append(p.Approvals, tx.From)
+			s.maybeExecuteMultisig(c, p)
 		default:
 			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
 		}
@@ -743,6 +795,23 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	}
 	from.Nonce++
 	return nil
+}
+
+// maybeExecuteMultisig exécute une proposition dès que le seuil
+// d'approbations est atteint et que le coffre a encore les fonds.
+func (s *State) maybeExecuteMultisig(c *Contract, p *MultisigProposal) {
+	if p.Executed || uint64(len(p.Approvals)) < c.Threshold {
+		return
+	}
+	if c.Amount-c.Released < p.Amount {
+		return // d'autres propositions ont déjà épuisé le coffre
+	}
+	s.acct(p.To).Balances[c.TokenID] += p.Amount
+	c.Released += p.Amount
+	p.Executed = true
+	if c.Released == c.Amount {
+		c.Status = "completed"
+	}
 }
 
 // Mint crée de la monnaie native (genèse, récompenses de bloc).

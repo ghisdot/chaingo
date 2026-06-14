@@ -88,8 +88,11 @@ Exemple de bloc `vesting` (équipe, 4 ans) dans `mainnet.json` :
 
 ## 5. Décisions encore ouvertes (à trancher avec l'équipe avant la cérémonie)
 
-- Adresses exactes : communauté, trésorerie, équipe, écosystème (idéalement des **multisig** —
-  template multisig prévu en Phase 4).
+- Adresses exactes : communauté, trésorerie, équipe, écosystème. **Le template multisig
+  M-of-N est disponible** (`chaingo contract multisig`) — recommandé pour ces coffres
+  plutôt que des adresses à clé unique. (À la genèse, on alloue d'abord vers une adresse,
+  puis on déplace dans un coffre multisig créé on-chain ; un multisig directement à la
+  genèse pourra être ajouté ensuite.)
 - Calendrier précis des vestings (cliff ? durée trésorerie ?).
 - Liste nominative des validateurs de genèse.
 - Date du lancement.

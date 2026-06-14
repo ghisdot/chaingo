@@ -50,7 +50,9 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       on-chain, déblocage linéaire à l'horloge des blocs / séquestre acheteur-vendeur
       avec arbitre optionnel — une commande, zéro code
 - [x] Déploiement en un appel API / une commande (`chaingo contract …`)
-- [ ] Templates multisig et DAO
+- [x] **Template multisig M-of-N** : coffre à N signataires, M approbations pour dépenser
+      (propose/approve), exécution au seuil — pour les coffres trésorerie/communauté
+- [ ] Template DAO (gouvernance on-chain)
 - [ ] VM WASM déterministe pour les développeurs
 
 ## Phase 5 — Écosystème

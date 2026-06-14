@@ -72,11 +72,13 @@ go build -o chaingo.exe ./cmd/chaingo
 # 5. Créer un token SANS CODE
 .\chaingo.exe token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000 --mintable
 
-# 5bis. Smart contracts SANS CODE : vesting (déblocage progressif) et escrow (séquestre)
+# 5bis. Smart contracts SANS CODE : vesting, escrow, multisig M-of-N
 .\chaingo.exe contract vesting --from alice --beneficiary <adresse> --amount 100 --duration 720h
 .\chaingo.exe contract escrow --from alice --seller <adresse> --amount 50 [--arbiter <adresse>]
-.\chaingo.exe contract claim --from bob --id <contrat>      # le bénéficiaire récupère la part débloquée
-.\chaingo.exe contract release --from alice --id <contrat>  # l'acheteur libère le séquestre
+.\chaingo.exe contract multisig --from alice --signers a,b,c --threshold 2 --amount 100  # coffre 2-of-3
+.\chaingo.exe contract propose --from alice --id <coffre> --to <adresse> --amount 30     # propose un paiement
+.\chaingo.exe contract approve --from bob --id <coffre> --proposal 0                      # 2e signature => exécuté
+.\chaingo.exe contract claim --from bob --id <contrat>      # vesting : récupérer la part débloquée
 
 # 6. Devenir validateur (minimum 10 000 CGO)…
 .\chaingo.exe stake --from alice --amount 12000

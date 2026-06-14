@@ -31,8 +31,9 @@ const (
 
 // Templates de contrats disponibles.
 const (
-	TemplateVesting = "vesting" // fonds débloqués linéairement vers un bénéficiaire
-	TemplateEscrow  = "escrow"  // séquestre acheteur/vendeur, arbitre optionnel
+	TemplateVesting  = "vesting"  // fonds débloqués linéairement vers un bénéficiaire
+	TemplateEscrow   = "escrow"   // séquestre acheteur/vendeur, arbitre optionnel
+	TemplateMultisig = "multisig" // coffre M-of-N : N signataires, M approbations pour dépenser
 )
 
 // Actions exécutables sur un contrat.
@@ -40,17 +41,21 @@ const (
 	ActionClaim   = "claim"   // vesting : le bénéficiaire récupère la part débloquée
 	ActionRelease = "release" // escrow : libère les fonds vers le vendeur
 	ActionRefund  = "refund"  // escrow : rembourse l'acheteur
+	ActionPropose = "propose" // multisig : un signataire propose un paiement (To, Amount)
+	ActionApprove = "approve" // multisig : un signataire approuve la proposition (Proposal)
 )
 
 type ContractParams struct {
-	Template    string `json:"template"`
-	TokenID     string `json:"token_id"`
-	Amount      uint64 `json:"amount"`
-	Beneficiary string `json:"beneficiary,omitempty"` // vesting
-	StartMs     int64  `json:"start_ms,omitempty"`    // vesting : début du déblocage
-	EndMs       int64  `json:"end_ms,omitempty"`      // vesting : 100 % débloqué
-	Seller      string `json:"seller,omitempty"`      // escrow
-	Arbiter     string `json:"arbiter,omitempty"`     // escrow (optionnel)
+	Template    string   `json:"template"`
+	TokenID     string   `json:"token_id"`
+	Amount      uint64   `json:"amount"`
+	Beneficiary string   `json:"beneficiary,omitempty"` // vesting
+	StartMs     int64    `json:"start_ms,omitempty"`    // vesting : début du déblocage
+	EndMs       int64    `json:"end_ms,omitempty"`      // vesting : 100 % débloqué
+	Seller      string   `json:"seller,omitempty"`      // escrow
+	Arbiter     string   `json:"arbiter,omitempty"`     // escrow (optionnel)
+	Signers     []string `json:"signers,omitempty"`     // multisig
+	Threshold   uint64   `json:"threshold,omitempty"`   // multisig : nb d'approbations requis
 }
 
 const (
@@ -91,6 +96,7 @@ type Transaction struct {
 	Contract   *ContractParams `json:"contract,omitempty"`    // contract_create
 	ContractID string          `json:"contract_id,omitempty"` // contract_exec
 	Action     string          `json:"action,omitempty"`      // contract_exec
+	Proposal   uint64          `json:"proposal,omitempty"`    // multisig approve : index de la proposition
 	Timestamp  int64           `json:"timestamp"`
 	Signature  []byte          `json:"signature,omitempty"`
 }
@@ -210,17 +216,41 @@ func (tx *Transaction) ValidateBasic() error {
 			if c.Arbiter != "" && !crypto.ValidAddress(c.Arbiter) {
 				return errors.New("escrow: invalid arbiter address")
 			}
+		case TemplateMultisig:
+			if len(c.Signers) < 1 {
+				return errors.New("multisig: at least one signer required")
+			}
+			seen := map[string]bool{}
+			for _, sg := range c.Signers {
+				if !crypto.ValidAddress(sg) {
+					return errors.New("multisig: invalid signer address")
+				}
+				if seen[sg] {
+					return errors.New("multisig: duplicate signer")
+				}
+				seen[sg] = true
+			}
+			if c.Threshold < 1 || c.Threshold > uint64(len(c.Signers)) {
+				return errors.New("multisig: threshold must be between 1 and the number of signers")
+			}
 		default:
-			return fmt.Errorf("unknown contract template %q (vesting|escrow)", c.Template)
+			return fmt.Errorf("unknown contract template %q (vesting|escrow|multisig)", c.Template)
 		}
 	case TxContractExec:
 		if tx.ContractID == "" {
 			return errors.New("contract_id required")
 		}
 		switch tx.Action {
-		case ActionClaim, ActionRelease, ActionRefund:
+		case ActionClaim, ActionRelease, ActionRefund, ActionApprove:
+		case ActionPropose:
+			if !crypto.ValidAddress(tx.To) {
+				return errors.New("multisig propose: invalid recipient address")
+			}
+			if tx.Amount == 0 {
+				return errors.New("multisig propose: amount must be > 0")
+			}
 		default:
-			return fmt.Errorf("unknown action %q (claim|release|refund)", tx.Action)
+			return fmt.Errorf("unknown action %q (claim|release|refund|propose|approve)", tx.Action)
 		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)
