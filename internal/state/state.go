@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 
 	"chaingo/internal/crypto"
@@ -84,12 +85,16 @@ type State struct {
 	Tokens     map[string]*Token     `json:"tokens"`
 	Validators map[string]*Validator `json:"validators"`
 	Contracts  map[string]*Contract  `json:"contracts"`
-	Unbonding  []*Unbonding          `json:"unbonding"`
-	Supply     Supply                `json:"supply"`
-	Params     types.Params          `json:"params"`
-	BaseFee    uint64                `json:"base_fee"` // base fee courant (EIP-1559)
-	Height     uint64                `json:"height"`
-	LastHash   string                `json:"last_hash"`
+	// Slashed : équivocations déjà punies (clé "voter@height") — garantit
+	// qu'une même faute n'est slashée qu'une fois, même si plusieurs nœuds
+	// l'incluent dans des blocs.
+	Slashed   map[string]bool `json:"slashed"`
+	Unbonding []*Unbonding    `json:"unbonding"`
+	Supply    Supply          `json:"supply"`
+	Params    types.Params    `json:"params"`
+	BaseFee   uint64          `json:"base_fee"` // base fee courant (EIP-1559)
+	Height    uint64          `json:"height"`
+	LastHash  string          `json:"last_hash"`
 }
 
 func New() *State {
@@ -98,6 +103,7 @@ func New() *State {
 		Tokens:     map[string]*Token{},
 		Validators: map[string]*Validator{},
 		Contracts:  map[string]*Contract{},
+		Slashed:    map[string]bool{},
 	}
 }
 
@@ -264,6 +270,13 @@ func (s *State) TotalPower() uint64 {
 	return s.totalStakedLocked()
 }
 
+// IsSlashed : l'équivocation (voter, height) a-t-elle déjà été punie ?
+func (s *State) IsSlashed(voter string, height uint64) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.Slashed[slashKey(voter, height)]
+}
+
 // ---- sélection du proposeur ----
 
 // SelectProposer picks the block proposer deterministically, weighted by
@@ -313,11 +326,18 @@ func (s *State) SelectProposer(height uint64, prevHash string, round uint32) str
 // block) drops failing txs; strict=true (follower replaying a received
 // block) reports the first failure — caller restores the snapshot.
 // blockTime is the block header timestamp (ms) — never the local clock.
-func (s *State) Execute(txs []*types.Transaction, proposer string, blockTime int64, strict bool) (applied []*types.Transaction, failed map[string]error, root string, err error) {
+func (s *State) Execute(txs []*types.Transaction, evidence []*types.DoubleSignEvidence, proposer string, blockTime int64, strict bool) (applied []*types.Transaction, failed map[string]error, root string, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.releaseUnbondedLocked(blockTime)
+
+	// Slashing déterministe AVANT les txs : une faute punie au plus une
+	// fois (marqueur Slashed). L'ordre est celui de la liste du bloc, mais
+	// le résultat est indépendant de l'ordre (chaque slash est isolé).
+	for _, ev := range evidence {
+		s.slashLocked(ev.Voter, ev.Height, blockTime)
+	}
 
 	failed = map[string]error{}
 	for _, tx := range txs {
@@ -347,6 +367,71 @@ func (s *State) totalStakedLocked() uint64 {
 		total += v.weight()
 	}
 	return total
+}
+
+func slashKey(voter string, height uint64) string {
+	return voter + "@" + strconv.FormatUint(height, 10)
+}
+
+// slashLocked punit une équivocation : SlashDoubleSignBps du stake propre
+// ET de chaque délégation du validateur sont BRÛLÉS (déflationniste).
+// Idempotent via le marqueur Slashed : une faute (voter,height) n'est
+// punie qu'une fois, peu importe combien de blocs portent la preuve.
+func (s *State) slashLocked(voter string, height uint64, blockTime int64) {
+	key := slashKey(voter, height)
+	if s.Slashed == nil {
+		s.Slashed = map[string]bool{}
+	}
+	if s.Slashed[key] {
+		return
+	}
+	s.Slashed[key] = true
+
+	v, ok := s.Validators[voter]
+	if !ok {
+		return // validateur déjà sorti — rien à slasher
+	}
+	bps := s.Params.SlashDoubleSignBps
+	burn := uint64(0)
+
+	// Stake propre.
+	cut := types.MulDiv(v.Stake, bps, 10_000)
+	v.Stake -= cut
+	if a, ok := s.Accounts[voter]; ok {
+		if a.Staked >= cut {
+			a.Staked -= cut
+		} else {
+			a.Staked = 0
+		}
+	}
+	burn += cut
+
+	// Délégations (ordre trié — déterminisme).
+	if len(v.Delegators) > 0 {
+		addrs := make([]string, 0, len(v.Delegators))
+		for a := range v.Delegators {
+			addrs = append(addrs, a)
+		}
+		sort.Strings(addrs)
+		for _, a := range addrs {
+			dcut := types.MulDiv(v.Delegators[a], bps, 10_000)
+			v.Delegators[a] -= dcut
+			v.Delegated -= dcut
+			burn += dcut
+		}
+	}
+
+	s.Supply.Total -= burn
+	s.Supply.Burned += burn
+
+	// Validateur entièrement slashé (bps=100 %) : on le sort et on libère
+	// le reliquat des délégations en unbonding.
+	if v.Stake == 0 {
+		for a, amt := range v.Delegators {
+			s.Unbonding = append(s.Unbonding, &Unbonding{Address: a, Amount: amt, ReleaseAt: blockTime + s.Params.UnbondingSeconds*1000})
+		}
+		delete(s.Validators, voter)
+	}
 }
 
 // distributeRewardLocked : partage la récompense du bloc entre le
@@ -707,11 +792,12 @@ func (s *State) rootLocked() string {
 		Tokens     map[string]*Token     `json:"tokens"`
 		Validators map[string]*Validator `json:"validators"`
 		Contracts  map[string]*Contract  `json:"contracts"`
+		Slashed    map[string]bool       `json:"slashed"`
 		Unbonding  []*Unbonding          `json:"unbonding"`
 		Supply     Supply                `json:"supply"`
 		Params     types.Params          `json:"params"`
 		BaseFee    uint64                `json:"base_fee"`
-	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.Unbonding, s.Supply, s.Params, s.BaseFee})
+	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.Slashed, s.Unbonding, s.Supply, s.Params, s.BaseFee})
 	return crypto.HashHex(b)
 }
 
@@ -739,6 +825,10 @@ func (s *State) Restore(data []byte) error {
 	s.Tokens = tmp.Tokens
 	s.Validators = tmp.Validators
 	s.Contracts = tmp.Contracts
+	if tmp.Slashed == nil {
+		tmp.Slashed = map[string]bool{}
+	}
+	s.Slashed = tmp.Slashed
 	s.Unbonding = tmp.Unbonding
 	s.Supply = tmp.Supply
 	s.Params = tmp.Params

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -52,7 +53,14 @@ type Engine struct {
 	finalized uint64
 	chainID   string
 	OnVote    func(*types.Vote) // hook broadcast p2p des votes
-	stopCh    chan struct{}
+	// Slashing : preuves de double-signature en attente d'inclusion dans un
+	// bloc (clé voter@height), protégées par e.mu.
+	evidence map[string]*types.DoubleSignEvidence
+	stopCh   chan struct{}
+}
+
+func evidenceKey(voter string, height uint64) string {
+	return fmt.Sprintf("%s@%d", voter, height)
 }
 
 func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.KeyPair, interval time.Duration, maxTxs int) *Engine {
@@ -66,6 +74,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		heartbeat:    20,
 		lastProgress: time.Now(),
 		votes:        newVotePool(),
+		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
 	if key != nil {
@@ -131,13 +140,14 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 		return nil
 	}
 	txs := e.pool.Take(e.maxTxs, e.st.NonceOf)
-	if len(txs) == 0 && !force {
+	evid := e.drainEvidenceLocked()
+	if len(txs) == 0 && len(evid) == 0 && !force {
 		return nil
 	}
 	// Le timestamp est fixé AVANT l'exécution : il fait partie des règles
 	// (déblocage des unbondings) et doit être identique chez les suiveurs.
 	blockTime := time.Now().UnixMilli()
-	applied, failed, root, _ := e.st.Execute(txs, e.addr, blockTime, false)
+	applied, failed, root, _ := e.st.Execute(txs, evid, e.addr, blockTime, false)
 	for h, err := range failed {
 		log.Printf("[consensus] tx %s… rejected: %v", h[:12], err)
 		e.pool.Drop(h)
@@ -145,16 +155,21 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	for _, tx := range applied {
 		e.pool.Drop(tx.Hash())
 	}
+	if len(evid) > 0 {
+		log.Printf("[consensus] bloc #%d inclut %d preuve(s) de double-signature (slash appliqué)", height, len(evid))
+	}
 	b := &types.Block{
 		Header: types.BlockHeader{
-			Height:    height,
-			PrevHash:  prev,
-			Timestamp: blockTime,
-			Proposer:  e.addr,
-			TxRoot:    types.TxRoot(applied),
-			StateRoot: root,
+			Height:       height,
+			PrevHash:     prev,
+			Timestamp:    blockTime,
+			Proposer:     e.addr,
+			TxRoot:       types.TxRoot(applied),
+			EvidenceRoot: types.EvidenceRoot(evid),
+			StateRoot:    root,
 		},
-		Txs: applied,
+		Txs:      applied,
+		Evidence: evid,
 	}
 	b.Hash = b.ComputeHash()
 	b.ProposerPubKey = e.key.PubBytes()
@@ -206,11 +221,19 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	if types.TxRoot(b.Txs) != b.Header.TxRoot {
 		return errors.New("tx root mismatch")
 	}
+	if types.EvidenceRoot(b.Evidence) != b.Header.EvidenceRoot {
+		return errors.New("evidence root mismatch")
+	}
+	for _, ev := range b.Evidence {
+		if err := ev.Verify(e.chainID); err != nil {
+			return fmt.Errorf("invalid double-sign evidence: %w", err)
+		}
+	}
 	if err := types.VerifyAll(b.Txs); err != nil {
 		return err
 	}
 	snapshot := e.st.Bytes()
-	_, _, root, err := e.st.Execute(b.Txs, b.Header.Proposer, b.Header.Timestamp, true)
+	_, _, root, err := e.st.Execute(b.Txs, b.Evidence, b.Header.Proposer, b.Header.Timestamp, true)
 	if err != nil || root != b.Header.StateRoot {
 		e.st.Restore(snapshot)
 		if err == nil {
@@ -224,7 +247,10 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	for _, tx := range b.Txs {
 		e.pool.Drop(tx.Hash())
 	}
-	log.Printf("[consensus] block #%d accepted from peer: %d tx(s)", b.Header.Height, len(b.Txs))
+	for _, ev := range b.Evidence {
+		delete(e.evidence, evidenceKey(ev.Voter, ev.Height))
+	}
+	log.Printf("[consensus] block #%d accepted from peer: %d tx(s), %d preuve(s)", b.Header.Height, len(b.Txs), len(b.Evidence))
 	e.castVote(b.Header.Height, b.Hash)
 	return nil
 }
@@ -248,6 +274,19 @@ func (e *Engine) castVote(height uint64, hash string) {
 	e.checkFinalityLocked(height, hash)
 }
 
+// recordEquivocation : transforme un vote conflictuel en preuve à inclure
+// dans un futur bloc (sauf si la faute est déjà punie ou déjà connue).
+func (e *Engine) recordEquivocation(prev, cur *types.Vote) {
+	key := evidenceKey(cur.Voter, cur.Height)
+	if _, exists := e.evidence[key]; exists || e.st.IsSlashed(cur.Voter, cur.Height) {
+		return
+	}
+	e.evidence[key] = &types.DoubleSignEvidence{
+		Height: cur.Height, Voter: cur.Voter, VoteA: prev, VoteB: cur,
+	}
+	log.Printf("[consensus] ÉQUIVOCATION détectée : %s a précommit 2 blocs à la hauteur #%d — preuve en attente de slash", cur.Voter, cur.Height)
+}
+
 // AddVote : précommit reçu d'un pair. Renvoie true s'il est nouveau (à
 // re-diffuser). Valide la signature et le statut de validateur du votant.
 func (e *Engine) AddVote(v *types.Vote) (bool, error) {
@@ -266,9 +305,12 @@ func (e *Engine) AddVote(v *types.Vote) (bool, error) {
 	if err := v.Verify(); err != nil {
 		return false, err
 	}
-	isNew, _ := e.votes.add(v, power)
+	isNew, _, equiv := e.votes.add(v, power)
 	if !isNew {
 		return false, nil
+	}
+	if equiv != nil {
+		e.recordEquivocation(equiv, v)
 	}
 	e.checkFinalityLocked(v.Height, e.localHash(v.Height))
 	return true, nil
@@ -287,6 +329,29 @@ func (e *Engine) checkFinalityLocked(height uint64, localHash string) {
 		e.votes.prune(height)
 		log.Printf("[consensus] hauteur #%d FINALISÉE (%d%% du stake a précommit)", height, power*100/total)
 	}
+}
+
+// drainEvidenceLocked : retire et renvoie les preuves en attente (ordre
+// trié = déterministe), en écartant celles déjà punies. Suppose e.mu détenu.
+func (e *Engine) drainEvidenceLocked() []*types.DoubleSignEvidence {
+	if len(e.evidence) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(e.evidence))
+	for k := range e.evidence {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []*types.DoubleSignEvidence
+	for _, k := range keys {
+		ev := e.evidence[k]
+		delete(e.evidence, k)
+		if e.st.IsSlashed(ev.Voter, ev.Height) {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out
 }
 
 // localHash : hash du bloc local à une hauteur (db, ou état courant).

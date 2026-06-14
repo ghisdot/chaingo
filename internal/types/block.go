@@ -8,20 +8,22 @@ import (
 )
 
 type BlockHeader struct {
-	Height    uint64 `json:"height"`
-	PrevHash  string `json:"prev_hash"`
-	Timestamp int64  `json:"timestamp"`
-	Proposer  string `json:"proposer"`
-	TxRoot    string `json:"tx_root"`
-	StateRoot string `json:"state_root"`
+	Height       uint64 `json:"height"`
+	PrevHash     string `json:"prev_hash"`
+	Timestamp    int64  `json:"timestamp"`
+	Proposer     string `json:"proposer"`
+	TxRoot       string `json:"tx_root"`
+	EvidenceRoot string `json:"evidence_root"`
+	StateRoot    string `json:"state_root"`
 }
 
 type Block struct {
-	Header            BlockHeader    `json:"header"`
-	Txs               []*Transaction `json:"txs"`
-	Hash              string         `json:"hash"`
-	ProposerPubKey    []byte         `json:"proposer_pub_key,omitempty"`
-	ProposerSignature []byte         `json:"proposer_signature,omitempty"`
+	Header            BlockHeader           `json:"header"`
+	Txs               []*Transaction        `json:"txs"`
+	Evidence          []*DoubleSignEvidence `json:"evidence,omitempty"`
+	Hash              string                `json:"hash"`
+	ProposerPubKey    []byte                `json:"proposer_pub_key,omitempty"`
+	ProposerSignature []byte                `json:"proposer_signature,omitempty"`
 }
 
 // TxRoot computes a Merkle root over the transaction hashes.

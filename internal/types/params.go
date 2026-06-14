@@ -22,6 +22,7 @@ type Params struct {
 	MinDelegation           uint64 `json:"min_delegation"`
 	DelegationCommissionBps uint64 `json:"delegation_commission_bps"` // 1000 = 10 %
 	ContractCreateFee       uint64 `json:"contract_create_fee"`       // brûlé à la création d'un contrat no-code
+	SlashDoubleSignBps      uint64 `json:"slash_double_sign_bps"`     // 500 = 5 % du poids slashé en cas d'équivocation
 }
 
 func DefaultParams() Params {
@@ -39,6 +40,7 @@ func DefaultParams() Params {
 		MinDelegation:           1 * Unit,
 		DelegationCommissionBps: 1000, // 10 % pour le validateur
 		ContractCreateFee:       1 * Unit,
+		SlashDoubleSignBps:      500, // 5 %
 	}
 }
 

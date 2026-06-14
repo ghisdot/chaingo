@@ -17,9 +17,9 @@ func TestQuorumThreshold(t *testing.T) {
 		want         bool
 	}{
 		{0, 0, false},
-		{2, 3, false},  // exactement 2/3 → insuffisant
-		{3, 4, true},   // 3/4 = 75 % > 2/3
-		{2, 4, false},  // 2/4 = 50 %
+		{2, 3, false}, // exactement 2/3 → insuffisant
+		{3, 4, true},  // 3/4 = 75 % > 2/3
+		{2, 4, false}, // 2/4 = 50 %
 		{67, 100, true},
 		{66, 100, false},
 	}

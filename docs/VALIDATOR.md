@@ -15,8 +15,13 @@ Deux façons de sécuriser ChainGO et de gagner des récompenses (~3 %/an sur le
    + tips des transactions.
 
 **Hors-ligne ?** Les *rounds de secours* donnent ta place à un autre validateur après
-500 ms — la chaîne ne t'attend pas, mais tu ne gagnes rien pendant ce temps. En Phase 2,
-l'inactivité prolongée sera **slashée** (pénalité sur le stake) : visez un uptime sérieux.
+500 ms — la chaîne ne t'attend pas, mais tu ne gagnes rien pendant ce temps. Le slashing
+d'inactivité (downtime) est prévu ; l'inactivité prolongée pénalisera le stake.
+
+**Double-signature = slash immédiat.** Si ton nœud précommit deux blocs différents à la
+même hauteur (équivocation — typiquement deux instances avec la même clé), la preuve est
+incluse on-chain et **5 % de ton stake ET des délégations reçues sont brûlés**
+(`slash_double_sign_bps`). Ne fais JAMAIS tourner deux validateurs avec la même seed.
 
 **Sortir** : `chaingo unstake --from monwallet --amount 10000` → fonds en **unbonding
 21 jours** (5 min en devnet), puis liquides automatiquement. Si tu retires tout, tes
@@ -39,9 +44,10 @@ chaingo undelegate --from monwallet --to cg<validateur> --amount 50
 ```
 
 **Tes CGO ne quittent jamais ta propriété** : la délégation est un poids comptable, le
-validateur ne peut pas les dépenser. Risque actuel : si le validateur quitte le réseau,
-tes fonds passent en unbonding (récupérés après le délai). En Phase 2, le slashing
-pourra entamer les délégations d'un validateur malhonnête — choisis-le bien.
+validateur ne peut pas les dépenser. Risque : si le validateur quitte le réseau, tes
+fonds passent en unbonding (récupérés après le délai). Et surtout — **le slashing entame
+aussi les délégations** : si ton validateur double-signe, tu perds 5 % de ta délégation
+(brûlée) en même temps que lui. Choisis un validateur sérieux (un seul nœud, bon uptime).
 
 ## Les chiffres (params de la chaîne, visibles sur `GET /v1/fees`)
 
