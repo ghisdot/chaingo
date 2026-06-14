@@ -1,0 +1,4 @@
+# Les scripts shell DOIVENT rester en LF (sinon bash casse sur Linux/VPS).
+*.sh text eol=lf
+# Go : LF partout (cohérence, gofmt).
+*.go text eol=lf
