@@ -62,4 +62,6 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 - [ ] Explorateur de blocs public (sur le site embarqué)
 - [ ] SDK JavaScript et Python ([#4](https://github.com/ghisdot/chaingo/issues/4))
 - [ ] Documentation (docs/) traduite en anglais
-- [ ] Programme de distribution genèse mainnet (« communauté d'abord » : 50/20/15/10/5)
+- [x] Outillage de genèse (`chaingo genesis template|validate`, vesting on-chain à la genèse, empreinte déterministe)
+- [x] Runbook mainnet + checklist de pré-lancement ([docs/MAINNET.md](docs/MAINNET.md))
+- [ ] Programme de distribution genèse mainnet exécuté (« communauté d'abord » : 50/20/15/10/5) — au lancement

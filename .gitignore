@@ -3,7 +3,11 @@ chaingo
 dist/
 .devnet/
 .testnet/
+.bfttest/
+.gentest/
 *.seed
+genesis.json
+!internal/**/genesis.json
 # Artefacts WASM du wallet : construits par la CI (workflow Pages) ou
 # localement via scripts/build-wasm.ps1 — jamais versionnés.
 web/wallet/chaingo.wasm

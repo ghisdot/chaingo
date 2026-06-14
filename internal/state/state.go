@@ -758,6 +758,29 @@ func (s *State) mintLocked(addr string, amount uint64) {
 	s.Supply.Minted += amount
 }
 
+// BootstrapVesting verrouille des fonds à la genèse dans un contrat de
+// vesting (parts équipe/trésorerie). Les fonds entrent dans la supply mais
+// ne sont dans aucun solde : le bénéficiaire les réclame au fil du temps
+// via `contract claim`, comme un vesting créé par transaction.
+func (s *State) BootstrapVesting(id, beneficiary string, amount uint64, startMs, endMs int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Supply.Total += amount
+	s.Supply.Minted += amount
+	s.Contracts[id] = &Contract{
+		ID:          id,
+		Template:    types.TemplateVesting,
+		Creator:     "genesis",
+		TokenID:     types.NativeToken,
+		Amount:      amount,
+		Beneficiary: beneficiary,
+		StartMs:     startMs,
+		EndMs:       endMs,
+		Status:      "active",
+		CreatedAt:   0,
+	}
+}
+
 // BootstrapStake installe un stake à la genèse (sans passer par une tx).
 func (s *State) BootstrapStake(addr string, amount uint64) {
 	s.mu.Lock()

@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"chaingo/internal/crypto"
+	"chaingo/internal/genesis"
 	"chaingo/internal/node"
+	"chaingo/internal/state"
 	"chaingo/internal/types"
 	"chaingo/internal/wallet"
 )
@@ -46,6 +48,8 @@ Usage :
   chaingo contract list [--api URL]
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo keygen [--out validator.seed]      (génère une seed de validateur ML-DSA-65)
+  chaingo genesis template [--chain-id ID] [--out genesis.json] [--seed-out FILE]
+  chaingo genesis validate <genesis.json>    (vérifie + empreinte déterministe)
   chaingo bench [--txs 10000] [--senders 16]
 `
 
@@ -82,6 +86,8 @@ func main() {
 		err = cmdFaucet(os.Args[2:])
 	case "keygen":
 		err = cmdKeygen(os.Args[2:])
+	case "genesis":
+		err = cmdGenesis(os.Args[2:])
 	case "bench":
 		err = cmdBench(os.Args[2:])
 	case "help", "-h", "--help":
@@ -596,6 +602,88 @@ func cmdKeygen(args []string) error {
 	}
 	fmt.Printf("Seed écrite dans %s (à utiliser avec --validator-seed)\n", *out)
 	return nil
+}
+
+// ---------- genesis (outillage testnet/mainnet) ----------
+
+func cmdGenesis(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage : chaingo genesis template|validate")
+	}
+	switch args[0] {
+	case "template":
+		fs := flag.NewFlagSet("genesis template", flag.ExitOnError)
+		chainID := fs.String("chain-id", "chaingo-testnet-pub", "identifiant de la chaîne")
+		out := fs.String("out", "genesis.json", "fichier de sortie")
+		seedOut := fs.String("seed-out", "validator.seed", "fichier seed du validateur de genèse")
+		fs.Parse(args[1:])
+		if _, err := os.Stat(*out); err == nil {
+			return fmt.Errorf("%s existe déjà — refus d'écraser", *out)
+		}
+		kp, err := crypto.GenerateKeyPair()
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(*seedOut); err == nil {
+			return fmt.Errorf("%s existe déjà — refus d'écraser une clé", *seedOut)
+		}
+		if err := os.WriteFile(*seedOut, []byte(hex.EncodeToString(kp.Seed)), 0o600); err != nil {
+			return err
+		}
+		p := types.DefaultParams()
+		g := &genesis.Genesis{
+			ChainID:   *chainID,
+			Timestamp: time.Now().UnixMilli(),
+			Params:    &p,
+			Alloc:     map[string]uint64{kp.Address(): 1_000 * types.Unit},
+			Stakes:    map[string]uint64{kp.Address(): 1_000_000 * types.Unit},
+			Vesting:   []genesis.VestingGrant{},
+		}
+		if _, err := g.Validate(); err != nil {
+			return err
+		}
+		if err := os.WriteFile(*out, g.Bytes(), 0o600); err != nil {
+			return err
+		}
+		fmt.Printf("Genèse écrite : %s\n", *out)
+		fmt.Printf("Validateur de genèse : %s (seed : %s)\n", kp.Address(), *seedOut)
+		fmt.Println("Édite alloc / stakes / vesting selon ta distribution, puis :")
+		fmt.Printf("  chaingo genesis validate %s\n", *out)
+		fmt.Printf("  chaingo node start --genesis %s --validator-seed %s\n", *out, *seedOut)
+		return nil
+
+	case "validate":
+		if len(args) < 2 {
+			return fmt.Errorf("usage : chaingo genesis validate <genesis.json>")
+		}
+		data, err := os.ReadFile(args[1])
+		if err != nil {
+			return err
+		}
+		g, err := genesis.Parse(data)
+		if err != nil {
+			return fmt.Errorf("JSON invalide : %w", err)
+		}
+		sum, err := g.Validate()
+		if err != nil {
+			return err
+		}
+		// Empreinte déterministe : appliquer la genèse à un état neuf donne
+		// le même hash de bloc / racine d'état sur tous les nœuds.
+		gb := g.Apply(state.New())
+		fmt.Printf("✓ Genèse valide — chaîne %s\n", sum.ChainID)
+		fmt.Printf("  Validateurs    : %d (stake total %s CGO)\n", sum.Validators, formatAmount(sum.Staked, types.NativeDecimals))
+		fmt.Printf("  Soldes liquides: %s CGO\n", formatAmount(sum.Liquid, types.NativeDecimals))
+		fmt.Printf("  Vesting        : %d allocation(s), %s CGO verrouillés\n", sum.VestingN, formatAmount(sum.Vested, types.NativeDecimals))
+		fmt.Printf("  SUPPLY TOTALE  : %s CGO\n", formatAmount(sum.TotalSupply, types.NativeDecimals))
+		fmt.Printf("  Empreinte genèse (à comparer entre nœuds) :\n")
+		fmt.Printf("    block hash  : %s\n", gb.Hash)
+		fmt.Printf("    state root  : %s\n", gb.Header.StateRoot)
+		return nil
+
+	default:
+		return fmt.Errorf("sous-commande inconnue %q (template|validate)", args[0])
+	}
 }
 
 // ---------- helpers ----------
