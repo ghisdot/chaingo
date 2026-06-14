@@ -39,7 +39,7 @@ Les règles économiques vivent dans le **document de genèse** (`params`) : cha
 ## Documentation
 
 - [Référence API](docs/API.md) — tous les endpoints + comment construire et signer une transaction
-- [Hébergement 24/24](docs/DEPLOYMENT.md) — VPS, systemd, Docker, HTTPS, sauvegardes
+- [Hébergement 24/24](docs/DEPLOYMENT.md) — déploiement express OVH (1 commande), VPS, systemd, Docker, HTTPS, sauvegardes
 - [Guide validateur & délégateur](docs/VALIDATOR.md)
 - [Préparation du mainnet](docs/MAINNET.md) — distribution, vesting on-chain, cérémonie de genèse
 - [Feuille de route](ROADMAP.md) · [Contribuer](CONTRIBUTING.md) · [Sécurité](SECURITY.md)

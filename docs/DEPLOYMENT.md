@@ -3,6 +3,51 @@
 Objectif : un serveur qui fait tourner **le nœud ChainGO en continu** et sert **le site
 vitrine** (avec stats live) sur ton domaine, en HTTPS.
 
+## Déploiement express (OVH / Ubuntu) — une commande
+
+Sur un VPS Ubuntu fraîchement installé, en root :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ghisdot/chaingo/main/scripts/deploy-node.sh -o deploy.sh
+sudo bash deploy.sh --network testnet --domain node.exemple.com
+```
+
+Le script ([scripts/deploy-node.sh](../scripts/deploy-node.sh)) installe Go, compile ChainGO,
+crée l'utilisateur + le service systemd (redémarrage auto), configure le pare-feu, et —
+si `--domain` est fourni — installe **Caddy avec HTTPS automatique** (Let's Encrypt).
+Ce premier nœud `--testnet` génère la **genèse canonique** du testnet (`chaingo-testnet-1`)
+et l'expose sur `/v1/genesis` ; c'est le nœud d'amorçage que les autres rejoindront.
+
+> 🔐 Après coup : **sauvegarde `/var/lib/chaingo/validator.seed` (et `faucet.seed`) hors du
+> serveur** — c'est l'identité de ton validateur et de ton faucet.
+
+### Faire tourner un nœud local qui REJOINT ce testnet
+
+⚠️ N'utilise PAS `--testnet` en local (il créerait une genèse différente = un autre réseau).
+Pour **rejoindre** le testnet du VPS, fais récupérer sa genèse :
+
+```powershell
+.\chaingo.exe node start --genesis-url https://node.exemple.com/v1/genesis `
+  --peers <ip-du-vps>:9000 --datadir .testnet-local --api 127.0.0.1:8545
+```
+
+Ton nœud local télécharge la genèse, se synchronise et reçoit les blocs en gossip (même
+derrière une box/NAT : la connexion sortante suffit). Il sert l'API en local sans clé
+validateur (nœud complet : sync + API + relais).
+
+### Premières transactions de test
+
+```powershell
+# 1. Un wallet (clés ML-DSA-65)
+.\chaingo.exe wallet new test1
+# 2. Le financer via le faucet du VPS (faucet ouvert sur testnet)
+.\chaingo.exe faucet --to test1 --amount 100 --api https://node.exemple.com
+# 3. Transférer (via ton nœud local OU directement le VPS)
+.\chaingo.exe send --from test1 --to <adresse> --amount 5 --api http://127.0.0.1:8545
+# 4. Wallet web : ouvre https://ghisdot.github.io/chaingo/wallet/ et mets l'URL « Nœud »
+#    sur https://node.exemple.com
+```
+
 ## Option 100 % gratuite (recommandée pour démarrer)
 
 Deux pièces, deux hébergeurs gratuits :
