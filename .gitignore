@@ -1,7 +1,7 @@
 chaingo.exe
 chaingo
 dist/
-.devnet/
+.devnet*/
 .testnet/
 .bfttest/
 .gentest/
