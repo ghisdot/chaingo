@@ -197,9 +197,18 @@ let wasmReady=false, seedHex=null, myAddress=null, nodeUrl=null;
 const UNIT=1e9;
 
 function defaultNode(){
-  if(location.protocol==="file:") return "http://127.0.0.1:8545";
-  // servi par un nœud => même origine ; sinon (GitHub Pages) champ à remplir
-  return localStorage.getItem("chaingo_node_url") || (location.origin.includes("github.io")? "" : location.origin);
+  // Priorité 1 : préférence utilisateur sauvegardée.
+  const saved = localStorage.getItem("chaingo_node_url");
+  if (saved) return saved;
+  // Priorité 2 : ouvert depuis un fichier local → nœud local par défaut.
+  if (location.protocol === "file:") return "http://127.0.0.1:8545";
+  // Priorité 3 : sur chaingo.org (le site officiel), pointer le testnet par défaut.
+  const h = location.hostname;
+  if (h === "chaingo.org" || h === "www.chaingo.org") return "https://node.chaingo.org";
+  // Priorité 4 : sur GitHub Pages → champ à remplir par l'utilisateur.
+  if (h.endsWith("github.io")) return "";
+  // Fallback : même origine (cas où le nœud sert le site sur son port).
+  return location.origin;
 }
 function saveNode(){nodeUrl=$("nodeUrl").value.trim().replace(/\/$/,"");localStorage.setItem("chaingo_node_url",nodeUrl);pingNode();}
 async function api(path,opts){const r=await fetch(nodeUrl+path,opts);if(!r.ok){let e;try{e=(await r.json()).error;}catch{} throw new Error(e||("HTTP "+r.status));}return r.json();}
