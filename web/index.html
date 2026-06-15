@@ -519,7 +519,15 @@ function toggleLang() {
 // ---------- stats live ----------
 const fmt = () => new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 0 });
 const fmtFee = () => new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-US', { maximumFractionDigits: 6 });
-const base = location.protocol === 'file:' ? 'http://127.0.0.1:8545' : '';
+// URL de l'API publique pour les stats live : même logique que le wallet.
+// Sur chaingo.org → node.chaingo.org. Sur un fichier local → nœud local.
+// Ailleurs (GitHub Pages, etc.) → même origine (cas où un nœud sert le site).
+const base = (() => {
+  if (location.protocol === 'file:') return 'http://127.0.0.1:8545';
+  const h = location.hostname;
+  if (h === 'chaingo.org' || h === 'www.chaingo.org') return 'https://node.chaingo.org';
+  return '';
+})();
 const $ = id => document.getElementById(id);
 
 async function refresh() {
