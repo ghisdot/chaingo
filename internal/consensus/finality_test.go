@@ -33,7 +33,7 @@ func TestQuorumThreshold(t *testing.T) {
 // TestVoteSignVerify : aller-retour ML-DSA-65 + détection d'altération.
 func TestVoteSignVerify(t *testing.T) {
 	kp, _ := crypto.GenerateKeyPair()
-	v := &types.Vote{ChainID: "test", Height: 7, BlockHash: "abc"}
+	v := &types.Vote{ChainID: "test", Height: 7, Kind: types.PrecommitKind, BlockHash: "abc"}
 	v.SignWith(kp)
 	if err := v.Verify(); err != nil {
 		t.Fatalf("vote valide rejeté: %v", err)
@@ -54,7 +54,7 @@ func mkValidators(st *state.State, n int) []*crypto.KeyPair {
 }
 
 func addVote(e *Engine, kp *crypto.KeyPair, h uint64, hash string) {
-	v := &types.Vote{ChainID: "test", Height: h, BlockHash: hash}
+	v := &types.Vote{ChainID: "test", Height: h, Kind: types.PrecommitKind, BlockHash: hash}
 	v.SignWith(kp)
 	e.AddVote(v)
 }
@@ -100,7 +100,7 @@ func TestCommitRejectsBadVotes(t *testing.T) {
 	e := newEngine(st, vs[0])
 	const h, hash = uint64(1), "HASH1"
 
-	v0 := &types.Vote{ChainID: "test", Height: h, BlockHash: hash}
+	v0 := &types.Vote{ChainID: "test", Height: h, Kind: types.PrecommitKind, BlockHash: hash}
 	v0.SignWith(vs[0])
 	// Doublon du même votant dans un commit → rejet.
 	if _, err := e.verifyCommit([]*types.Vote{v0, v0}, h, hash); err == nil {
@@ -112,7 +112,7 @@ func TestCommitRejectsBadVotes(t *testing.T) {
 	}
 	// Non-validateur → pouvoir 0 → rejet.
 	stranger, _ := crypto.GenerateKeyPair()
-	vs1 := &types.Vote{ChainID: "test", Height: h, BlockHash: hash}
+	vs1 := &types.Vote{ChainID: "test", Height: h, Kind: types.PrecommitKind, BlockHash: hash}
 	vs1.SignWith(stranger)
 	if _, err := e.verifyCommit([]*types.Vote{vs1}, h, hash); err == nil {
 		t.Fatal("vote d'un non-validateur devrait être rejeté")

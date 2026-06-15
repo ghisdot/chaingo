@@ -7,12 +7,21 @@ import (
 	"chaingo/internal/crypto"
 )
 
-// Vote : précommit BFT signé par un validateur sur un bloc à une hauteur
-// donnée (Phase 2 — finalité). Comme pour Transaction, l'ordre des champs
-// EST le format de signature canonique — ne pas réordonner.
+// Kinds de votes BFT. Deux tours par hauteur dans le modèle complet
+// (prevote -> precommit) ; aujourd'hui seul le precommit décide la finalité,
+// le prevote prépare le verrouillage (tranche 2).
+const (
+	PrecommitKind = "precommit"
+	PrevoteKind   = "prevote"
+)
+
+// Vote : vote BFT signé par un validateur sur un bloc à une hauteur donnée.
+// Comme pour Transaction, l'ordre des champs EST le format de signature
+// canonique — ne pas réordonner.
 type Vote struct {
 	ChainID   string `json:"chain_id"`
 	Height    uint64 `json:"height"`
+	Kind      string `json:"kind"` // PrecommitKind | PrevoteKind
 	BlockHash string `json:"block_hash"`
 	Voter     string `json:"voter"`
 	VoterPub  []byte `json:"voter_pub"`

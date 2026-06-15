@@ -53,10 +53,11 @@ type Engine struct {
 	votes   *votePool
 	chainID string
 	OnVote  func(*types.Vote) // hook broadcast p2p des votes
-	// voted : hauteur -> hash déjà précommit PAR CE NŒUD. Invariant de sûreté
-	// BFT : on ne signe JAMAIS deux précommits à la même hauteur (sinon on
-	// déclenche notre propre règle d'équivocation → auto-slash).
-	voted map[uint64]string
+	// voted : hauteur -> kind -> hash déjà signé PAR CE NŒUD. Invariant de
+	// sûreté BFT : on ne signe JAMAIS deux votes de même kind à la même
+	// hauteur (sinon on déclenche notre propre règle d'équivocation →
+	// auto-slash). Tranche 2 ajoutera la règle de verrouillage POL.
+	voted map[uint64]map[string]string
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -78,7 +79,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		heartbeat:    20,
 		lastProgress: time.Now(),
 		votes:        newVotePool(),
-		voted:        map[uint64]string{},
+		voted:        map[uint64]map[string]string{},
 		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
@@ -289,26 +290,35 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 
 var errWrongVoteChain = errors.New("vote on wrong chain")
 
-// castVote : ce nœud, s'il est validateur, précommit le bloc qu'il vient
-// de committer, l'ajoute au pool et le diffuse. Suppose e.mu détenu. La
-// finalité n'est PAS décidée ici : elle l'est quand un bloc ultérieur porte
-// le commit ≥ 2/3 (buildLastCommit / verifyCommit).
-//
-// INVARIANT DE SÛRETÉ BFT : un validateur ne signe jamais deux précommits à
-// la même hauteur. Sinon il produit lui-même une preuve d'équivocation et se
-// fait slasher. Ce garde-fou est aussi le prérequis d'un futur fork-choice.
+// castVote : émet prevote puis précommit pour le bloc qu'on vient de
+// committer. Le précommit reste celui qui décide la finalité ; le prevote
+// est posé en préparation de la tranche 2 (locking). Suppose e.mu détenu.
 func (e *Engine) castVote(height uint64, hash string) {
+	e.castVoteKind(height, types.PrevoteKind, hash)
+	e.castVoteKind(height, types.PrecommitKind, hash)
+}
+
+// castVoteKind : émet un vote d'un kind donné, l'ajoute au pool et le diffuse.
+//
+// INVARIANT DE SÛRETÉ BFT : un validateur ne signe jamais deux votes du même
+// kind à la même hauteur. Sinon il produit lui-même une preuve d'équivocation
+// et se fait slasher. Ce garde-fou est aussi le prérequis d'un futur
+// fork-choice (la règle de verrouillage POL viendra en tranche 2).
+func (e *Engine) castVoteKind(height uint64, kind, hash string) {
 	if e.key == nil {
 		return
 	}
-	if prev, ok := e.voted[height]; ok {
-		if prev != hash {
-			log.Printf("[consensus] SÛRETÉ : refus de précommit un 2e bloc (%s…) à la hauteur #%d — déjà voté %s… (anti-auto-équivocation)", short(hash), height, short(prev))
-		}
-		return // déjà voté à cette hauteur : on ne re-signe pas
+	if e.voted[height] == nil {
+		e.voted[height] = map[string]string{}
 	}
-	e.voted[height] = hash
-	v := &types.Vote{ChainID: e.chainID, Height: height, BlockHash: hash}
+	if prev, ok := e.voted[height][kind]; ok {
+		if prev != hash {
+			log.Printf("[consensus] SÛRETÉ : refus de signer un 2e %s (%s…) à la hauteur #%d — déjà voté %s… (anti-auto-équivocation)", kind, short(hash), height, short(prev))
+		}
+		return
+	}
+	e.voted[height][kind] = hash
+	v := &types.Vote{ChainID: e.chainID, Height: height, Kind: kind, BlockHash: hash}
 	v.SignWith(e.key)
 	e.votes.add(v)
 	if e.OnVote != nil {
@@ -332,9 +342,13 @@ func (e *Engine) pruneVotedLocked(upTo uint64) {
 	}
 }
 
-// recordEquivocation : transforme un vote conflictuel en preuve à inclure
-// dans un futur bloc (sauf si la faute est déjà punie ou déjà connue).
+// recordEquivocation : transforme un précommit conflictuel en preuve à
+// inclure dans un futur bloc (sauf si la faute est déjà punie ou déjà
+// connue). Pour cette tranche, seuls les précommits déclenchent un slash.
 func (e *Engine) recordEquivocation(prev, cur *types.Vote) {
+	if cur.Kind != types.PrecommitKind {
+		return
+	}
 	key := evidenceKey(cur.Voter, cur.Height)
 	if _, exists := e.evidence[key]; exists || e.st.IsSlashed(cur.Voter, cur.Height) {
 		return
@@ -345,13 +359,16 @@ func (e *Engine) recordEquivocation(prev, cur *types.Vote) {
 	log.Printf("[consensus] ÉQUIVOCATION détectée : %s a précommit 2 blocs à la hauteur #%d — preuve en attente de slash", cur.Voter, cur.Height)
 }
 
-// AddVote : précommit reçu d'un pair. Renvoie true s'il est nouveau (à
-// re-diffuser). Valide la signature et le statut de validateur du votant.
+// AddVote : vote reçu d'un pair (prevote ou précommit). Renvoie true s'il est
+// nouveau (à re-diffuser). Valide signature, kind et statut de validateur.
 func (e *Engine) AddVote(v *types.Vote) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.chainID != "" && v.ChainID != e.chainID {
 		return false, errWrongVoteChain
+	}
+	if v.Kind != types.PrecommitKind && v.Kind != types.PrevoteKind {
+		return false, fmt.Errorf("unknown vote kind %q", v.Kind)
 	}
 	if v.Height <= e.st.GetFinalized() {
 		return false, nil // hauteur déjà finalisée
@@ -399,6 +416,9 @@ func (e *Engine) verifyCommit(votes []*types.Vote, height uint64, hash string) (
 	for _, v := range votes {
 		if e.chainID != "" && v.ChainID != e.chainID {
 			return 0, errors.New("commit vote on wrong chain")
+		}
+		if v.Kind != types.PrecommitKind {
+			return 0, errors.New("commit must contain precommits only")
 		}
 		if v.Height != height || v.BlockHash != hash {
 			return 0, errors.New("commit vote height/hash mismatch")

@@ -22,7 +22,7 @@ func TestSlashDoubleSign(t *testing.T) {
 
 	// Deux votes conflictuels du même validateur à la hauteur 5.
 	mkVote := func(hash string) *types.Vote {
-		v := &types.Vote{ChainID: "c", Height: 5, BlockHash: hash}
+		v := &types.Vote{ChainID: "c", Height: 5, Kind: types.PrecommitKind, BlockHash: hash}
 		v.SignWith(val)
 		return v
 	}
@@ -81,9 +81,9 @@ func TestSlashHitsDelegations(t *testing.T) {
 		t.Fatalf("délégation attendue 100000 CGO, got %d", deleg)
 	}
 
-	v1 := &types.Vote{ChainID: "c", Height: 9, BlockHash: "X"}
+	v1 := &types.Vote{ChainID: "c", Height: 9, Kind: types.PrecommitKind, BlockHash: "X"}
 	v1.SignWith(val)
-	v2 := &types.Vote{ChainID: "c", Height: 9, BlockHash: "Y"}
+	v2 := &types.Vote{ChainID: "c", Height: 9, Kind: types.PrecommitKind, BlockHash: "Y"}
 	v2.SignWith(val)
 	ev := &types.DoubleSignEvidence{Height: 9, Voter: val.Address(), VoteA: v1, VoteB: v2}
 	if _, _, _, err := st.Execute(nil, []*types.DoubleSignEvidence{ev}, nil, "", 2000, true); err != nil {
