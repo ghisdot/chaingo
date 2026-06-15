@@ -393,17 +393,17 @@
 <span class="k">chaingo</span> delegate --from alice --to cg… --amount 50
 </pre>
     <p class="lead" style="margin-top:22px" data-i18n="d.links">
-      Pas envie de ligne de commande ? <a href="/wallet/">Crée ton wallet dans le navigateur</a> ou
-      <a href="/explorer/">parcours la chaîne en direct</a>. Tu veux faire tourner ton propre nœud
-      ou intégrer ChainGO ? <a href="/api/">Référence API</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">code source</a>.
+      Pas envie de ligne de commande ? <a href="/wallet/">Créez un wallet dans le navigateur</a> ou
+      <a href="/explorer/">parcourez la chaîne en direct</a>. Pour faire tourner un nœud
+      ou intégrer ChainGO : <a href="/api/">Référence API</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">code source</a>.
     </p>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <div class="warn" data-i18n="ft.warn">ℹ️ Le testnet public est en ligne — explore-le librement, demande des CGO de test
-    au faucet, lance ton nœud. Le <b>mainnet</b> ouvrira après l'audit de sécurité externe et la finalisation
+    <div class="warn" data-i18n="ft.warn">ℹ️ Le testnet public est en ligne — explorez-le librement, obtenez des CGO de test
+    via le faucet, rejoignez le réseau. Le <b>mainnet</b> ouvrira après l'audit de sécurité externe et la finalisation
     de la Phase 2 (consensus BFT durci). L'anonymat fort (zk-STARK) arrive en Phase 3.</div>
     <div data-i18n="ft.info">ChainGO — blockchain post-quantique open source (MIT) écrite en Go.
     Signatures ML-DSA-65 (NIST FIPS 204) · SHA3-256 · <a href="/api/">Référence API</a> ·
@@ -490,13 +490,13 @@ const STR = {
     title: `ChainGO — La blockchain post-quantique`,
     connecting: `Connexion au nœud…`,
     online: (id, sig, dev) => `<span class="ok">● Nœud connecté</span> — chaîne <b>${id}</b>, signatures ${sig}${dev ? ' · mode devnet' : ''}`,
-    offline: `<span class="ko">● Nœud hors-ligne</span> — lancez <code>chaingo node start --dev</code> puis rechargez.`,
+    offline: `<span class="ko">● Nœud public temporairement injoignable</span> — réessai automatique en cours.`,
   },
   en: {
     title: `ChainGO — The post-quantum blockchain`,
     connecting: `Connecting to node…`,
     online: (id, sig, dev) => `<span class="ok">● Node connected</span> — chain <b>${id}</b>, ${sig} signatures${dev ? ' · devnet mode' : ''}`,
-    offline: `<span class="ko">● Node offline</span> — run <code>chaingo node start --dev</code> and reload.`,
+    offline: `<span class="ko">● Public node temporarily unreachable</span> — auto-retrying.`,
   },
 };
 

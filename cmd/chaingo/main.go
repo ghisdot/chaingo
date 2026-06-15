@@ -56,6 +56,8 @@ Usage :
   chaingo genesis template [--chain-id ID] [--out genesis.json] [--seed-out FILE]
   chaingo genesis validate <genesis.json>    (vérifie + empreinte déterministe)
   chaingo bench [--txs 10000] [--senders 16]
+  chaingo loadtest [--api URL] [--wallets 10] [--txs 200] [--workers 8] [--faucet 100] [--amount 0.01] [--fast]
+                     (bombarde un testnet/devnet de transactions réelles — observe les stats monter)
 `
 
 const defaultAPI = "http://127.0.0.1:8545"
@@ -97,6 +99,8 @@ func main() {
 		err = cmdGenesis(os.Args[2:])
 	case "bench":
 		err = cmdBench(os.Args[2:])
+	case "loadtest":
+		err = cmdLoadtest(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

@@ -32,6 +32,7 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
   Création d'un wallet, faucet testnet, envoi de transactions, gestion des
   tokens et contrats no-code. Les clés sont générées et conservées **dans
   votre navigateur** (jamais envoyées à un serveur).
+- **Obtenir des CGO de test** : voir [docs/GET-CGO.md](docs/GET-CGO.md).
 - **Explorateur de blocs** : <https://chaingo.org/explorer/>
   Parcourir les blocs, transactions, comptes, validateurs et tokens en direct.
 - **Référence API** : <https://chaingo.org/api/>
