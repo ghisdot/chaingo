@@ -2,10 +2,19 @@ package consensus
 
 import (
 	"sort"
+	"strconv"
 	"sync"
 
 	"chaingo/internal/types"
 )
+
+// rkKey : clé composite (round, kind) pour la détection d'équivocation. Une
+// équivocation = deux votes du même kind à la même hauteur ET au même round
+// pour des hash différents. Voter pour des blocs différents à des rounds
+// DIFFÉRENTS est légitime (changement sur polka plus récente, POL #6).
+func rkKey(round uint32, kind string) string {
+	return kind + "@" + strconv.FormatUint(uint64(round), 10)
+}
 
 // votePool accumule les votes BFT (prevotes ET precommits) par (hauteur, kind,
 // hash de bloc). Il stocke les votes pour pouvoir reconstruire le COMMIT
@@ -42,18 +51,21 @@ func (p *votePool) add(v *types.Vote) (isNew bool, equiv *types.Vote) {
 	}
 	p.seen[h] = true
 
+	// Équivocation détectée par (hauteur, round, kind) — un conflit n'est une
+	// faute qu'au MÊME round (cf rkKey).
+	rk := rkKey(v.Round, v.Kind)
 	if p.first[v.Height] == nil {
 		p.first[v.Height] = map[string]map[string]*types.Vote{}
 	}
-	if p.first[v.Height][v.Kind] == nil {
-		p.first[v.Height][v.Kind] = map[string]*types.Vote{}
+	if p.first[v.Height][rk] == nil {
+		p.first[v.Height][rk] = map[string]*types.Vote{}
 	}
-	if prev, ok := p.first[v.Height][v.Kind][v.Voter]; ok {
+	if prev, ok := p.first[v.Height][rk][v.Voter]; ok {
 		if prev.BlockHash != v.BlockHash {
 			equiv = prev
 		}
 	} else {
-		p.first[v.Height][v.Kind][v.Voter] = v
+		p.first[v.Height][rk][v.Voter] = v
 	}
 
 	if p.votes[v.Height] == nil {

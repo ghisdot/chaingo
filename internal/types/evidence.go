@@ -27,14 +27,28 @@ func (e *DoubleSignEvidence) Hash() string {
 	return crypto.HashHex(b)
 }
 
-// Verify : les deux votes sont signés par `Voter`, à la même hauteur, sur
-// des blocs DIFFÉRENTS. Si tout est vrai, l'équivocation est prouvée.
+// Verify : les deux votes sont signés par `Voter`, à la même hauteur, AU MÊME
+// ROUND et du MÊME KIND, sur des blocs DIFFÉRENTS. Si tout est vrai,
+// l'équivocation est prouvée.
+//
+// L'égalité de round est ESSENTIELLE depuis l'ajout de Vote.Round (#6) : avec
+// le verrouillage POL, un validateur PEUT légitimement voter pour des blocs
+// différents à des rounds DIFFÉRENTS (sur preuve d'une polka plus récente).
+// Seul un conflit au MÊME round est une faute. Sans ce contrôle, on pourrait
+// faire slasher à tort un validateur honnête en exhibant deux de ses votes
+// cross-round.
 func (e *DoubleSignEvidence) Verify(chainID string) error {
 	if e.VoteA == nil || e.VoteB == nil {
 		return errors.New("evidence: missing vote")
 	}
 	if e.VoteA.BlockHash == e.VoteB.BlockHash {
 		return errors.New("evidence: same block hash (not equivocation)")
+	}
+	if e.VoteA.Round != e.VoteB.Round {
+		return errors.New("evidence: votes at different rounds (legitimate POL change, not equivocation)")
+	}
+	if e.VoteA.Kind != e.VoteB.Kind {
+		return errors.New("evidence: votes of different kinds")
 	}
 	for _, v := range []*Vote{e.VoteA, e.VoteB} {
 		if v.ChainID != chainID {
