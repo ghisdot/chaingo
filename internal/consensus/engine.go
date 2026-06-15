@@ -67,8 +67,13 @@ type Engine struct {
 	// bloc, il se VERROUILLE dessus (round + hash). Il ne précommettra un hash
 	// différent à cette hauteur QUE sur preuve d'une polka à un round STRICTEMENT
 	// supérieur (POL). Garantit qu'on ne change d'avis que sur quorum plus récent
-	// — base d'un reorg sûr (fork-choice = tranche 5/#7).
+	// — base d'un reorg sûr (fork-choice = #7).
 	locked map[uint64]lock
+	// snapshots : photo de l'état (bytes) APRÈS application de chaque hauteur,
+	// pour la fenêtre NON finalisée [finalized, current] (#7, fondation du reorg).
+	// Un reorg = restaurer le snapshot du point de fork (toujours ≥ finalized,
+	// immuable) puis rejouer la branche concurrente. Purgé sous `finalized`.
+	snapshots map[uint64][]byte
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -99,6 +104,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		voted:        map[uint64]map[string]string{},
 		setByHeight:  map[uint64]*state.ValidatorSet{},
 		locked:       map[uint64]lock{},
+		snapshots:    map[uint64][]byte{},
 		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
@@ -213,11 +219,13 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	b.ProposerPubKey = e.key.PubBytes()
 	b.ProposerSignature = e.key.Sign(b.SigningBytes())
 	e.st.Commit(height, b.Hash)
+	e.snapshotStateLocked(height) // point de restauration pour un éventuel reorg (#7)
 	if len(lastCommit) > 0 {
 		e.st.SetFinalized(height - 1)
 		e.votes.prune(height - 1)
 		e.pruneVotedLocked(height - 1)
 		e.pruneSetsLocked(height - 1)
+		e.pruneSnapshotsBelow(height - 1) // garde ≥ finalité (point de fork minimal)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -301,11 +309,13 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		return err
 	}
 	e.st.Commit(b.Header.Height, b.Hash)
+	e.snapshotStateLocked(b.Header.Height) // point de restauration reorg (#7)
 	if finalizesParent {
 		e.st.SetFinalized(b.Header.Height - 1)
 		e.votes.prune(b.Header.Height - 1)
 		e.pruneVotedLocked(b.Header.Height - 1)
 		e.pruneSetsLocked(b.Header.Height - 1)
+		e.pruneSnapshotsBelow(b.Header.Height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -539,6 +549,67 @@ func (e *Engine) pruneSetsLocked(upTo uint64) {
 			delete(e.setByHeight, h)
 		}
 	}
+}
+
+// snapshotStateLocked mémorise l'état (bytes) APRÈS la hauteur `height` — point
+// de restauration possible pour un reorg (#7). Suppose e.mu détenu.
+func (e *Engine) snapshotStateLocked(height uint64) {
+	e.snapshots[height] = e.st.Bytes()
+}
+
+// pruneSnapshotsBelow purge les snapshots strictement SOUS `keep` : une fois une
+// hauteur finalisée (immuable), aucun reorg ne peut descendre en-dessous, donc
+// son point de restauration n'est plus utile. On GARDE `keep` lui-même (point
+// de fork minimal possible). Suppose e.mu détenu.
+func (e *Engine) pruneSnapshotsBelow(keep uint64) {
+	for h := range e.snapshots {
+		if h < keep {
+			delete(e.snapshots, h)
+		}
+	}
+}
+
+// RewindTo restaure l'état au point de fin de la hauteur `height` à partir du
+// snapshot conservé, et repositionne la hauteur du moteur. Échoue si aucun
+// snapshot n'est disponible (hauteur trop ancienne — déjà purgée car finalisée,
+// ou jamais traitée dans cette session). C'est la brique de bas niveau du
+// fork-choice : l'appelant rejoue ensuite la branche concurrente depuis
+// height+1. NE descend JAMAIS sous la dernière hauteur finalisée.
+func (e *Engine) RewindTo(height uint64) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if height < e.st.GetFinalized() {
+		return fmt.Errorf("rewind refusé : hauteur %d sous la finalité %d (immuable)", height, e.st.GetFinalized())
+	}
+	snap, ok := e.snapshots[height]
+	if !ok {
+		return fmt.Errorf("rewind impossible : pas de snapshot pour la hauteur %d", height)
+	}
+	if err := e.st.Restore(snap); err != nil {
+		return fmt.Errorf("rewind : restauration échouée : %w", err)
+	}
+	// Les votes/verrous/sets des hauteurs > height appartiennent à la branche
+	// abandonnée : on les oublie pour repartir proprement.
+	for h := range e.voted {
+		if h > height {
+			delete(e.voted, h)
+		}
+	}
+	for h := range e.locked {
+		if h > height {
+			delete(e.locked, h)
+		}
+	}
+	for h := range e.snapshots {
+		if h > height {
+			delete(e.snapshots, h)
+		}
+	}
+	// NB : les votes accumulés pour les hauteurs > height (branche abandonnée)
+	// sont laissés au votePool ; ils sont dédupliqués par hash, réévalués contre
+	// le set figé, et purgés à la finalisation. Le nettoyage fin relève du
+	// fork-choice (#7, étape suivante).
+	return nil
 }
 
 // verifyCommit valide un ensemble de précommits sur (height, hash) et renvoie
