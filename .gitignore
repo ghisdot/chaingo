@@ -1,6 +1,7 @@
-chaingo.exe
-chaingo
-dist/
+# Binaires compilés à la racine (pas le dossier cmd/chaingo !).
+/chaingo.exe
+/chaingo
+/dist/
 .devnet*/
 .testnet/
 .bfttest/
