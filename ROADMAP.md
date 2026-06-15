@@ -38,14 +38,15 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       tant que jailé, sortie via `chaingo unjail` après le délai.
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
-- [~] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
-      Tranches 1, 2 et 3 livrées. Primitives `internal/codec/` (varint, length-prefixed,
-      protections taille max et octets parasites). `Transaction.MarshalBinary/UnmarshalBinary`
-      (gain mesuré **27 %**). `Block`/`Vote`/`DoubleSignEvidence` (gain **26,2 %** sur bloc complet).
-      **Protocole P2P binaire** : frame `[type][uvarint len][payload]`, anti-DoS 16 MB/frame,
-      re-gossip de la frame brute (un seul marshal au receveur), smoke test TCP intégré.
-      `SigningBytes` reste JSON canonique → toutes les signatures existantes
-      restent valides après round-trip binaire. Reste : stockage DB (tranche 4).
+- [x] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
+      Terminé (tranches 1 à 5). Primitives `internal/codec/` (varint, length-prefixed,
+      protections taille max et octets parasites). `Transaction`/`Block`/`Vote`/`DoubleSignEvidence`
+      en binaire. **Protocole P2P binaire** : frame `[type][uvarint len][payload]`, anti-DoS
+      16 MB/frame, re-gossip de la frame brute. **Stockage bbolt binaire** avec migration
+      paresseuse rétrocompatible (les anciennes bases JSON restent lisibles). Gains : **−27 %**
+      taille sur tx / **−26 %** sur bloc · **~23×** plus rapide sur tx / **~6,8×** sur bloc.
+      `SigningBytes` reste JSON canonique → toutes les signatures restent valides après
+      round-trip binaire. Doc : [docs/design/binary-codec.md](docs/design/binary-codec.md).
 - [~] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)) :
       unitaires (consensus, state, genesis) + **intégration multi-validateurs en mémoire**
       (4 nœuds convergent + finalisent, synchro d'un nœud tardif). À étendre : fuzzing réseau,
