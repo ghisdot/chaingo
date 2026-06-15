@@ -4,10 +4,30 @@ package store
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 
 	bolt "go.etcd.io/bbolt"
 
 	"chaingo/internal/types"
+)
+
+// Format de stockage des blocs (tranche 4 du codec binaire).
+//
+// Les blocs étaient persistés en JSON. On passe au binaire compact
+// (Block.MarshalBinary) pour gagner ~26 % de disque et accélérer la
+// relecture. Migration PARESSEUSE et rétrocompatible — aucune passe de
+// conversion, aucun risque sur une base existante :
+//
+//   - Les anciens blocs sont du JSON brut, qui commence toujours par '{'
+//     (0x7b). À la lecture, si le 1er octet est '{', on décode en JSON.
+//   - Les nouveaux blocs sont préfixés d'un octet de version (0x01) suivi
+//     du binaire. À la lecture, ce tag route vers UnmarshalBinary.
+//   - On choisit un tag (0x01) ≠ '{' pour que la détection soit sans
+//     ambiguïté. La genèse et l'état restent JSON (l'état NE DOIT PAS
+//     changer : la racine d'état dépend de encoding/json — invariant).
+const (
+	blockTagLegacyJSON = byte('{')  // ancien format : JSON brut (pas de préfixe)
+	blockTagBinaryV1   = byte(0x01) // nouveau format : [0x01][Block.MarshalBinary]
 )
 
 var (
@@ -91,8 +111,42 @@ func txAddrs(t *types.Transaction) []string {
 	return out
 }
 
+// encodeBlock : sérialise un bloc au format binaire taggé (0x01 + binaire).
+func encodeBlock(b *types.Block) ([]byte, error) {
+	bin, err := b.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, 1+len(bin))
+	out = append(out, blockTagBinaryV1)
+	out = append(out, bin...)
+	return out, nil
+}
+
+// decodeBlock : relit un bloc en détectant le format au 1er octet.
+// '{' → JSON legacy ; 0x01 → binaire v1 ; sinon erreur explicite.
+func decodeBlock(data []byte) (*types.Block, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	b := &types.Block{}
+	switch data[0] {
+	case blockTagLegacyJSON:
+		if err := json.Unmarshal(data, b); err != nil {
+			return nil, fmt.Errorf("store: legacy json block: %w", err)
+		}
+	case blockTagBinaryV1:
+		if err := b.UnmarshalBinary(data[1:]); err != nil {
+			return nil, fmt.Errorf("store: binary v1 block: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("store: unknown block format tag 0x%02x", data[0])
+	}
+	return b, nil
+}
+
 func (s *Store) SaveBlock(b *types.Block) error {
-	data, err := json.Marshal(b)
+	data, err := encodeBlock(b)
 	if err != nil {
 		return err
 	}
@@ -118,6 +172,15 @@ func (s *Store) SaveBlock(b *types.Block) error {
 			}
 		}
 		return tx.Bucket(bucketMeta).Put(keyHeight, heightKey(b.Header.Height))
+	})
+}
+
+// putRawBlock : écrit des octets bruts comme valeur de bloc à une hauteur,
+// SANS ré-encoder ni indexer. Sert à reconstituer un état legacy (JSON brut)
+// dans les tests, et de brique pour une éventuelle passe de migration.
+func (s *Store) putRawBlock(height uint64, raw []byte) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketBlocks).Put(heightKey(height), raw)
 	})
 }
 
@@ -208,8 +271,15 @@ func (s *Store) GetBlock(h uint64) (*types.Block, error) {
 		if data == nil {
 			return nil
 		}
-		b = &types.Block{}
-		return json.Unmarshal(data, b)
+		// bbolt prête une slice valide seulement pendant la transaction.
+		// decodeBlock → UnmarshalBinary recopie déjà tous les []byte/string
+		// (cf. codec.ReadBytes/ReadString), donc le bloc ne référence plus le
+		// buffer après retour. La copie ci-dessous est une garde peu coûteuse
+		// contre une régression future du codec (1 bloc/lecture).
+		dup := append([]byte{}, data...)
+		var err error
+		b, err = decodeBlock(dup)
+		return err
 	})
 	return b, err
 }
