@@ -69,6 +69,25 @@ func (p *votePool) add(v *types.Vote) (isNew bool, equiv *types.Vote) {
 	return true, equiv
 }
 
+// prevoters renvoie les PREVOTES connus pour (hauteur, round, hash) — la base
+// de la détection de polka (POL). Filtre par round : seuls les prevotes émis
+// au round demandé comptent pour la polka de ce round.
+func (p *votePool) prevoters(height uint64, round uint32, hash string) []*types.Vote {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	m := p.votes[height][types.PrevoteKind][hash]
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]*types.Vote, 0, len(m))
+	for _, v := range m {
+		if v.Round == round {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // commitVotes renvoie les PRECOMMITS connus pour (hauteur, hash), triés par
 // votant (ordre déterministe pour la racine de commit).
 func (p *votePool) commitVotes(height uint64, hash string) []*types.Vote {

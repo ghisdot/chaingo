@@ -410,6 +410,40 @@ func (e *Engine) AddVote(v *types.Vote) (bool, error) {
 	return true, nil
 }
 
+// hasPolka : existe-t-il une POLKA (Proof-of-Lock) pour (height, round, hash) —
+// c.-à-d. ≥ 2/3 du pouvoir du set FIGÉ de la hauteur en PREVOTES sur ce bloc à
+// ce round ? La polka est la preuve qu'une super-majorité a vu ce bloc à ce
+// round ; c'est elle qui autorise un validateur à se (re)verrouiller dessus
+// (#6, chemin B). Les prevotes sont vérifiés (signature, votant dans le set,
+// pas de doublon). Suppose e.mu détenu.
+func (e *Engine) hasPolka(height uint64, round uint32, hash string) bool {
+	cand := e.votes.prevoters(height, round, hash)
+	if len(cand) == 0 {
+		return false
+	}
+	set := e.setForHeight(height)
+	seen := map[string]bool{}
+	var power uint64
+	for _, v := range cand {
+		if v.Kind != types.PrevoteKind || v.Height != height || v.Round != round || v.BlockHash != hash {
+			continue
+		}
+		if seen[v.Voter] {
+			continue
+		}
+		p := set.PowerOf(v.Voter)
+		if p == 0 {
+			continue // pas dans le set figé de cette hauteur
+		}
+		if v.Verify() != nil {
+			continue
+		}
+		seen[v.Voter] = true
+		power += p
+	}
+	return hasQuorum(power, set.Total)
+}
+
 // buildLastCommit : reconstruit le commit du bloc (height, hash) à partir des
 // précommits connus, s'il atteint ≥ 2/3 du stake actif ; sinon nil (le bloc
 // ne finalisera pas son parent — la finalité rattrapera plus tard).
