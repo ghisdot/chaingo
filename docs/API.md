@@ -15,6 +15,9 @@ des signatures ML-DSA-65 des transactions.
 | `GET /v1/blocks/{hauteur\|latest}` | un bloc avec ses transactions |
 | `GET /v1/tx/{hash}` | `{tx, block_height, status}` — 404 si inconnue/en attente |
 | `GET /v1/accounts/{adresse}` | `{balances, nonce, staked, unbonding, delegations}` |
+| `GET /v1/accounts/{adresse}/txs?limit=50&before=<height>` | historique des tx impliquant l'adresse (paginé, plus récentes d'abord) — pour l'explorateur |
+| `GET /v1/blocks/by-hash/{hash}` | bloc recherché par son hash (et non par sa hauteur) |
+| `GET /v1/search?q=<terme>` | recherche universelle : détecte hauteur / hash bloc / hash tx / adresse / symbole de token → renvoie `{type, ref, url}` |
 | `GET /v1/validators` | set actif : stake, délégations, blocs proposés, récompenses |
 | `GET /v1/tokens` · `GET /v1/tokens/{symbole}` | registre des tokens no-code |
 | `GET /v1/contracts` · `GET /v1/contracts/{id}` | smart contracts no-code (vesting, escrow) : statut, montants verrouillés/libérés |

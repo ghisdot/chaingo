@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"chaingo/internal/crypto"
 	"chaingo/internal/state"
 	"chaingo/internal/types"
 )
@@ -20,6 +21,8 @@ type Backend interface {
 	GetBlockByHeight(h uint64) *types.Block
 	LatestBlocks(n int) []*types.Block
 	GetTx(hash string) (*types.Transaction, uint64, bool)
+	GetBlockByHash(hash string) *types.Block
+	AddressTxs(addr string, limit int, beforeHeight uint64) []map[string]any
 	GetAccount(addr string) *state.Account
 	Validators() []*state.Validator
 	Tokens() []*state.Token
@@ -119,6 +122,37 @@ func (s *Server) Start() error {
 	})
 	mux.HandleFunc("GET /v1/accounts/{addr}", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, s.b.GetAccount(r.PathValue("addr")))
+	})
+	mux.HandleFunc("GET /v1/accounts/{addr}/txs", func(w http.ResponseWriter, r *http.Request) {
+		limit := 50
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if p, err := strconv.Atoi(v); err == nil && p > 0 && p <= 500 {
+				limit = p
+			}
+		}
+		var before uint64
+		if v := r.URL.Query().Get("before"); v != "" {
+			if p, err := strconv.ParseUint(v, 10, 64); err == nil {
+				before = p
+			}
+		}
+		writeJSON(w, 200, s.b.AddressTxs(r.PathValue("addr"), limit, before))
+	})
+	mux.HandleFunc("GET /v1/blocks/by-hash/{hash}", func(w http.ResponseWriter, r *http.Request) {
+		b := s.b.GetBlockByHash(r.PathValue("hash"))
+		if b == nil {
+			writeErr(w, 404, "block not found")
+			return
+		}
+		writeJSON(w, 200, b)
+	})
+	mux.HandleFunc("GET /v1/search", func(w http.ResponseWriter, r *http.Request) {
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" {
+			writeErr(w, 400, "q parameter required")
+			return
+		}
+		writeJSON(w, 200, s.search(q))
 	})
 	mux.HandleFunc("GET /v1/validators", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, s.b.Validators())
@@ -223,7 +257,10 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			"GET  /v1/blocks/{height|latest}",
 			"POST /v1/tx                       (tx signée ML-DSA-65)",
 			"GET  /v1/tx/{hash}",
+			"GET  /v1/blocks/by-hash/{hash}    (explorateur)",
 			"GET  /v1/accounts/{address}",
+			"GET  /v1/accounts/{address}/txs?limit=50&before=<height> (historique tx, pagination)",
+			"GET  /v1/search?q=<terme>         (recherche universelle : bloc/tx/adresse/token)",
 			"GET  /v1/validators",
 			"GET  /v1/tokens",
 			"GET  /v1/tokens/{symbol}",
@@ -236,6 +273,57 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			"POST /v1/dev/wallet               (devnet)",
 		},
 	})
+}
+
+// search : recherche universelle pour l'explorateur. Détecte le type de `q`
+// (hauteur, hash de bloc, hash de tx, adresse, symbole de token) et renvoie
+// {type, ref, url}. type = "none" si rien trouvé.
+func (s *Server) search(q string) map[string]any {
+	// 1) Hauteur de bloc.
+	if h, err := strconv.ParseUint(q, 10, 64); err == nil {
+		if s.b.GetBlockByHeight(h) != nil {
+			return map[string]any{"type": "block", "ref": h, "url": "/v1/blocks/" + q}
+		}
+	}
+	// 2) Adresse (cg + 40 hex).
+	if crypto.ValidAddress(q) {
+		return map[string]any{"type": "account", "ref": q, "url": "/v1/accounts/" + q}
+	}
+	// 3) Hash hex 64 chars : bloc ou tx ?
+	if len(q) == 64 && isHex(q) {
+		if s.b.GetBlockByHash(q) != nil {
+			return map[string]any{"type": "block", "ref": q, "url": "/v1/blocks/by-hash/" + q}
+		}
+		if tx, _, ok := s.b.GetTx(q); ok && tx != nil {
+			return map[string]any{"type": "tx", "ref": q, "url": "/v1/tx/" + q}
+		}
+	}
+	// 4) Symbole de token (A-Z, 3-8).
+	if isTokenSymbol(q) && s.b.GetToken(q) != nil {
+		return map[string]any{"type": "token", "ref": q, "url": "/v1/tokens/" + q}
+	}
+	return map[string]any{"type": "none", "ref": q}
+}
+
+func isHex(s string) bool {
+	for _, c := range s {
+		if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+func isTokenSymbol(s string) bool {
+	if len(s) < 3 || len(s) > 8 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

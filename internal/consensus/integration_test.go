@@ -78,23 +78,33 @@ func (s *simNet) step() {
 	s.deliver()
 }
 
-// stepWithOffline : seuls les nœuds dont l'index N'EST PAS dans `offline`
-// produisent. Le round de secours est forcé en mettant `lastProgress` loin
-// dans le passé pour TOUS les moteurs (ils accepteront donc un round > 0).
-func (s *simNet) stepWithOffline(offline map[int]bool) {
-	long := time.Now().Add(-24 * time.Hour)
-	for _, e := range s.engines {
-		e.mu.Lock()
-		e.lastProgress = long
-		e.mu.Unlock()
-	}
-	for i, e := range s.engines {
-		if offline[i] {
+// stepWithOffline : produit la prochaine hauteur via un round de secours
+// déterministe. Cherche le 1er round ≥ 1 dont le proposeur n'est pas dans
+// `offline`, règle lastProgress pour le forcer chez tous les moteurs, puis
+// fait produire CE proposeur. Renvoie le round effectif (> 0). Non
+// probabiliste : reproductible quel que soit le tirage des clés.
+func (s *simNet) stepWithOffline(offline map[int]bool) (uint32, bool) {
+	height := s.states[0].GetHeight() + 1
+	prev := s.states[0].GetLastHash()
+	for r := uint32(1); r < MaxRounds; r++ {
+		a := s.states[0].SelectProposer(height, prev, r)
+		idx := s.indexOf(a)
+		if idx < 0 || offline[idx] {
 			continue
 		}
-		e.ProduceOnce(true)
+		// Force ce round précis : round = floor(time.Since / interval).
+		// interval=1h dans nos moteurs de test, donc dur = r*1h (+marge).
+		dur := time.Duration(r)*time.Hour + 100*time.Millisecond
+		for _, e := range s.engines {
+			e.mu.Lock()
+			e.lastProgress = time.Now().Add(-dur)
+			e.mu.Unlock()
+		}
+		s.engines[idx].ProduceOnce(true)
+		s.deliver()
+		return r, true
 	}
-	s.deliver()
+	return 0, false
 }
 
 // indexOf : index du nœud dont la clé correspond à l'adresse.
@@ -195,12 +205,18 @@ func TestFallbackRoundOnOfflineProposer(t *testing.T) {
 	}
 
 	// On le coupe et on déclenche un round de secours.
-	net.stepWithOffline(map[int]bool{off: true})
+	r, ok := net.stepWithOffline(map[int]bool{off: true})
+	if !ok {
+		t.Fatal("aucun round de secours disponible avec un proposeur en ligne")
+	}
+	if r == 0 {
+		t.Fatal("round attendu > 0 pour un round de secours")
+	}
 
 	// Tous les nœuds en ligne sont à la hauteur 2 et d'accord.
 	h0 := net.states[0].GetHeight()
 	if h0 != 2 {
-		t.Fatalf("après round de secours : hauteur 2 attendue, got %d", h0)
+		t.Fatalf("après round de secours r=%d : hauteur 2 attendue, got %d", r, h0)
 	}
 	hash0 := net.states[0].GetLastHash()
 	for i, st := range net.states {
@@ -211,9 +227,9 @@ func TestFallbackRoundOnOfflineProposer(t *testing.T) {
 			t.Fatalf("nœud %d divergent : h=%d hash=%s", i, st.GetHeight(), st.GetLastHash())
 		}
 	}
-	// Le bloc produit a un round > 0.
-	if net.chain[len(net.chain)-1].Header.Round == 0 {
-		t.Fatal("le bloc de secours devrait avoir un round > 0")
+	// Le bloc produit a bien le round attendu.
+	if got := net.chain[len(net.chain)-1].Header.Round; got != r {
+		t.Fatalf("header.Round = %d, attendu %d", got, r)
 	}
 }
 

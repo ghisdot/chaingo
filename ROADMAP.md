@@ -70,7 +70,7 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       seed chiffrée AES-256-GCM côté client — créer/importer, solde, envoyer
 - [x] **Hébergement gratuit** du site + wallet sur GitHub Pages (CI rebuild du WASM)
 - [x] Site bilingue FR/EN (README EN + bascule de langue sur le site et le wallet)
-- [ ] Explorateur de blocs public (sur le site embarqué)
+- [~] Explorateur de blocs public — couche API livrée (bloc-par-hash, historique tx d'une adresse, recherche universelle). Front explorateur à venir.
 - [ ] SDK JavaScript et Python ([#4](https://github.com/ghisdot/chaingo/issues/4))
 - [ ] Documentation (docs/) traduite en anglais
 - [x] Outillage de genèse (`chaingo genesis template|validate`, vesting on-chain à la genèse, empreinte déterministe)

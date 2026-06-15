@@ -349,6 +349,36 @@ func (n *Node) GetBlockByHeight(h uint64) *types.Block {
 	return b
 }
 
+func (n *Node) GetBlockByHash(hash string) *types.Block {
+	b, _ := n.db.BlockByHash(hash)
+	return b
+}
+
+// AddressTxs : historique des transactions impliquant `addr`, paginé.
+// Retourne les tx complètes (pas juste les hash), pour épargner un round-trip
+// à l'explorateur web.
+func (n *Node) AddressTxs(addr string, limit int, beforeHeight uint64) []map[string]any {
+	refs, _ := n.db.AddressTxs(addr, limit, beforeHeight)
+	out := make([]map[string]any, 0, len(refs))
+	for _, r := range refs {
+		b, _ := n.db.GetBlock(r.Height)
+		if b == nil {
+			continue
+		}
+		for _, tx := range b.Txs {
+			if tx.Hash() == r.Hash {
+				out = append(out, map[string]any{
+					"tx":           tx,
+					"block_height": r.Height,
+					"timestamp":    b.Header.Timestamp,
+				})
+				break
+			}
+		}
+	}
+	return out
+}
+
 func (n *Node) LatestBlocks(count int) []*types.Block {
 	top := n.st.GetHeight()
 	out := []*types.Block{}

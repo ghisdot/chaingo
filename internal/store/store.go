@@ -11,12 +11,14 @@ import (
 )
 
 var (
-	bucketBlocks  = []byte("blocks")
-	bucketTxIndex = []byte("txindex")
-	bucketMeta    = []byte("meta")
-	keyHeight     = []byte("height")
-	keyState      = []byte("state")
-	keyGenesis    = []byte("genesis")
+	bucketBlocks      = []byte("blocks")
+	bucketTxIndex     = []byte("txindex")
+	bucketBlockByHash = []byte("blockbyhash") // hash hex -> height (recherche bloc par hash)
+	bucketAddrTxs     = []byte("addrtxs")     // <addr>|<height BE>|<txhash> -> 1 (tx par adresse)
+	bucketMeta        = []byte("meta")
+	keyHeight         = []byte("height")
+	keyState          = []byte("state")
+	keyGenesis        = []byte("genesis")
 )
 
 type Store struct{ db *bolt.DB }
@@ -27,7 +29,7 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{bucketBlocks, bucketTxIndex, bucketMeta} {
+		for _, b := range [][]byte{bucketBlocks, bucketTxIndex, bucketBlockByHash, bucketAddrTxs, bucketMeta} {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
 				return err
 			}
@@ -49,6 +51,46 @@ func heightKey(h uint64) []byte {
 	return k[:]
 }
 
+// addrTxKey : clé composite <addr>|<height BE>|<txhash> permettant un
+// scan préfixe par adresse, naturellement ordonné par hauteur croissante.
+func addrTxKey(addr string, height uint64, txhash string) []byte {
+	k := make([]byte, 0, len(addr)+1+8+1+len(txhash))
+	k = append(k, addr...)
+	k = append(k, '|')
+	var h [8]byte
+	binary.BigEndian.PutUint64(h[:], height)
+	k = append(k, h[:]...)
+	k = append(k, '|')
+	k = append(k, txhash...)
+	return k
+}
+
+// txAddrs : adresses impliquées par une transaction (from + to + bénéficiaires
+// éventuels des contrats). On indexe les liens visibles pour un explorateur.
+func txAddrs(t *types.Transaction) []string {
+	seen := map[string]bool{}
+	add := func(a string) {
+		if a != "" && !seen[a] {
+			seen[a] = true
+		}
+	}
+	add(t.From)
+	add(t.To)
+	if t.Contract != nil {
+		add(t.Contract.Beneficiary)
+		add(t.Contract.Seller)
+		add(t.Contract.Arbiter)
+		for _, s := range t.Contract.Signers {
+			add(s)
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for a := range seen {
+		out = append(out, a)
+	}
+	return out
+}
+
 func (s *Store) SaveBlock(b *types.Block) error {
 	data, err := json.Marshal(b)
 	if err != nil {
@@ -58,14 +100,105 @@ func (s *Store) SaveBlock(b *types.Block) error {
 		if err := tx.Bucket(bucketBlocks).Put(heightKey(b.Header.Height), data); err != nil {
 			return err
 		}
+		// Index bloc-par-hash : permet la recherche universelle dans l'explorateur.
+		if err := tx.Bucket(bucketBlockByHash).Put([]byte(b.Hash), heightKey(b.Header.Height)); err != nil {
+			return err
+		}
 		idx := tx.Bucket(bucketTxIndex)
+		addrIdx := tx.Bucket(bucketAddrTxs)
 		for _, t := range b.Txs {
-			if err := idx.Put([]byte(t.Hash()), heightKey(b.Header.Height)); err != nil {
+			h := t.Hash()
+			if err := idx.Put([]byte(h), heightKey(b.Header.Height)); err != nil {
 				return err
+			}
+			for _, addr := range txAddrs(t) {
+				if err := addrIdx.Put(addrTxKey(addr, b.Header.Height, h), []byte{1}); err != nil {
+					return err
+				}
 			}
 		}
 		return tx.Bucket(bucketMeta).Put(keyHeight, heightKey(b.Header.Height))
 	})
+}
+
+// BlockByHash : recherche un bloc par son hash. Retourne nil si inconnu.
+func (s *Store) BlockByHash(hash string) (*types.Block, error) {
+	var height uint64
+	found := false
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		v := tx.Bucket(bucketBlockByHash).Get([]byte(hash))
+		if v != nil {
+			height = binary.BigEndian.Uint64(v)
+			found = true
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	return s.GetBlock(height)
+}
+
+// TxRef : pointeur léger vers une transaction (assez pour un explorateur).
+type TxRef struct {
+	Hash   string `json:"hash"`
+	Height uint64 `json:"height"`
+}
+
+// AddressTxs : retourne jusqu'à `limit` tx impliquant `addr`, des plus
+// RÉCENTES vers les plus anciennes. `beforeHeight` (0 = sans limite) ne
+// renvoie que les tx strictement antérieures à cette hauteur (pagination).
+func (s *Store) AddressTxs(addr string, limit int, beforeHeight uint64) ([]TxRef, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	prefix := append([]byte(addr), '|')
+	out := []TxRef{}
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketAddrTxs).Cursor()
+		// On veut un parcours descendant. Seek à la borne supérieure du préfixe,
+		// puis on remonte.
+		upper := append([]byte{}, prefix...)
+		upper[len(upper)-1] = '|' + 1 // caractère juste après '|' → exclut le préfixe
+		k, _ := c.Seek(upper)
+		if k == nil {
+			k, _ = c.Last()
+		} else {
+			k, _ = c.Prev()
+		}
+		for ; k != nil && len(out) < limit; k, _ = c.Prev() {
+			if !hasPrefix(k, prefix) {
+				return nil
+			}
+			// k = addr|height BE|txhash
+			rest := k[len(prefix):]
+			if len(rest) < 9 {
+				continue
+			}
+			h := binary.BigEndian.Uint64(rest[:8])
+			if beforeHeight > 0 && h >= beforeHeight {
+				continue
+			}
+			txhash := string(rest[9:])
+			out = append(out, TxRef{Hash: txhash, Height: h})
+		}
+		return nil
+	})
+	return out, err
+}
+
+func hasPrefix(b, prefix []byte) bool {
+	if len(b) < len(prefix) {
+		return false
+	}
+	for i, c := range prefix {
+		if b[i] != c {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Store) GetBlock(h uint64) (*types.Block, error) {
