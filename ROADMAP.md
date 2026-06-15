@@ -36,7 +36,13 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       inactivité (downtime)** : round inscrit dans l'en-tête (déterministe), comptage des
       slots de proposeur manqués, jail au seuil + slash 0,1 %, exclusion du pouvoir/tirage
       tant que jailé, sortie via `chaingo unjail` après le délai.
-- [ ] Fork-choice et gestion des réorganisations
+- [~] **Verrouillage BFT (locking POL)** — machinerie complète : `Vote.Round` signé, détection
+      de polka par round, règle de lock/unlock à l'émission du précommit, équivocation consciente
+      du round (un changement légitime cross-round n'est plus slashable). Quorums mesurés contre
+      le **set de validateurs figé par hauteur**. Design : [phase2-locking-pol.md](docs/design/phase2-locking-pol.md).
+      Reste l'activation par le fork-choice (ci-dessous).
+- [ ] **Fork-choice et réorganisations** : revert d'état depuis le dernier finalisé + bascule
+      vers la branche couverte par la polka de plus haut round. Active la machinerie de verrou.
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
 - [x] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
       Terminé (tranches 1 à 5). Primitives `internal/codec/` (varint, length-prefixed,
