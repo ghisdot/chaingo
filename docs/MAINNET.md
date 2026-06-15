@@ -1,8 +1,9 @@
 # Préparation du mainnet ChainGO
 
-> 🔴 **Le mainnet n'est PAS lancé.** On reste sur le **testnet** (`chaingo-testnet-1`)
-> tant que les pré-requis ci-dessous ne sont pas tous remplis. Ce document est le plan
-> de route et le mode opératoire — pas un déclencheur.
+> 🔴 **Le mainnet n'est PAS lancé.** Le réseau reste sur le **testnet**
+> (`chaingo-testnet-1`) tant que les pré-requis ci-dessous ne sont pas tous
+> remplis. Ce document est le plan de route et le mode opératoire — pas un
+> déclencheur.
 
 ## 1. Pré-requis avant lancement (checklist bloquante)
 
@@ -74,27 +75,32 @@ Exemple de bloc `vesting` (équipe, 4 ans) dans `mainnet.json` :
 
 ## 4. Cérémonie de genèse (multi-validateurs)
 
-1. Chaque validateur génère sa clé : `chaingo keygen --out vN.seed` et **partage son adresse** (jamais sa seed).
-2. Une personne assemble `mainnet.json` (distribution + `stakes` des N validateurs).
-3. **Tout le monde lance `chaingo genesis validate mainnet.json` et compare le `block hash`** :
-   il doit être identique partout. C'est la garantie qu'on démarre la même chaîne.
-4. Au temps T convenu, chacun lance son nœud :
+1. Chaque validateur génère sa clé : `chaingo keygen --out vN.seed` et
+   **partage publiquement son adresse cg…** (jamais la seed).
+2. Un coordinateur assemble `mainnet.json` (distribution + `stakes` des N
+   validateurs, paramètres).
+3. **Chaque participant exécute `chaingo genesis validate mainnet.json` et
+   compare le `block hash` retourné.** L'empreinte doit être strictement
+   identique partout — c'est la garantie de démarrage de la même chaîne.
+4. À l'instant T convenu, chaque opérateur lance son nœud :
    ```bash
    chaingo node start --genesis mainnet.json --validator-seed vN.seed \
      --datadir /var/lib/chaingo --api 127.0.0.1:8545 --p2p :9000 \
-     --peers <ip-seed-1>:9000,<ip-seed-2>:9000 --web /opt/chaingo/web
+     --peers <ip-seed-1>:9000,<ip-seed-2>:9000
    ```
-5. Vérifier que `finalized_height` avance (≥ 2/3 du stake en ligne) : la chaîne est vivante et finalise.
+5. Vérifier que `finalized_height` progresse (≥ 2/3 du stake en ligne) :
+   la chaîne est vivante et finalise.
 
-## 5. Décisions encore ouvertes (à trancher avec l'équipe avant la cérémonie)
+## 5. Décisions à finaliser avant la cérémonie
 
-- Adresses exactes : communauté, trésorerie, équipe, écosystème. **Le template multisig
-  M-of-N est disponible** (`chaingo contract multisig`) — recommandé pour ces coffres
-  plutôt que des adresses à clé unique. (À la genèse, on alloue d'abord vers une adresse,
-  puis on déplace dans un coffre multisig créé on-chain ; un multisig directement à la
-  genèse pourra être ajouté ensuite.)
-- Calendrier précis des vestings (cliff ? durée trésorerie ?).
-- Liste nominative des validateurs de genèse.
-- Date du lancement.
+- **Adresses des coffres** (communauté, trésorerie, équipe, écosystème).
+  Le template multisig M-of-N est disponible (`chaingo contract multisig`)
+  et est recommandé pour ces coffres plutôt que des adresses à clé unique.
+  À la genèse, on alloue d'abord vers une adresse, puis on déplace dans un
+  coffre multisig créé on-chain. Un multisig directement à la genèse pourra
+  être ajouté ultérieurement.
+- **Calendrier précis des vestings** (cliff initial ? durée trésorerie ?).
+- **Liste des validateurs de genèse** et leurs stakes respectifs.
+- **Date du lancement** et plan de communication.
 
 Voir la [feuille de route](../ROADMAP.md) pour l'avancement des pré-requis techniques.

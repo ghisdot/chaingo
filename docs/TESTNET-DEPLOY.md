@@ -1,156 +1,76 @@
-# Déployer ChainGO sur ton VPS Debian (chaingo.org) — guide complet
+# Faire tourner un nœud ChainGO
 
-Ce guide te fait passer d'un **VPS Debian vide** à :
+Guide pas-à-pas pour les opérateurs qui veulent contribuer au réseau ChainGO en
+faisant tourner un nœud. Deux parcours :
 
-- **`https://chaingo.org`** → ton site officiel (vitrine FR/EN + wallet web post-quantique), 100 % chez toi
-- **`https://node.chaingo.org`** → l'API publique de **ton nœud testnet**, HTTPS auto
-- **Plus tard `https://mainnet.chaingo.org`** → l'API d'un nœud mainnet, **sur le même VPS** ou un autre
+- **A.** Rejoindre le **testnet public** ChainGO (`chaingo-testnet-1`) — le plus
+  rapide, idéal pour tester, valider, ou se préparer à devenir validateur.
+- **B.** Bootstrap d'un **nouveau réseau** (testnet privé ou futur mainnet) —
+  pour les équipes qui veulent lancer leur propre instance.
 
-Tout passe par **Caddy** en frontal (reverse proxy + Let's Encrypt), avec des nœuds **séparés** (process, datadir, ports) pour pouvoir faire cohabiter testnet et mainnet plus tard.
-
-> 📌 GitHub ne sert que de **dépôt de code** dans ce setup. Le site et le wallet
-> sont servis par TON serveur, pas par GitHub Pages.
-
-> ⏱️ Compte 20-30 min la première fois. Tout est en commandes copy-paste.
-
----
-
-## 0. Pré-requis (à avoir AVANT de commencer)
-
-- Un VPS **Debian 12 (Bookworm)**, accès SSH (en root ou user avec sudo)
-- Le domaine `chaingo.org` chez ton registrar
-- **DNS configuré** (étape 1 ci-dessous, si ce n'est pas déjà fait)
-- ~2 Go de RAM libres, ~5 Go d'espace disque
-
-Vérifier qu'on est bien sur Debian :
-
-```bash
-cat /etc/os-release | head -2
-```
+> 💡 **Vous voulez juste utiliser ChainGO ?**
+> Pas besoin de serveur. Le wallet web tourne dans votre navigateur :
+> [`https://chaingo.org/wallet/`](https://chaingo.org/wallet/) (clés
+> post-quantiques générées localement, jamais envoyées). Pour explorer la
+> chaîne en direct : [`https://chaingo.org/explorer/`](https://chaingo.org/explorer/).
 
 ---
 
-## 1. DNS — pointer les domaines sur le VPS
+## Pré-requis
 
-Dans la console DNS de `chaingo.org` (OVH ou autre registrar), tu dois avoir
-**au moins ces 3 enregistrements** :
-
-| Type | Sous-domaine | Cible (= IP du VPS) | TTL |
-|------|--------------|---------------------|-----|
-| `A` | `@` (= chaingo.org) | `IPv4 du VPS` | 300 |
-| `A` | `www` | `IPv4 du VPS` | 300 |
-| `A` | `node` | `IPv4 du VPS` | 300 |
-
-(Garde `node` pour le testnet ; on ajoutera `mainnet` plus tard pour le mainnet.)
-
-**Vérification depuis ta machine** (pas le VPS) :
-
-```bash
-dig +short chaingo.org
-dig +short www.chaingo.org
-dig +short node.chaingo.org
-# Les trois doivent renvoyer EXACTEMENT l'IP du VPS.
-```
-
-Si ça ne renvoie rien ou la mauvaise IP, attends quelques minutes (propagation
-DNS). Ne passe pas à la suite tant que les 3 résolvent vers ton VPS.
+| Composant | Recommandation |
+|---|---|
+| OS | Debian 12 (Bookworm) ou Ubuntu LTS récent |
+| CPU / RAM | 2 vCPU / 4 Go RAM (largement suffisant pour un nœud testnet) |
+| Disque | 20 Go SSD (la base bbolt grossit lentement) |
+| Réseau | IPv4 publique, ports `22 / 80 / 443 / 9000` ouvrables |
+| Accès | SSH en root ou via `sudo` |
+| Optionnel | Un nom de domaine (recommandé pour exposer l'API publique en HTTPS) |
 
 ---
 
-## 2. Premier SSH et hardening minimal
+## A. Rejoindre le testnet public ChainGO
+
+Le réseau de référence est `chaingo-testnet-1`, dont le nœud d'amorçage public
+expose son API sur `https://node.chaingo.org` et son port P2P sur
+`node.chaingo.org:9000`.
+
+### A.1 Installer Go et compiler le binaire
 
 ```bash
-ssh root@<ip-du-vps>
-# (ou ssh debian@<ip-du-vps> si OVH t'a donné un user "debian")
-```
-
-### 2.1 Mise à jour + outils de base
-
-```bash
-apt update && apt full-upgrade -y
-apt install -y curl git ufw gnupg debian-keyring debian-archive-keyring apt-transport-https
-```
-
-### 2.2 Créer un user dédié avec sudo
-
-```bash
-adduser ghislain                       # choisis un mot de passe FORT
-usermod -aG sudo ghislain
-```
-
-### 2.3 Activer la connexion par clé SSH
-
-**Sur ta machine locale** (pas le VPS), dans un autre terminal :
-
-```bash
-ssh-copy-id ghislain@chaingo.org
-ssh ghislain@chaingo.org               # vérifie que ça passe sans mot de passe
-```
-
-### 2.4 Durcir SSH (sur le VPS)
-
-**Une fois la connexion par clé confirmée** (très important : ne te bloque pas dehors) :
-
-```bash
-sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo systemctl reload ssh
-```
-
-Garde une session SSH ouverte pendant que tu testes la nouvelle config dans une
-seconde session — si la 2e ne passe pas, tu corriges depuis la 1re.
-
----
-
-## 3. Installer Go (le compilateur)
-
-```bash
+# Sur le serveur, en root
+apt update && apt install -y curl git ufw
 curl -fsSL https://go.dev/dl/go1.26.4.linux-amd64.tar.gz -o /tmp/go.tgz
-sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf /tmp/go.tgz
-echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/go.sh
+rm -rf /usr/local/go
+tar -C /usr/local -xzf /tmp/go.tgz
+echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
 source /etc/profile.d/go.sh
-go version            # doit afficher : go version go1.26.4 linux/amd64
-```
 
----
-
-## 4. Cloner ChainGO et compiler
-
-```bash
-# User système dédié pour le nœud (pas root, pas ghislain)
-sudo useradd -r -m -d /var/lib/chaingo -s /usr/sbin/nologin chaingo
-
-# Cloner les sources dans /opt/chaingo
-sudo git clone https://github.com/ghisdot/chaingo /opt/chaingo
+git clone https://github.com/ghisdot/chaingo /opt/chaingo
 cd /opt/chaingo
-
-# Compiler le binaire du nœud (~1 min)
-sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo
-
-# Compiler le WASM du wallet web (~30 s) — sinon /wallet/ affichera "Chargement…" sans jamais finir
-sudo GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm
-sudo cp "$(/usr/local/go/bin/go env GOROOT)/lib/wasm/wasm_exec.js" web/wallet/wasm_exec.js
-
-# Sanity check
-chaingo help | head -3
-ls -lh /opt/chaingo/web/wallet/chaingo.wasm
+go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo
 ```
 
----
-
-## 5. Le service systemd du nœud testnet
+### A.2 Créer un utilisateur système dédié
 
 ```bash
-sudo tee /etc/systemd/system/chaingo-testnet.service >/dev/null <<'EOF'
+useradd -r -m -d /var/lib/chaingo -s /usr/sbin/nologin chaingo
+```
+
+### A.3 Service systemd qui rejoint le testnet public
+
+```bash
+cat > /etc/systemd/system/chaingo-testnet.service <<'EOF'
 [Unit]
-Description=ChainGO testnet node
+Description=ChainGO node (testnet)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 User=chaingo
-ExecStart=/usr/local/bin/chaingo node start --testnet \
+ExecStart=/usr/local/bin/chaingo node start \
+  --genesis-url https://node.chaingo.org/v1/genesis \
+  --peers node.chaingo.org:9000 \
   --datadir /var/lib/chaingo \
   --api 127.0.0.1:8545 \
   --p2p :9000
@@ -162,376 +82,225 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable --now chaingo-testnet
+systemctl daemon-reload
+systemctl enable --now chaingo-testnet
 ```
 
-Vérifier que ça tourne :
+Le nœud télécharge la genèse depuis le seed public, se synchronise par lots et
+reçoit ensuite les blocs en gossip P2P.
+
+### A.4 Vérifier que le nœud est synchronisé
 
 ```bash
-sudo systemctl status chaingo-testnet --no-pager
-sudo journalctl -u chaingo-testnet -n 30 --no-pager
+systemctl status chaingo-testnet --no-pager
+journalctl -u chaingo-testnet -n 30 --no-pager
+
+# Hauteur locale vs hauteur du réseau :
+curl -s http://127.0.0.1:8545/v1/status | grep -oE '"height":[0-9]+'
+curl -s https://node.chaingo.org/v1/status | grep -oE '"height":[0-9]+'
 ```
 
-Tu devrais voir des lignes du style :
+Quand les deux hauteurs sont identiques (à ±1), le nœud est synchronisé. Il
+peut alors être utilisé en lecture (sans clé validateur) ou — si l'opérateur
+veut devenir validateur — il faudra staker depuis un wallet financé (voir
+[VALIDATOR.md](VALIDATOR.md)).
 
-```
-[node] chain chaingo-testnet-1 initialized, genesis abc123…
-[node] validator: cg...
-[node] faucet:    cg... (1,000,000,000 CGO)
-[consensus] block #1 produced: 0 tx(s), hash ... 
-```
+### A.5 (Optionnel) Exposer l'API en HTTPS via un domaine
 
-**Note bien l'adresse du validateur** (ligne `validator:`) — c'est l'identité de ton nœud.
-
-Test rapide en local sur le VPS :
+Si l'opérateur dispose d'un nom de domaine (par ex. `node.exemple.org`),
+Caddy fournit HTTPS automatiquement via Let's Encrypt.
 
 ```bash
-curl -s http://127.0.0.1:8545/v1/status | head -c 200
-```
+# DNS : créer un A record pointant <votre-sous-domaine> → IP du VPS
 
----
+# Pare-feu
+ufw allow 22,80,443,9000/tcp
+ufw --force enable
 
-## 6. Pare-feu (UFW)
+# Caddy
+apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  > /etc/apt/sources.list.d/caddy-stable.list
+apt update && apt install -y caddy
 
-```bash
-sudo ufw allow 22/tcp        # SSH
-sudo ufw allow 80/tcp        # HTTP (challenge Let's Encrypt)
-sudo ufw allow 443/tcp       # HTTPS (site + API)
-sudo ufw allow 9000/tcp      # P2P testnet
-sudo ufw --force enable
-sudo ufw status numbered
-```
-
----
-
-## 7. Installer Caddy (reverse proxy + HTTPS automatique)
-
-```bash
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
-sudo apt update
-sudo apt install -y caddy
-```
-
----
-
-## 8. Configurer Caddy : site + API
-
-C'est ici que la magie opère : un seul `Caddyfile` gère le site statique
-ET le reverse proxy vers le nœud, avec HTTPS auto pour les deux.
-
-```bash
-sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
-# --- Site officiel : vitrine FR/EN + wallet web ---
-chaingo.org, www.chaingo.org {
-    root * /opt/chaingo/web
-    file_server
-    encode gzip
-
-    # WASM doit être servi avec le bon Content-Type pour le wallet
-    @wasm path *.wasm
-    header @wasm Content-Type application/wasm
-
-    # En-têtes de sécurité
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "no-referrer-when-downgrade"
-    }
-}
-
-# --- API publique du nœud testnet ---
-# Le nœud ChainGO gère déjà CORS (Access-Control-Allow-Origin: *) côté
-# applicatif — ne PAS le rajouter ici, sinon double header refusé par les
-# navigateurs.
-node.chaingo.org {
+cat > /etc/caddy/Caddyfile <<'EOF'
+<votre-sous-domaine.exemple.org> {
     reverse_proxy 127.0.0.1:8545
     encode gzip
 }
 EOF
-
-sudo systemctl reload caddy
-sudo journalctl -u caddy -n 20 --no-pager
+systemctl reload caddy
 ```
 
-Caddy obtient les certificats Let's Encrypt automatiquement (compte 30-60 sec
-au premier démarrage). Tu peux suivre :
-
-```bash
-sudo journalctl -u caddy -f
-# Ctrl+C quand tu vois "certificate obtained successfully" pour les 3 domaines
-```
+> Remplacer `<votre-sous-domaine.exemple.org>` par le FQDN réel. Le certificat
+> TLS est obtenu en 30-60 s au premier démarrage.
 
 ---
 
-## 9. Vérifications
+## B. Bootstrap d'un nouveau réseau (testnet privé ou mainnet)
 
-Depuis n'importe où :
+Pour les équipes qui veulent **créer leur propre chaîne** plutôt que rejoindre
+le testnet public. La procédure est identique pour un testnet privé ou pour
+préparer le futur mainnet — seul le document de genèse change.
 
-```bash
-# Le site
-curl -sI https://chaingo.org | head -3
-# HTTP/2 200
-
-# Le wallet (statique)
-curl -sI https://chaingo.org/wallet/ | head -3
-
-# L'API du nœud testnet
-curl -s https://node.chaingo.org/v1/status
-# {"chain_id":"chaingo-testnet-1","height":42,...}
-
-curl -s https://node.chaingo.org/v1/fees
-```
-
-Ouvre dans ton navigateur :
-- **https://chaingo.org** → ton site
-- **https://chaingo.org/wallet/** → le wallet web (il pointe **automatiquement** sur `https://node.chaingo.org` puisque c'est servi depuis `chaingo.org`)
-
----
-
-## 10. Sauvegarde des seeds — CRITIQUE
-
-Le datadir contient `validator.seed` et `faucet.seed` : ce sont les **clés** du
-nœud et du faucet. Si tu les perds, ce nœud précis devient muet.
+### B.1 Générer la clé du validateur de genèse
 
 ```bash
-# Sur le VPS : chiffrer
-sudo tar czf - /var/lib/chaingo/*.seed | gpg -c > /tmp/chaingo-testnet-seeds.tar.gz.gpg
-# (gpg te demande un mot de passe FORT — note-le hors ligne)
+chaingo keygen --out /var/lib/chaingo/validator.seed
+chmod 600 /var/lib/chaingo/validator.seed
 ```
 
-Depuis ta machine locale :
+> ⚠️ Cette `validator.seed` est l'identité du validateur. **Sauvegardez-la
+> immédiatement et hors-ligne** (voir section *Sauvegarde des seeds* plus bas).
+
+### B.2 Préparer le document de genèse
 
 ```bash
-scp ghislain@chaingo.org:/tmp/chaingo-testnet-seeds.tar.gz.gpg ~/backups/
-ssh ghislain@chaingo.org 'sudo rm /tmp/chaingo-testnet-seeds.tar.gz.gpg'
+chaingo genesis template \
+  --chain-id <id-de-votre-chaine> \
+  --out /etc/chaingo/genesis.json \
+  --seed-out /var/lib/chaingo/validator.seed
+
+# Éditer /etc/chaingo/genesis.json (alloc / stakes / vesting / params)
+# selon la distribution prévue. Voir docs/MAINNET.md pour la cérémonie.
+
+chaingo genesis validate /etc/chaingo/genesis.json
 ```
 
-Pour restaurer plus tard (sur un nouveau serveur) :
+`validate` imprime une empreinte déterministe (`block hash` + `state root`).
+**Tous les opérateurs participant au bootstrap doivent obtenir la même
+empreinte** sur la même genèse — c'est la garantie de démarrage du réseau.
+
+### B.3 Service systemd qui amorce le nouveau réseau
 
 ```bash
-gpg -d chaingo-testnet-seeds.tar.gz.gpg | sudo tar xzf - -C /
-sudo chown chaingo:chaingo /var/lib/chaingo/*.seed
-```
-
----
-
-## 11. Première transaction de test
-
-Depuis ta machine, avec le binaire `chaingo` local :
-
-```powershell
-.\chaingo.exe wallet new alice
-.\chaingo.exe faucet --to alice --amount 100 --api https://node.chaingo.org
-.\chaingo.exe balance alice --api https://node.chaingo.org
-.\chaingo.exe send --from alice --to <adresse> --amount 5 --api https://node.chaingo.org
-```
-
-Ou tout simplement : ouvre **https://chaingo.org/wallet/** dans un navigateur,
-crée un wallet, demande des CGO au faucet — tout marche sans ligne de commande.
-
----
-
-## 12. Lancer un nœud LOCAL qui rejoint ton testnet
-
-> ⚠️ N'utilise PAS `--testnet` en local : ça créerait un AUTRE réseau. Pour rejoindre le tien, on télécharge la genèse depuis le VPS :
-
-```powershell
-.\chaingo.exe node start `
-  --genesis-url https://node.chaingo.org/v1/genesis `
-  --peers node.chaingo.org:9000 `
-  --datadir .testnet-local `
-  --api 127.0.0.1:8545 `
-  --p2p 127.0.0.1:9001
-```
-
-Ton nœud local télécharge la genèse, se synchronise, reçoit les nouveaux blocs.
-Pas besoin de port ouvert sur ta box : la connexion sortante TCP suffit.
-
----
-
-## 13. Maintenance
-
-### Mettre à jour le code (site **et** binaire)
-
-```bash
-ssh ghislain@chaingo.org
-cd /opt/chaingo
-sudo git pull
-sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo
-# Rebuild aussi le WASM (le code du wallet peut avoir évolué)
-sudo GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm
-sudo cp "$(/usr/local/go/bin/go env GOROOT)/lib/wasm/wasm_exec.js" web/wallet/wasm_exec.js
-sudo systemctl restart chaingo-testnet
-# Le site /opt/chaingo/web est servi tel quel par Caddy : git pull + rebuild WASM suffisent
-```
-
-### Logs
-
-```bash
-sudo journalctl -u chaingo-testnet -f       # nœud
-sudo journalctl -u caddy -f                  # site + HTTPS
-```
-
-### Espace disque
-
-```bash
-sudo du -sh /var/lib/chaingo
-df -h /
-```
-
-### Redémarrage
-
-```bash
-sudo systemctl restart chaingo-testnet
-sudo systemctl restart caddy
-```
-
----
-
-## 14. PLUS TARD — ajouter un nœud MAINNET sur le même VPS
-
-> 🔴 **Ne fais ça que quand la checklist mainnet est cochée** :
-> Phase 2 BFT finalisée + audit externe + ≥ 4 validateurs indépendants + testnet
-> public stable depuis plusieurs semaines + document de genèse mainnet validé.
-> Voir [docs/MAINNET.md](MAINNET.md).
-
-Le principe : un **2e nœud** sur le **même VPS**, **ports différents**, **datadir différent**, **user système différent**, **sous-domaine différent**.
-
-### 14.1 DNS
-
-Ajouter un enregistrement `A` : `mainnet.chaingo.org` → IP du VPS.
-
-### 14.2 User système et datadir
-
-```bash
-sudo useradd -r -m -d /var/lib/chaingo-mainnet -s /usr/sbin/nologin chaingo-mainnet
-sudo install -d -o chaingo-mainnet -g chaingo-mainnet /var/lib/chaingo-mainnet
-```
-
-### 14.3 Mettre la genèse mainnet en place
-
-Le document `mainnet.json` (généré par `chaingo genesis template/validate`, voir
-[MAINNET.md](MAINNET.md)) :
-
-```bash
-sudo install -d /etc/chaingo
-sudo cp mainnet.json /etc/chaingo/mainnet.json
-sudo cp validator.seed /var/lib/chaingo-mainnet/validator.seed
-sudo chown chaingo-mainnet:chaingo-mainnet /var/lib/chaingo-mainnet/validator.seed
-sudo chmod 600 /var/lib/chaingo-mainnet/validator.seed
-```
-
-### 14.4 Service systemd dédié
-
-```bash
-sudo tee /etc/systemd/system/chaingo-mainnet.service >/dev/null <<'EOF'
+cat > /etc/systemd/system/chaingo.service <<'EOF'
 [Unit]
-Description=ChainGO mainnet node
+Description=ChainGO bootstrap node
 After=network-online.target
-Wants=network-online.target
 
 [Service]
-User=chaingo-mainnet
+User=chaingo
 ExecStart=/usr/local/bin/chaingo node start \
-  --genesis /etc/chaingo/mainnet.json \
-  --validator-seed /var/lib/chaingo-mainnet/validator.seed \
-  --datadir /var/lib/chaingo-mainnet \
-  --api 127.0.0.1:8546 \
-  --p2p :9001 \
-  --peers <ip-bootstrap-1>:9001,<ip-bootstrap-2>:9001
+  --genesis /etc/chaingo/genesis.json \
+  --validator-seed /var/lib/chaingo/validator.seed \
+  --datadir /var/lib/chaingo \
+  --api 127.0.0.1:8545 \
+  --p2p :9000
 Restart=always
 RestartSec=3
-LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable --now chaingo-mainnet
+systemctl daemon-reload
+systemctl enable --now chaingo
 ```
 
-### 14.5 Pare-feu
-
-```bash
-sudo ufw allow 9001/tcp          # P2P mainnet
-```
-
-### 14.6 Ajouter le routage Caddy
-
-Ajouter ce bloc à `/etc/caddy/Caddyfile` :
-
-```caddy
-mainnet.chaingo.org {
-    reverse_proxy 127.0.0.1:8546
-    encode gzip
-    # PAS de header Access-Control-Allow-Origin : le nœud le gère déjà.
-}
-```
-
-Puis :
-
-```bash
-sudo systemctl reload caddy
-```
-
-### 14.7 Vérification
-
-```bash
-curl -s https://mainnet.chaingo.org/v1/status
-# {"chain_id":"chaingo-1",...}
-```
-
-**Le site `chaingo.org` reste le même** — tu peux ajouter une bascule
-testnet/mainnet dans le wallet (à venir : sélecteur de réseau), ou héberger un
-wallet dédié sur `mainnet.chaingo.org/wallet/`.
+Les autres validateurs initiaux et les nœuds-suiveurs rejoignent ensuite via
+`--genesis-url https://<premier-nœud>/v1/genesis --peers <premier-nœud>:9000`.
 
 ---
 
-## 15. Devrais-je garder le testnet quand le mainnet est en ligne ?
+## Sauvegarde des seeds (impératif)
 
-**Oui — sur le même serveur, sans souci.** Le testnet reste utile en permanence pour :
-- Les nouveaux utilisateurs qui veulent tester avant de bouger des fonds réels,
-- Les développeurs qui intègrent l'API,
-- Les futures versions à valider avant de toucher au mainnet.
+Le datadir `/var/lib/chaingo/` contient `validator.seed` (et, en mode `--dev`
+ou `--testnet`, `faucet.seed`). Sans ces fichiers, le validateur ne peut plus
+signer de blocs avec son identité.
 
-Le VPS fait tourner les deux nœuds en parallèle (~150 Mo de RAM pour les deux,
-~100 Mo de disque par jour de blocs).
+```bash
+# Sur le serveur — chiffrer avec une passphrase forte (notée hors-ligne)
+mkdir -p ~/.gnupg && echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+gpgconf --kill gpg-agent
+tar czf - /var/lib/chaingo/*.seed \
+  | gpg --pinentry-mode loopback -c \
+  > /tmp/chaingo-seeds.tar.gz.gpg
+```
+
+Ensuite, depuis un poste de confiance, télécharger l'archive chiffrée et
+supprimer la copie temporaire du serveur :
+
+```bash
+scp <user>@<serveur>:/tmp/chaingo-seeds.tar.gz.gpg ~/backups/
+ssh <user>@<serveur> 'rm /tmp/chaingo-seeds.tar.gz.gpg'
+```
+
+Restauration sur un nouveau serveur :
+
+```bash
+gpg -d chaingo-seeds.tar.gz.gpg | sudo tar xzf - -C /
+sudo chown chaingo:chaingo /var/lib/chaingo/*.seed
+sudo chmod 600 /var/lib/chaingo/*.seed
+```
 
 ---
 
-## 16. Et si je veux séparer testnet et mainnet sur 2 serveurs ?
+## Maintenance
 
-Recommandé à terme (sécurité + isolation des charges). Procédure :
+### Mettre à jour le binaire
 
-1. Sur le **nouveau** VPS mainnet, suit ce guide en remplaçant `node` par `mainnet` et `--testnet` par `--genesis /etc/chaingo/mainnet.json --validator-seed ...`.
-2. Sur l'ancien (testnet), supprime juste le bloc `mainnet.chaingo.org` du Caddyfile et désactive le service `chaingo-mainnet`.
+```bash
+cd /opt/chaingo
+git pull
+/usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo
+systemctl restart chaingo-testnet   # ou chaingo selon le service
+```
+
+L'état est persisté dans `/var/lib/chaingo/` ; la chaîne reprend exactement où
+elle s'est arrêtée.
+
+### Suivre les logs
+
+```bash
+journalctl -u chaingo-testnet -f
+```
+
+### Mesurer l'espace utilisé
+
+```bash
+du -sh /var/lib/chaingo
+```
+
+### Recharger après modification du Caddyfile
+
+```bash
+systemctl reload caddy
+```
 
 ---
 
-## Récap des commandes utiles
+## Sécurité du serveur
 
-| Action | Commande |
-|--------|----------|
-| Statut nœud testnet | `sudo systemctl status chaingo-testnet` |
-| Logs nœud | `sudo journalctl -u chaingo-testnet -f` |
-| Logs Caddy | `sudo journalctl -u caddy -f` |
-| Statut chaîne | `curl https://node.chaingo.org/v1/status` |
-| Mise à jour (binaire + WASM wallet) | `cd /opt/chaingo && sudo git pull && sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo && sudo GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm && sudo cp "$(/usr/local/go/bin/go env GOROOT)/lib/wasm/wasm_exec.js" web/wallet/wasm_exec.js && sudo systemctl restart chaingo-testnet` |
-| Backup seeds | `sudo tar czf - /var/lib/chaingo/*.seed \| gpg -c > seeds.tgz.gpg` |
-| Recharger Caddy | `sudo systemctl reload caddy` |
-| Taille de la db | `sudo du -sh /var/lib/chaingo` |
+Recommandations minimales pour un nœud public :
+
+- **Compte non-root + clé SSH** : créer un utilisateur dédié, désactiver
+  l'authentification par mot de passe et la connexion `root` par mot de passe
+  (`PermitRootLogin prohibit-password`, `PasswordAuthentication no` dans
+  `/etc/ssh/sshd_config`).
+- **Pare-feu UFW** : seuls les ports `22 / 80 / 443 / 9000` ouverts.
+- **Mises à jour OS** : `unattended-upgrades` pour les patches de sécurité.
+- **Sauvegarde régulière** de l'archive chiffrée des seeds.
 
 ---
 
 ## En cas de pépin
 
-- **Caddy ne démarre pas** : `sudo journalctl -u caddy -n 50` — souvent un Caddyfile mal formé. `sudo caddy validate --config /etc/caddy/Caddyfile`.
-- **HTTPS ne marche pas** : vérifier que le port 80 est ouvert (challenge Let's Encrypt), et que le DNS pointe bien vers le VPS.
-- **Le nœud ne démarre pas** : `sudo journalctl -u chaingo-testnet -n 50` — souvent un port déjà pris (`netstat -tlnp | grep 8545`).
-- **L'API renvoie 502** : Caddy tourne mais le nœud non. `sudo systemctl restart chaingo-testnet`.
-- **Wallet web "hors-ligne" avec erreur CORS `multiple values '*, *'`** : Caddy ajoute un en-tête `Access-Control-Allow-Origin` alors que le nœud le renvoie déjà. Retirer la ligne `header Access-Control-Allow-Origin ...` du bloc node.* du Caddyfile, puis `systemctl reload caddy`.
-- **gpg : `Inappropriate ioctl for device`** : pinentry ne trouve pas de TTY graphique en SSH. Activer le loopback : `mkdir -p ~/.gnupg && echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf && gpgconf --kill gpg-agent`, puis utiliser `gpg --pinentry-mode loopback -c ...`.
+| Symptôme | Diagnostic |
+|---|---|
+| Le service ne démarre pas | `journalctl -u chaingo-testnet -n 100` — souvent un port déjà utilisé (`ss -tlnp | grep 8545`) |
+| Caddy ne démarre pas | `caddy validate --config /etc/caddy/Caddyfile`. HTTPS bloqué : vérifier que le port 80 est ouvert (challenge Let's Encrypt). |
+| L'API renvoie HTTP 502 | Caddy tourne mais le nœud non — `systemctl restart chaingo-testnet`. |
+| Wallet web bloqué sur « hors-ligne » avec erreur CORS dédoublée | Une couche externe (proxy/firewall) ajoute un `Access-Control-Allow-Origin`. Le nœud ChainGO le renvoie déjà — ne pas le réajouter. |
+| `gpg: Inappropriate ioctl for device` | Pinentry sans TTY. Suivre la procédure « loopback » de la section *Sauvegarde des seeds*. |
+
+---
+
+## Pour aller plus loin
+
+- [VALIDATOR.md](VALIDATOR.md) — devenir validateur, staking, délégation, slashing
+- [MAINNET.md](MAINNET.md) — pré-requis et cérémonie de genèse pour un mainnet
+- [API.md](API.md) — référence complète de l'API REST
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — contribuer au code source

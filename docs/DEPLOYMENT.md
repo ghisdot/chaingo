@@ -1,207 +1,116 @@
-# Héberger ChainGO 24/24 — site + premier nœud en ligne
+# Déployer ChainGO 24/24 — alternatives au guide principal
 
-Objectif : un serveur qui fait tourner **le nœud ChainGO en continu** et sert **le site
-vitrine** (avec stats live) sur ton domaine, en HTTPS.
+Ce document complète [TESTNET-DEPLOY.md](TESTNET-DEPLOY.md) qui détaille le
+déploiement standard sur un VPS Debian. Sont rassemblées ici les
+**alternatives** : déploiement express via script, Docker, hébergeurs avec
+offre gratuite, ajout de nœuds secondaires.
 
-## Déploiement express (OVH / Ubuntu) — une commande
+---
 
-Sur un VPS Ubuntu fraîchement installé, en root :
+## Déploiement express — script tout-en-un
+
+Pour ceux qui préfèrent une seule commande à un guide pas-à-pas, le dépôt
+fournit `scripts/deploy-node.sh` :
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ghisdot/chaingo/main/scripts/deploy-node.sh -o deploy.sh
-sudo bash deploy.sh --network testnet --domain node.exemple.com
+sudo bash deploy.sh --network testnet --domain <votre-domaine.example.org>
 ```
 
-Le script ([scripts/deploy-node.sh](../scripts/deploy-node.sh)) installe Go, compile ChainGO,
-crée l'utilisateur + le service systemd (redémarrage auto), configure le pare-feu, et —
-si `--domain` est fourni — installe **Caddy avec HTTPS automatique** (Let's Encrypt).
-Ce premier nœud `--testnet` génère la **genèse canonique** du testnet (`chaingo-testnet-1`)
-et l'expose sur `/v1/genesis` ; c'est le nœud d'amorçage que les autres rejoindront.
+Ce script installe Go, compile ChainGO, crée l'utilisateur système et le
+service systemd, configure UFW, et — si `--domain` est fourni — installe
+Caddy avec HTTPS automatique (Let's Encrypt).
 
-> 🔐 Après coup : **sauvegarde `/var/lib/chaingo/validator.seed` (et `faucet.seed`) hors du
-> serveur** — c'est l'identité de ton validateur et de ton faucet.
+Options principales :
 
-### Faire tourner un nœud local qui REJOINT ce testnet
+| Option | Description |
+|---|---|
+| `--network testnet \| mainnet` | Réseau à lancer (par défaut `testnet`) |
+| `--domain <fqdn>` | Active le reverse proxy HTTPS automatique sur ce domaine |
+| `--peers <host:port,…>` | Liste de pairs à rejoindre |
 
-⚠️ N'utilise PAS `--testnet` en local (il créerait une genèse différente = un autre réseau).
-Pour **rejoindre** le testnet du VPS, fais récupérer sa genèse :
+> ℹ️ Le mode `--network testnet` lancé sans `--peers` **crée une nouvelle
+> genèse locale** (chain_id `chaingo-testnet-1`) et devient un nœud
+> d'amorçage. Pour rejoindre le testnet public ChainGO, utiliser plutôt la
+> procédure A de [TESTNET-DEPLOY.md](TESTNET-DEPLOY.md#a-rejoindre-le-testnet-public-chaingo).
 
-```powershell
-.\chaingo.exe node start --genesis-url https://node.exemple.com/v1/genesis `
-  --peers <ip-du-vps>:9000 --datadir .testnet-local --api 127.0.0.1:8545
-```
+---
 
-Ton nœud local télécharge la genèse, se synchronise et reçoit les blocs en gossip (même
-derrière une box/NAT : la connexion sortante suffit). Il sert l'API en local sans clé
-validateur (nœud complet : sync + API + relais).
-
-### Premières transactions de test
-
-```powershell
-# 1. Un wallet (clés ML-DSA-65)
-.\chaingo.exe wallet new test1
-# 2. Le financer via le faucet du VPS (faucet ouvert sur testnet)
-.\chaingo.exe faucet --to test1 --amount 100 --api https://node.exemple.com
-# 3. Transférer (via ton nœud local OU directement le VPS)
-.\chaingo.exe send --from test1 --to <adresse> --amount 5 --api http://127.0.0.1:8545
-# 4. Wallet web : ouvre https://ghisdot.github.io/chaingo/wallet/ et mets l'URL « Nœud »
-#    sur https://node.exemple.com
-```
-
-## Option 100 % gratuite (recommandée pour démarrer)
-
-Deux pièces, deux hébergeurs gratuits :
-
-1. **Le site + le wallet web → GitHub Pages (gratuit, illimité).** Le workflow
-   `.github/workflows/pages.yml` reconstruit le wallet WASM et publie `web/` à chaque
-   push sur `main`. Une fois Pages activé (Settings → Pages → Source : *GitHub Actions*),
-   le site est en ligne sur `https://ghisdot.github.io/chaingo/`. Le wallet web y demande
-   l'URL d'un nœud (champ « Nœud ») — pointe-le vers le nœud ci-dessous.
-
-2. **Le nœud → un hébergeur avec offre gratuite persistante.** Un nœud blockchain doit
-   tourner 24/24 avec stockage persistant et un port P2P ouvert — ce que les « free tiers
-   qui s'endorment » (Render free, etc.) ne permettent pas. Options réellement viables :
-
-   | Hébergeur | Gratuit ? | Notes |
-   |---|---|---|
-   | **Oracle Cloud — Always Free** | Oui, permanent | VM ARM 4 cœurs / 24 Go : large pour un nœud. Le meilleur choix gratuit 24/24. |
-   | **Fly.io** | Allocation gratuite limitée | Simple avec le `Dockerfile` fourni ; surveille le quota. |
-   | **Google Cloud / AWS free tier** | 12 mois | Petite VM e2-micro/t2.micro suffisante pour un nœud léger. |
-
-   ⚠️ Ces hébergeurs demandent **ta propre inscription** (carte bancaire pour vérification
-   même sur l'offre gratuite). Je ne peux pas créer ces comptes à ta place.
-
-> 🔴 **Avant de parler de « mainnet » :** la v1 n'a pas encore la finalité BFT
-> multi-validateurs, le slashing ni l'audit (Phase 2). Mettre en ligne un **réseau de test
-> public (testnet)** est la bonne étape maintenant — même binaire, mais aucune valeur réelle
-> promise. Le mainnet viendra après la Phase 2. La suite de ce guide marche pour les deux.
-
-## 1. Le serveur
-
-Un petit VPS suffit largement (le nœud est léger) :
-
-| Spec minimum | Recommandé | Exemples (~5-10 €/mois) |
-|---|---|---|
-| 2 vCPU, 4 Go RAM, 40 Go SSD | 4 vCPU, 8 Go RAM, 80 Go SSD | Hetzner CX22/CX32, OVH VPS, Scaleway DEV1-M |
-
-Prends **Ubuntu 24.04 LTS**. Ouvre les ports : `22` (SSH), `80/443` (web), `9000` (P2P).
-Le port `8545` (API) reste **interne** — c'est le reverse proxy qui l'expose en HTTPS.
+## Déploiement Docker
 
 ```bash
-sudo ufw allow 22,80,443,9000/tcp && sudo ufw enable
-```
-
-## 2. Installer le nœud
-
-### Option A — binaire (le plus simple)
-
-```bash
-# Depuis la page GitHub Releases (générée automatiquement à chaque tag v*) :
-wget https://github.com/<ton-compte>/chaingo/releases/latest/download/chaingo-linux-amd64
-sudo install chaingo-linux-amd64 /usr/local/bin/chaingo
-
-# Le site est dans le dépôt :
-git clone https://github.com/<ton-compte>/chaingo /opt/chaingo
-```
-
-### Option B — Docker
-
-```bash
-git clone https://github.com/<ton-compte>/chaingo && cd chaingo
+git clone https://github.com/ghisdot/chaingo && cd chaingo
 docker build -t chaingo .
 docker run -d --name chaingo --restart unless-stopped \
-  -p 127.0.0.1:8545:8545 -p 9000:9000 -v chaingo-data:/data \
+  -p 127.0.0.1:8545:8545 -p 9000:9000 \
+  -v chaingo-data:/data \
   chaingo
 ```
-(L'image lance par défaut un nœud **testnet public**, voir le `CMD` du Dockerfile.)
 
-## 3. Service systemd (option A) — redémarre tout seul, survit aux reboots
+Par défaut, l'image lance un nœud testnet public (voir `CMD` du Dockerfile).
+Pour rejoindre une chaîne existante, surcharger la commande :
 
-`/etc/systemd/system/chaingo.service` :
+```bash
+docker run -d --name chaingo --restart unless-stopped \
+  -p 127.0.0.1:8545:8545 -p 9000:9000 \
+  -v chaingo-data:/data \
+  chaingo node start \
+    --genesis-url https://node.chaingo.org/v1/genesis \
+    --peers node.chaingo.org:9000 \
+    --datadir /data --api :8545 --p2p :9000 \
+    --web /web
+```
 
-```ini
-[Unit]
-Description=ChainGO node
-After=network-online.target
-Wants=network-online.target
+---
 
-[Service]
-User=chaingo
-ExecStart=/usr/local/bin/chaingo node start --testnet \
+## Hébergeurs
+
+Pré-requis pour un nœud public : VPS persistant avec un port P2P ouvrable
+(les « free tiers qui s'endorment » type Render free ne conviennent pas).
+
+| Hébergeur | Coût | Notes |
+|---|---|---|
+| Hetzner Cloud (CX22 et plus) | ~5 €/mois | Bon rapport qualité/prix, large bande passante |
+| OVH VPS / Public Cloud | ~5-10 €/mois | Présence en France, IPv4 incluse |
+| Scaleway DEV1-M | ~7 €/mois | Présence en Europe |
+| Oracle Cloud — Always Free | Gratuit, permanent | VM ARM (4 cœurs / 24 Go RAM). Inscription avec carte de vérification. |
+| Fly.io | Allocation gratuite limitée | Compatible avec le `Dockerfile` fourni ; vérifier le quota mensuel. |
+
+L'inscription chez ces hébergeurs (même sur l'offre gratuite) est à la
+charge de l'opérateur — une vérification d'identité ou de moyen de paiement
+peut être demandée.
+
+---
+
+## Ajouter un nœud secondaire (résilience / décentralisation)
+
+Sur un second serveur, pointer vers le premier nœud pour rejoindre la même
+chaîne :
+
+```bash
+chaingo node start \
   --datadir /var/lib/chaingo \
-  --api 127.0.0.1:8545 --p2p :9000 \
-  --web /opt/chaingo/web
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
+  --genesis-url https://node1.example.org/v1/genesis \
+  --peers <ip-serveur-1>:9000 \
+  --api 127.0.0.1:8545 --p2p :9000
 ```
 
-```bash
-sudo useradd -r -m -d /var/lib/chaingo chaingo
-sudo systemctl enable --now chaingo
-journalctl -u chaingo -f        # suivre les logs
-```
+Le nouveau nœud télécharge la genèse, se synchronise par lots et relaie
+ensuite les blocs. Avec `--validator-seed <fichier>`, il peut proposer des
+blocs (à condition d'avoir staké au moins `min_validator_stake` CGO).
 
-> ℹ️ `--testnet` lance un **réseau de test public** (chain_id `chaingo-testnet-1`, faucet
-> ouvert, unbonding 24 h, mais l'endpoint qui révèle une seed reste désactivé). C'est ce
-> nœud-ci que le wallet web (sur GitHub Pages) interrogera : indique-lui son URL HTTPS dans
-> le champ « Nœud ». Le mainnet viendra après la Phase 2.
+---
 
-## 4. Domaine + HTTPS : Caddy (2 lignes, certificat automatique)
+## Sauvegardes critiques
 
-```bash
-sudo apt install caddy
-```
-
-`/etc/caddy/Caddyfile` :
-
-```
-chaingo.example.com {
-    reverse_proxy 127.0.0.1:8545
-}
-```
-
-```bash
-sudo systemctl reload caddy
-```
-
-C'est tout : `https://chaingo.example.com` sert le site (stats live incluses) et l'API
-`https://chaingo.example.com/v1/...` — certificat TLS renouvelé automatiquement.
-
-## 5. Mettre à jour le site et le nœud
-
-- **Site seul** : le nœud sert `web/` directement depuis le disque →
-  `cd /opt/chaingo && git pull` et c'est en ligne au prochain rafraîchissement. Zéro coupure.
-- **Nœud** : `git pull`, retélécharger/recompiler le binaire, `sudo systemctl restart chaingo`
-  (la chaîne reprend où elle s'était arrêtée — état persisté). En Docker :
-  `docker build -t chaingo . && docker restart chaingo`.
-
-## 6. Sauvegardes — CRITIQUE
-
-Dans le datadir (`/var/lib/chaingo`) :
+Le datadir `/var/lib/chaingo/` contient :
 
 | Fichier | Contenu | Si perdu… |
 |---|---|---|
-| `validator.seed` | la clé de TON validateur | tu ne produis plus de blocs (et stake bloqué) |
-| `faucet.seed` | la clé du faucet devnet | faucet mort |
-| `genesis.json` | les règles de la chaîne | les autres nœuds l'ont aussi |
-| `chain.db` | blocs + état | resynchronisable depuis les pairs |
+| `validator.seed` | clé du validateur | impossible de signer de nouveaux blocs avec cette identité |
+| `faucet.seed` | clé du faucet (dev/testnet uniquement) | faucet inutilisable |
+| `genesis.json` | document de genèse | resynchronisable depuis n'importe quel pair |
+| `chain.db` | base de données des blocs et de l'état | resynchronisable depuis les pairs |
 
-```bash
-# Sauvegarde chiffrée des seeds, à copier HORS du serveur :
-tar czf - /var/lib/chaingo/*.seed | gpg -c > chaingo-seeds-backup.tar.gz.gpg
-```
-
-## 7. Ajouter d'autres nœuds (résilience)
-
-Sur un second serveur, il suffit de pointer vers le premier :
-
-```bash
-chaingo node start --datadir /var/lib/chaingo \
-  --genesis-url https://chaingo.example.com/v1/genesis \
-  --peers <ip-serveur-1>:9000 --api 127.0.0.1:8545 --p2p :9000
-```
-
-Il télécharge la genèse, se synchronise et relaie — un nœud complet de plus sur le réseau.
+Seules les `*.seed` sont irrécupérables si perdues. Procédure de sauvegarde
+chiffrée en section *Sauvegarde des seeds* de [TESTNET-DEPLOY.md](TESTNET-DEPLOY.md#sauvegarde-des-seeds-impératif).
