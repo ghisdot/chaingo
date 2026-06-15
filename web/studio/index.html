@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainGO — Studio no-code</title>
+<style>
+  :root{--bg:#0b0f17;--bg2:#0f1522;--card:#131b2c;--border:#1f2a40;--text:#e6edf6;--muted:#8b9bb4;--cyan:#22d3ee;--violet:#8b5cf6;--green:#34d399;--amber:#fbbf24;--red:#f87171;--grad:linear-gradient(90deg,var(--cyan),var(--violet));}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;line-height:1.55;}
+  a{color:var(--cyan);text-decoration:none;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 20px;}
+  nav{border-bottom:1px solid var(--border);background:rgba(11,15,23,.85);backdrop-filter:blur(10px);}
+  nav .wrap{display:flex;align-items:center;gap:18px;height:58px;}
+  .logo{font-weight:800;font-size:1.2rem;}.logo span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .spacer{flex:1;}
+  nav a.link{color:var(--muted);font-size:.9rem;} nav a.link:hover{color:var(--text);}
+  h1{font-size:1.55rem;margin:26px 0 4px;}
+  h2{font-size:1.05rem;margin-bottom:6px;}
+  .muted{color:var(--muted);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin:16px 0;}
+  label{display:block;font-size:.82rem;color:var(--muted);margin:12px 0 4px;}
+  input,select,textarea{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:.95rem;font-family:inherit;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan);}
+  textarea{font-family:ui-monospace,monospace;font-size:.84rem;min-height:64px;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}.row>div{flex:1;min-width:150px;}
+  button{cursor:pointer;padding:11px 18px;border-radius:9px;font-weight:700;font-size:.93rem;border:1px solid var(--border);background:var(--card);color:var(--text);margin-top:16px;}
+  button.primary{background:var(--grad);color:#06121a;border:none;}
+  button.danger{border-color:rgba(248,113,113,.4);color:var(--red);background:transparent;}
+  button:hover{filter:brightness(1.15);} button:disabled{opacity:.5;cursor:not-allowed;}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;}
+  .warn{border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.07);color:var(--amber);border-radius:11px;padding:12px 15px;font-size:.86rem;margin:14px 0;}
+  .info{border:1px solid rgba(34,211,238,.3);background:rgba(34,211,238,.06);color:var(--cyan);border-radius:11px;padding:12px 15px;font-size:.86rem;margin:10px 0;}
+  .ok{color:var(--green);} .ko{color:var(--red);}
+  .addr{font-family:ui-monospace,monospace;font-size:.82rem;word-break:break-all;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;}
+  .hidden{display:none;}
+  .pill{font-size:.72rem;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
+  .pill.ok{color:var(--green);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.08);}
+  .nodecfg{display:flex;gap:8px;align-items:center;font-size:.8rem;}
+  .nodecfg input{padding:6px 9px;font-size:.8rem;}
+  .tabs{display:flex;gap:4px;margin:14px 0 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .tab{padding:10px 16px;font-size:.92rem;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-weight:600;}
+  .tab.on{color:var(--text);border-bottom-color:var(--cyan);}
+  .fee{display:flex;justify-content:space-between;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin-top:14px;font-size:.9rem;}
+  .fee b{color:var(--amber);font-variant-numeric:tabular-nums;}
+  .hint{font-size:.78rem;color:var(--muted);margin-top:4px;}
+  table{width:100%;border-collapse:collapse;font-size:.86rem;margin-top:10px;}
+  th,td{padding:8px;text-align:left;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-size:.78rem;text-transform:uppercase;}
+  td.mono{font-family:ui-monospace,monospace;font-size:.78rem;}
+  #status{font-size:.88rem;margin-top:12px;min-height:1.2em;}
+  footer{color:var(--muted);font-size:.8rem;text-align:center;padding:30px 0;}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <div class="logo">Chain<span>GO</span> <span style="font-weight:400;font-size:.8rem;color:var(--muted)">Studio</span></div>
+  <div class="spacer"></div>
+  <a class="link" href="/">Accueil</a>
+  <a class="link" href="/wallet/">Wallet</a>
+  <a class="link" href="/explorer/">Explorateur</a>
+  <a class="link" href="/validator/">Validator</a>
+  <a class="link" href="/api/">API</a>
+</div></nav>
+
+<div class="wrap">
+  <h1>Studio no-code</h1>
+  <p class="muted">Créez un token ou déployez un contrat (vesting, séquestre, multisig) en quelques clics. Signature post-quantique ML-DSA-65 dans votre navigateur — la clé ne quitte jamais votre machine.</p>
+
+  <div class="warn" id="wasmWarn">Chargement du moteur cryptographique post-quantique…</div>
+
+  <div class="card">
+    <div class="nodecfg">
+      <span class="muted">Nœud :</span>
+      <input id="nodeUrl" placeholder="https://node.chaingo.org" style="flex:1">
+      <button style="margin:0;padding:6px 12px" onclick="saveNode()">OK</button>
+      <span id="netState" class="pill">…</span>
+    </div>
+  </div>
+
+  <!-- Identification -->
+  <div id="connect" class="card">
+    <h2>Votre compte</h2>
+    <p class="muted" style="font-size:.86rem;margin-bottom:8px">Chargez votre wallet pour signer les déploiements. La seed reste dans ce navigateur.</p>
+    <label>Seed (hex, 64 caractères)</label>
+    <input id="seedInput" placeholder="ex : 1271a825…" spellcheck="false" autocomplete="off">
+    <div class="btnrow">
+      <button class="primary" onclick="loadSeed()">Charger</button>
+      <button onclick="loadFromWallet()">Utiliser mon wallet ChainGO</button>
+    </div>
+  </div>
+
+  <div id="studio" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:260px">
+        <div class="muted" style="font-size:.78rem">Compte connecté</div>
+        <div class="addr" id="myAddr"></div>
+      </div>
+      <div>
+        <span class="pill ok" id="balPill">…</span>
+        <button class="danger" style="margin:0;padding:7px 12px" onclick="forgetSeed()">Oublier</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab on" data-t="token" onclick="switchTab('token')">Créer un token</div>
+      <div class="tab" data-t="vesting" onclick="switchTab('vesting')">Vesting</div>
+      <div class="tab" data-t="escrow" onclick="switchTab('escrow')">Séquestre</div>
+      <div class="tab" data-t="multisig" onclick="switchTab('multisig')">Multisig</div>
+      <div class="tab" data-t="mine" onclick="switchTab('mine')">Mes créations</div>
+    </div>
+
+    <!-- TOKEN -->
+    <div id="tab-token" class="card">
+      <h2>Créer un token</h2>
+      <p class="hint">Un token fongible dont vous êtes le créateur. La totalité du supply initial est créditée sur votre compte.</p>
+      <div class="row">
+        <div><label>Symbole (ex : DOGE)</label><input id="tkSym" maxlength="12" placeholder="DOGE"></div>
+        <div><label>Nom</label><input id="tkName" placeholder="Doge Token"></div>
+      </div>
+      <div class="row">
+        <div><label>Décimales (0–18)</label><input id="tkDec" type="number" min="0" max="18" value="9"></div>
+        <div><label>Supply initial</label><input id="tkSupply" type="number" min="1" value="1000000"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px">
+        <input type="checkbox" id="tkMintable" style="width:auto"> <span>Mintable (vous pourrez émettre plus de jetons plus tard)</span>
+      </label>
+      <div class="fee" id="feeToken">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createToken()">Déployer le token</button>
+    </div>
+
+    <!-- VESTING -->
+    <div id="tab-vesting" class="card hidden">
+      <h2>Contrat de vesting</h2>
+      <p class="hint">Verrouille un montant et le débloque LINÉAIREMENT vers un bénéficiaire entre deux dates. Le bénéficiaire réclame la part acquise au fil du temps.</p>
+      <div class="row">
+        <div><label>Bénéficiaire (adresse cg…)</label><input id="vsBenef" placeholder="cg…"></div>
+        <div><label>Token</label><input id="vsToken" value="CGO"></div>
+      </div>
+      <div class="row">
+        <div><label>Montant à verrouiller</label><input id="vsAmount" type="number" min="0" step="any" value="1000"></div>
+      </div>
+      <div class="row">
+        <div><label>Début du déblocage</label><input id="vsStart" type="datetime-local"></div>
+        <div><label>Fin (100 % débloqué)</label><input id="vsEnd" type="datetime-local"></div>
+      </div>
+      <div class="fee" id="feeVesting">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createVesting()">Déployer le vesting</button>
+    </div>
+
+    <!-- ESCROW -->
+    <div id="tab-escrow" class="card hidden">
+      <h2>Séquestre (escrow)</h2>
+      <p class="hint">Verrouille un montant entre acheteur (vous) et vendeur. Vous libérez les fonds (release) à réception, ou demandez un remboursement (refund). Un arbitre optionnel peut trancher.</p>
+      <div class="row">
+        <div><label>Vendeur (adresse cg…)</label><input id="esSeller" placeholder="cg…"></div>
+        <div><label>Arbitre (optionnel)</label><input id="esArbiter" placeholder="cg… (laisser vide si aucun)"></div>
+      </div>
+      <div class="row">
+        <div><label>Token</label><input id="esToken" value="CGO"></div>
+        <div><label>Montant à séquestrer</label><input id="esAmount" type="number" min="0" step="any" value="500"></div>
+      </div>
+      <div class="fee" id="feeEscrow">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createEscrow()">Déployer le séquestre</button>
+    </div>
+
+    <!-- MULTISIG -->
+    <div id="tab-multisig" class="card hidden">
+      <h2>Coffre multisig M-of-N</h2>
+      <p class="hint">Un coffre à plusieurs signataires : il faut M approbations sur N pour dépenser. Idéal pour une trésorerie partagée.</p>
+      <label>Signataires (une adresse cg… par ligne)</label>
+      <textarea id="msSigners" placeholder="cg…&#10;cg…&#10;cg…"></textarea>
+      <div class="row">
+        <div><label>Seuil M (approbations requises)</label><input id="msThreshold" type="number" min="1" value="2"></div>
+        <div><label>Token</label><input id="msToken" value="CGO"></div>
+        <div><label>Montant initial à déposer</label><input id="msAmount" type="number" min="0" step="any" value="0"></div>
+      </div>
+      <div class="fee" id="feeMultisig">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createMultisig()">Déployer le coffre</button>
+    </div>
+
+    <!-- MINE -->
+    <div id="tab-mine" class="card hidden">
+      <h2>Mes créations</h2>
+      <p class="hint">Tokens et contrats dont vous êtes le créateur sur ce réseau.</p>
+      <div id="myTokens"></div>
+      <div id="myContracts"></div>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <footer>Open-source · <a href="https://github.com/ghisdot/chaingo">github.com/ghisdot/chaingo</a></footer>
+</div>
+
+<script src="../wallet/wasm_exec.js"></script>
+<script>
+const KEY_NODE = "chaingo_node_url", KEY_SEED = "chaingo_studio_seed_v1";
+const UNIT = 1_000_000_000; // 1 CGO = 1e9 ucgo
+let nodeUrl = "", wasmReady = false, seedHex = null, myAddress = null, fees = null;
+const $ = id => document.getElementById(id);
+
+function defaultNode(){
+  const saved = localStorage.getItem(KEY_NODE);
+  if (saved) return saved;
+  if (location.protocol === "file:") return "http://127.0.0.1:8545";
+  const h = location.hostname;
+  if (h === "chaingo.org" || h === "www.chaingo.org") return "https://node.chaingo.org";
+  return location.origin;
+}
+function saveNode(){ nodeUrl = $("nodeUrl").value.trim().replace(/\/$/, ""); localStorage.setItem(KEY_NODE, nodeUrl); refreshAll(); }
+async function api(path, opts){
+  const r = await fetch(nodeUrl + path, opts);
+  if (!r.ok){ let e; try{ e = (await r.json()).error; }catch{} throw new Error(e || ("HTTP " + r.status)); }
+  return r.json();
+}
+async function pingNode(){
+  try{ const s = await api("/v1/status"); $("netState").innerHTML = '<span class="ok">● ' + s.chain_id + " #" + s.height + "</span>"; return s; }
+  catch{ $("netState").innerHTML = '<span class="ko">● hors-ligne</span>'; return null; }
+}
+
+function fmt(u){ return (u / UNIT).toLocaleString("fr-FR", { maximumFractionDigits: 9 }); }
+
+// montant décimal -> entier base (10^dec), via BigInt pour éviter les flottants.
+function toBase(str, dec){
+  const [w, f = ""] = String(str).trim().split(".");
+  if (f.length > dec) throw new Error("trop de décimales (max " + dec + ")");
+  const frac = (f + "0".repeat(dec)).slice(0, dec);
+  return BigInt(w || "0") * (10n ** BigInt(dec)) + BigInt(frac || "0");
+}
+
+// txToJSON : sérialise une tx en PRÉSERVANT les BigInt comme entiers JSON bruts
+// (JSON.stringify ne sait pas sérialiser les BigInt, et Number perd la précision
+// au-delà de 2^53 — un supply de token peut largement dépasser). On marque les
+// BigInt puis on réinjecte les chiffres non quotés. Le décodeur Go (uint64)
+// accepte ces entiers jusqu'à 2^64-1.
+function txToJSON(tx){
+  const marks = {}; let i = 0;
+  const s = JSON.stringify(tx, (k, v) => {
+    if (typeof v === "bigint"){ const m = "@@B" + (i++) + "@@"; marks[m] = v.toString(); return m; }
+    return v;
+  });
+  return s.replace(/"@@B(\d+)@@"/g, (_, n) => marks["@@B" + n + "@@"]);
+}
+
+function switchTab(t){
+  document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
+  ["token","vesting","escrow","multisig","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
+  if (t === "mine") loadMine();
+}
+
+function loadSeed(){
+  const s = $("seedInput").value.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(s)) return alert("Seed invalide : 64 caractères hex attendus.");
+  if (!wasmReady) return alert("Module WASM pas encore prêt.");
+  const r = chaingoAddressFromSeed(s);
+  if (r.error) return alert("Seed invalide.");
+  seedHex = s; myAddress = r.address; localStorage.setItem(KEY_SEED, s);
+  $("seedInput").value = ""; showStudio();
+}
+async function loadFromWallet(){
+  const raw = localStorage.getItem("chaingo_wallet_v1");
+  if (!raw) return alert("Aucun wallet ChainGO dans ce navigateur. Allez sur /wallet/ d'abord.");
+  const pass = prompt("Mot de passe du wallet :"); if (pass === null) return;
+  try{
+    const w = JSON.parse(raw), enc = new TextEncoder(), dec = new TextDecoder();
+    const b = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey({name:"PBKDF2",salt:b(w.salt),iterations:250000,hash:"SHA-256"}, base, {name:"AES-GCM",length:256}, false, ["decrypt"]);
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM",iv:b(w.iv)}, key, b(w.ct));
+    seedHex = dec.decode(pt); myAddress = w.address; localStorage.setItem(KEY_SEED, seedHex); showStudio();
+  }catch{ alert("Mot de passe incorrect."); }
+}
+function forgetSeed(){
+  if(!confirm("Oublier la seed dans ce navigateur ?")) return;
+  localStorage.removeItem(KEY_SEED); seedHex = null; myAddress = null;
+  $("studio").classList.add("hidden"); $("connect").classList.remove("hidden");
+}
+function showStudio(){
+  $("connect").classList.add("hidden"); $("studio").classList.remove("hidden");
+  $("myAddr").textContent = myAddress; refreshAll();
+}
+
+async function refreshAll(){
+  if (!await pingNode()) return;
+  try{
+    fees = await api("/v1/fees");
+    renderFees();
+    if (myAddress){
+      const a = await api("/v1/accounts/" + myAddress);
+      $("balPill").textContent = fmt(a.balances?.CGO || 0) + " CGO";
+    }
+  }catch(e){ /* silencieux */ }
+}
+
+function renderFees(){
+  if (!fees) return;
+  const base = fees.base_fee || 0, tip = fees.suggested_tip || 0;
+  const tokenTotal = (fees.token_create_fee || 0) + base + tip;
+  const ctrTotal = (fees.contract_create_fee || 0) + base + tip;
+  const tk = `${fmt(fees.token_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(tokenTotal)} CGO</b>`;
+  const ct = `${fmt(fees.contract_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(ctrTotal)} CGO</b>`;
+  $("feeToken").innerHTML = "Coût de déploiement : " + tk;
+  ["feeVesting","feeEscrow","feeMultisig"].forEach(id => $(id).innerHTML = "Coût de déploiement : " + ct);
+}
+
+// Construit la base commune d'une tx (chain_id, nonce, frais).
+async function buildBase(type){
+  const [status, acct, f] = await Promise.all([api("/v1/status"), api("/v1/accounts/"+myAddress), api("/v1/fees")]);
+  return { chain_id: status.chain_id, type, amount: 0, nonce: acct.nonce,
+    max_base_fee: f.suggested_max_base, tip: f.suggested_tip, timestamp: Date.now() };
+}
+
+async function signAndSend(tx, label){
+  const st = $("status"); st.innerHTML = label + " — signature post-quantique…";
+  const signed = chaingoSignTransaction(seedHex, txToJSON(tx));
+  if (signed.error) throw new Error(signed.error);
+  const res = await api("/v1/tx", { method:"POST", headers:{"Content-Type":"application/json"}, body: signed.signed });
+  st.innerHTML = `<span class="ok">${label} envoyé ✓</span> tx ${res.hash.slice(0,16)}…`;
+  for (let i=0;i<20;i++){
+    await new Promise(r=>setTimeout(r,600));
+    try{ const c = await api("/v1/tx/"+res.hash); if (c.status==="confirmed"){
+      st.innerHTML = `<span class="ok">${label} confirmé dans le bloc #${c.block_height} ✓</span>`; refreshAll(); return res.hash;
+    }}catch{}
+  }
+  st.innerHTML += " — en attente"; refreshAll(); return res.hash;
+}
+
+async function createToken(){
+  try{
+    const sym = $("tkSym").value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,12}$/.test(sym)) throw new Error("symbole : 2–12 lettres/chiffres majuscules");
+    const dec = parseInt($("tkDec").value, 10);
+    if (!(dec>=0 && dec<=18)) throw new Error("décimales entre 0 et 18");
+    const supply = toBase($("tkSupply").value, dec);
+    if (supply <= 0n) throw new Error("supply doit être > 0");
+    const tx = await buildBase("create_token");
+    tx.token = { symbol: sym, name: $("tkName").value.trim() || sym, decimals: dec,
+      supply: supply, mintable: $("tkMintable").checked };
+    await signAndSend(tx, `Token ${sym}`);
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+// Pour un contrat : montant verrouillé exprimé dans les décimales du token
+// (CGO = 9 ; un autre token → on lit ses décimales).
+async function tokenDecimals(sym){
+  if (sym === "CGO") return 9;
+  const t = await api("/v1/tokens/" + sym); return t.decimals;
+}
+
+async function createVesting(){
+  try{
+    const benef = $("vsBenef").value.trim();
+    if (!benef.startsWith("cg")) throw new Error("bénéficiaire invalide");
+    const token = ($("vsToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("vsAmount").value, dec);
+    const start = Date.parse($("vsStart").value), end = Date.parse($("vsEnd").value);
+    if (isNaN(start) || isNaN(end) || end <= start) throw new Error("dates invalides (fin > début)");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "vesting", token_id: token, amount: amount,
+      beneficiary: benef, start_ms: start, end_ms: end };
+    await signAndSend(tx, "Vesting");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function createEscrow(){
+  try{
+    const seller = $("esSeller").value.trim();
+    if (!seller.startsWith("cg")) throw new Error("vendeur invalide");
+    const arbiter = $("esArbiter").value.trim();
+    if (arbiter && !arbiter.startsWith("cg")) throw new Error("arbitre invalide");
+    const token = ($("esToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("esAmount").value, dec);
+    if (amount <= 0n) throw new Error("montant doit être > 0");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "escrow", token_id: token, amount: amount, seller, arbiter };
+    await signAndSend(tx, "Séquestre");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function createMultisig(){
+  try{
+    const signers = $("msSigners").value.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+    if (signers.length < 2) throw new Error("au moins 2 signataires");
+    if (!signers.every(s=>s.startsWith("cg"))) throw new Error("toutes les adresses doivent commencer par cg");
+    const threshold = parseInt($("msThreshold").value, 10);
+    if (!(threshold>=1 && threshold<=signers.length)) throw new Error("seuil entre 1 et "+signers.length);
+    const token = ($("msToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("msAmount").value || "0", dec);
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "multisig", token_id: token, amount: amount, signers, threshold };
+    await signAndSend(tx, "Coffre multisig");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function loadMine(){
+  try{
+    const [toks, ctrs] = await Promise.all([api("/v1/tokens"), api("/v1/contracts")]);
+    const myT = (toks||[]).filter(t => t.creator === myAddress);
+    const myC = (ctrs||[]).filter(c => c.creator === myAddress);
+    $("myTokens").innerHTML = "<h2 style='font-size:.95rem;margin:14px 0 6px'>Tokens ("+myT.length+")</h2>" + (myT.length
+      ? "<table><tr><th>Symbole</th><th>Nom</th><th>Décimales</th><th>Supply</th><th>Mintable</th></tr>" +
+        myT.map(t=>`<tr><td><b>${t.symbol}</b></td><td>${t.name||""}</td><td>${t.decimals}</td><td>${t.total_supply}</td><td>${t.mintable?"oui":"non"}</td></tr>`).join("") + "</table>"
+      : "<p class='muted' style='font-size:.85rem'>Aucun token créé.</p>");
+    $("myContracts").innerHTML = "<h2 style='font-size:.95rem;margin:18px 0 6px'>Contrats ("+myC.length+")</h2>" + (myC.length
+      ? "<table><tr><th>Type</th><th>ID</th><th>Token</th><th>Verrouillé</th><th>État</th></tr>" +
+        myC.map(c=>`<tr><td>${c.template}</td><td class="mono">${c.id.slice(0,14)}…</td><td>${c.token_id}</td><td>${c.amount}</td><td>${c.status}</td></tr>`).join("") + "</table>"
+      : "<p class='muted' style='font-size:.85rem'>Aucun contrat déployé.</p>");
+  }catch(e){ $("myTokens").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+// ---------------- init ----------------
+nodeUrl = defaultNode(); $("nodeUrl").value = nodeUrl;
+const go = new Go();
+async function loadWasm(){
+  try{ const r = await WebAssembly.instantiateStreaming(fetch("../wallet/chaingo.wasm"), go.importObject); return r.instance; }
+  catch{ const buf = await (await fetch("../wallet/chaingo.wasm")).arrayBuffer(); const r = await WebAssembly.instantiate(buf, go.importObject); return r.instance; }
+}
+loadWasm().then(inst => {
+  go.run(inst); wasmReady = true;
+  $("wasmWarn").textContent = "Moteur post-quantique prêt — vos signatures sont produites localement.";
+  $("wasmWarn").classList.add("ok");
+  refreshAll();
+  const saved = localStorage.getItem(KEY_SEED);
+  if (saved && /^[0-9a-f]{64}$/.test(saved)){
+    const r = chaingoAddressFromSeed(saved);
+    if (!r.error){ seedHex = saved; myAddress = r.address; showStudio(); }
+  }
+}).catch(e => { $("wasmWarn").innerHTML = '<span class="ko">Erreur WASM : '+e.message+'</span>'; });
+</script>
+</body>
+</html>
