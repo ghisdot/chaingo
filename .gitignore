@@ -14,3 +14,7 @@ genesis.json
 web/wallet/chaingo.wasm
 web/wallet/wasm_exec.js
 _wasmtest.cjs
+
+# État des lieux privé / suivi de session — pas versionné.
+STATUS.md
+NOTES.md
