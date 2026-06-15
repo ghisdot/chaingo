@@ -58,6 +58,11 @@ type Engine struct {
 	// hauteur (sinon on déclenche notre propre règle d'équivocation →
 	// auto-slash). Tranche 2 ajoutera la règle de verrouillage POL.
 	voted map[uint64]map[string]string
+	// setByHeight : set de validateurs FIGÉ qui gouverne les votes de chaque
+	// hauteur (#5). setByHeight[H] = pouvoir actif post-(H-1), figé à l'entrée
+	// du traitement du bloc H. Le quorum 2/3 d'une hauteur se mesure contre ce
+	// set, pas contre l'état vivant — voir docs/design/phase2-validator-set-freeze.md.
+	setByHeight map[uint64]*state.ValidatorSet
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -80,6 +85,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		lastProgress: time.Now(),
 		votes:        newVotePool(),
 		voted:        map[uint64]map[string]string{},
+		setByHeight:  map[uint64]*state.ValidatorSet{},
 		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
@@ -131,6 +137,9 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	}
 	height := e.st.GetHeight() + 1
 	prev := e.st.GetLastHash()
+	// Fige le set votant de cette hauteur : l'état est ici post-(height-1),
+	// donc le set actif est par définition celui qui gouverne height (#5).
+	e.freezeSetLocked(height)
 	// Round courant : un round de secours s'ouvre à chaque intervalle
 	// écoulé sans bloc. On ne produit que si on est LE proposeur du round
 	// en cours (pas d'un round passé ni futur).
@@ -195,6 +204,7 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 		e.st.SetFinalized(height - 1)
 		e.votes.prune(height - 1)
 		e.pruneVotedLocked(height - 1)
+		e.pruneSetsLocked(height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -220,6 +230,8 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	if b.Header.PrevHash != prev {
 		return fmt.Errorf("prev hash mismatch at height %d", b.Header.Height)
 	}
+	// Fige le set votant de cette hauteur : l'état est ici post-(Height-1) (#5).
+	e.freezeSetLocked(b.Header.Height)
 	// Le proposeur doit être EXACTEMENT l'élu du round inscrit dans l'en-tête
 	// (round 0 nominal, sinon un round de secours). Le round explicite lève
 	// toute ambiguïté et rend le comptage d'inactivité déterministe.
@@ -257,8 +269,8 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		if cerr != nil {
 			return fmt.Errorf("invalid last commit: %w", cerr)
 		}
-		if !hasQuorum(power, e.st.TotalPower()) {
-			return errors.New("last commit below 2/3 of active stake")
+		if !hasQuorum(power, e.setForHeight(b.Header.Height-1).Total) {
+			return errors.New("last commit below 2/3 of the height's validator set")
 		}
 		finalizesParent = true
 	}
@@ -280,6 +292,7 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		e.st.SetFinalized(b.Header.Height - 1)
 		e.votes.prune(b.Header.Height - 1)
 		e.pruneVotedLocked(b.Header.Height - 1)
+		e.pruneSetsLocked(b.Header.Height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -381,8 +394,8 @@ func (e *Engine) AddVote(v *types.Vote) (bool, error) {
 	if v.Height <= e.st.GetFinalized() {
 		return false, nil // hauteur déjà finalisée
 	}
-	if e.st.PowerOf(v.Voter) == 0 {
-		return false, errors.New("voter is not an active validator")
+	if e.setForHeight(v.Height).PowerOf(v.Voter) == 0 {
+		return false, errors.New("voter not in the height's validator set")
 	}
 	if err := v.Verify(); err != nil {
 		return false, err
@@ -409,16 +422,50 @@ func (e *Engine) buildLastCommit(height uint64, hash string) []*types.Vote {
 		return nil
 	}
 	power, err := e.verifyCommit(cand, height, hash)
-	if err != nil || !hasQuorum(power, e.st.TotalPower()) {
+	if err != nil || !hasQuorum(power, e.setForHeight(height).Total) {
 		return nil
 	}
 	return cand
 }
 
+// freezeSetLocked fige le set de validateurs qui gouverne la hauteur `height`,
+// s'il ne l'est pas déjà. Appelé À L'ENTRÉE du traitement du bloc `height`,
+// quand l'état est exactement post-(height-1) : le set actif à cet instant est
+// par définition le set votant de `height`. Suppose e.mu détenu.
+func (e *Engine) freezeSetLocked(height uint64) {
+	if _, ok := e.setByHeight[height]; !ok {
+		e.setByHeight[height] = e.st.SnapshotActiveSet()
+	}
+}
+
+// setForHeight renvoie le set figé qui gouverne la hauteur `height`. Repli sur
+// une photo de l'état courant si la hauteur n'est pas (encore) figée — cas
+// limité : (a) vote reçu sur la hauteur suivante avant traitement de son bloc
+// (l'état courant EST alors le bon set), (b) unique hauteur non finalisée juste
+// après un redémarrage. Le repli n'est jamais pire que l'ancien comportement
+// (qui lisait toujours l'état vivant). Suppose e.mu détenu.
+func (e *Engine) setForHeight(height uint64) *state.ValidatorSet {
+	if vs, ok := e.setByHeight[height]; ok {
+		return vs
+	}
+	return e.st.SnapshotActiveSet()
+}
+
+// pruneSetsLocked oublie les sets figés des hauteurs déjà finalisées.
+func (e *Engine) pruneSetsLocked(upTo uint64) {
+	for h := range e.setByHeight {
+		if h <= upTo {
+			delete(e.setByHeight, h)
+		}
+	}
+}
+
 // verifyCommit valide un ensemble de précommits sur (height, hash) et renvoie
-// le pouvoir actif cumulé des votants distincts. Sert au proposeur (build) et
-// aux suiveurs (validation du LastCommit reçu).
+// le pouvoir actif cumulé des votants distincts, MESURÉ CONTRE LE SET FIGÉ de
+// `height` (#5). Sert au proposeur (build) et aux suiveurs (validation du
+// LastCommit reçu).
 func (e *Engine) verifyCommit(votes []*types.Vote, height uint64, hash string) (uint64, error) {
+	set := e.setForHeight(height)
 	seen := map[string]bool{}
 	var power uint64
 	for _, v := range votes {
@@ -435,9 +482,9 @@ func (e *Engine) verifyCommit(votes []*types.Vote, height uint64, hash string) (
 			return 0, errors.New("duplicate voter in commit")
 		}
 		seen[v.Voter] = true
-		p := e.st.PowerOf(v.Voter)
+		p := set.PowerOf(v.Voter) // pouvoir FIGÉ de la hauteur, pas l'état vivant
 		if p == 0 {
-			return 0, errors.New("commit voter is not an active validator")
+			return 0, errors.New("commit voter not in the height's validator set")
 		}
 		if err := v.Verify(); err != nil {
 			return 0, err

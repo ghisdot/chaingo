@@ -311,6 +311,40 @@ func (s *State) TotalPower() uint64 {
 	return s.totalStakedLocked()
 }
 
+// ValidatorSet : photo IMMUABLE du pouvoir de vote actif à un instant donné.
+// Sert à figer le set qui gouverne les votes BFT d'une hauteur (le 2/3 doit se
+// mesurer contre un dénominateur stable, identique sur tous les nœuds — sinon
+// un commit légitime peut être rejeté quand l'état évolue). Voir
+// docs/design/phase2-validator-set-freeze.md.
+type ValidatorSet struct {
+	Powers map[string]uint64 // adresse -> pouvoir actif (stake + délégations)
+	Total  uint64            // somme des pouvoirs (dénominateur du quorum)
+}
+
+// PowerOf : pouvoir figé d'un votant (0 s'il n'était pas dans ce set).
+func (vs *ValidatorSet) PowerOf(addr string) uint64 {
+	if vs == nil {
+		return 0
+	}
+	return vs.Powers[addr]
+}
+
+// SnapshotActiveSet renvoie une photo du set de validateurs actifs (pouvoir
+// > 0) à l'instant de l'appel. La map est une copie : modifier l'état ensuite
+// n'altère pas la photo.
+func (s *State) SnapshotActiveSet() *ValidatorSet {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	vs := &ValidatorSet{Powers: make(map[string]uint64, len(s.Validators))}
+	for _, v := range s.Validators {
+		if w := v.activeWeight(); w > 0 {
+			vs.Powers[v.Address] = w
+			vs.Total += w
+		}
+	}
+	return vs
+}
+
 // IsSlashed : l'équivocation (voter, height) a-t-elle déjà été punie ?
 func (s *State) IsSlashed(voter string, height uint64) bool {
 	s.mu.RLock()
