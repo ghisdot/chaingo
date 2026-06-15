@@ -63,6 +63,12 @@ type Engine struct {
 	// du traitement du bloc H. Le quorum 2/3 d'une hauteur se mesure contre ce
 	// set, pas contre l'état vivant — voir docs/design/phase2-validator-set-freeze.md.
 	setByHeight map[uint64]*state.ValidatorSet
+	// locked : verrou POL par hauteur (#6 tranche 3). Quand ce nœud précommit un
+	// bloc, il se VERROUILLE dessus (round + hash). Il ne précommettra un hash
+	// différent à cette hauteur QUE sur preuve d'une polka à un round STRICTEMENT
+	// supérieur (POL). Garantit qu'on ne change d'avis que sur quorum plus récent
+	// — base d'un reorg sûr (fork-choice = tranche 5/#7).
+	locked map[uint64]lock
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -71,6 +77,12 @@ type Engine struct {
 
 func evidenceKey(voter string, height uint64) string {
 	return fmt.Sprintf("%s@%d", voter, height)
+}
+
+// lock : verrou POL d'un nœud à une hauteur (round + hash du bloc verrouillé).
+type lock struct {
+	round uint32
+	hash  string
 }
 
 func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.KeyPair, interval time.Duration, maxTxs int) *Engine {
@@ -86,6 +98,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		votes:        newVotePool(),
 		voted:        map[uint64]map[string]string{},
 		setByHeight:  map[uint64]*state.ValidatorSet{},
+		locked:       map[uint64]lock{},
 		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
@@ -329,16 +342,38 @@ func (e *Engine) castVoteKind(height uint64, round uint32, kind, hash string) {
 	if e.key == nil {
 		return
 	}
+	// Anti-auto-équivocation, désormais consciente du round : on ne signe jamais
+	// deux votes du même kind à la même hauteur ET au même round pour des hash
+	// différents (= notre propre preuve d'équivocation). Signer à un round
+	// DIFFÉRENT est en revanche autorisé (changement légitime, voir le verrou).
+	rk := rkKey(round, kind)
 	if e.voted[height] == nil {
 		e.voted[height] = map[string]string{}
 	}
-	if prev, ok := e.voted[height][kind]; ok {
+	if prev, ok := e.voted[height][rk]; ok {
 		if prev != hash {
-			log.Printf("[consensus] SÛRETÉ : refus de signer un 2e %s (%s…) à la hauteur #%d — déjà voté %s… (anti-auto-équivocation)", kind, short(hash), height, short(prev))
+			log.Printf("[consensus] SÛRETÉ : refus de signer un 2e %s (%s…) à la hauteur #%d round %d — déjà voté %s… (anti-auto-équivocation)", kind, short(hash), height, round, short(prev))
 		}
 		return
 	}
-	e.voted[height][kind] = hash
+
+	// Règle de VERROUILLAGE (POL), uniquement pour les précommits : si ce nœud
+	// est verrouillé sur un autre bloc à cette hauteur, il ne précommet le
+	// nouveau QUE s'il existe une polka pour ce nouveau bloc à un round
+	// STRICTEMENT supérieur au verrou (preuve d'un quorum plus récent). Sinon il
+	// reste fidèle à son verrou. Au PREMIER précommit d'une hauteur (cas nominal
+	// sans reorg), aucun verrou n'existe → comportement identique à l'historique.
+	if kind == types.PrecommitKind {
+		if lk, ok := e.locked[height]; ok && lk.hash != hash {
+			if !(round > lk.round && e.hasPolka(height, round, hash)) {
+				log.Printf("[consensus] VERROU : reste verrouillé sur %s… (round %d) à la hauteur #%d — refus de précommettre %s… sans polka de round supérieur", short(lk.hash), lk.round, height, short(hash))
+				return
+			}
+		}
+		e.locked[height] = lock{round: round, hash: hash} // (re)verrouillage
+	}
+
+	e.voted[height][rk] = hash
 	v := &types.Vote{ChainID: e.chainID, Height: height, Round: round, Kind: kind, BlockHash: hash}
 	v.SignWith(e.key)
 	e.votes.add(v)
@@ -354,11 +389,17 @@ func short(h string) string {
 	return h
 }
 
-// pruneVotedLocked oublie les précommits émis aux hauteurs déjà finalisées.
+// pruneVotedLocked oublie les votes émis ET les verrous aux hauteurs déjà
+// finalisées (une hauteur finalisée ne peut plus changer — verrou inutile).
 func (e *Engine) pruneVotedLocked(upTo uint64) {
 	for h := range e.voted {
 		if h <= upTo {
 			delete(e.voted, h)
+		}
+	}
+	for h := range e.locked {
+		if h <= upTo {
+			delete(e.locked, h)
 		}
 	}
 }
