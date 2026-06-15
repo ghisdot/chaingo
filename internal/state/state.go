@@ -75,13 +75,17 @@ type Unbonding struct {
 	ReleaseAt int64  `json:"release_at"` // ms epoch
 }
 
-// MultisigProposal : un paiement proposé depuis un coffre multisig, exécuté
-// dès que `Threshold` signataires distincts l'ont approuvé.
+// MultisigProposal : un paiement proposé depuis un coffre multisig OU une
+// trésorerie DAO. Multisig : exécuté dès que `Threshold` signataires l'ont
+// approuvé. DAO : `Approvals` = votes POUR, `Against` = votes CONTRE ; exécuté
+// au quorum POUR, rejeté si le quorum POUR ne peut plus être atteint.
 type MultisigProposal struct {
 	To        string   `json:"to"`
 	Amount    uint64   `json:"amount"`
 	Approvals []string `json:"approvals"`
+	Against   []string `json:"against,omitempty"` // DAO : votes CONTRE
 	Executed  bool     `json:"executed"`
+	Rejected  bool     `json:"rejected,omitempty"` // DAO : proposition rejetée
 }
 
 // Contract : instance d'un template no-code. Les fonds sont verrouillés
@@ -883,6 +887,37 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			}
 			p.Approvals = append(p.Approvals, tx.From)
 			s.maybeExecuteMultisig(c, p)
+		case c.Template == types.TemplateDAO && tx.Action == types.ActionPropose:
+			if !c.isSigner(tx.From) {
+				return errors.New("dao: only a member can propose")
+			}
+			if c.Amount-c.Released < tx.Amount {
+				return errors.New("dao: proposed amount exceeds the treasury balance")
+			}
+			// Le proposant vote POUR d'office.
+			p := &MultisigProposal{To: tx.To, Amount: tx.Amount, Approvals: []string{tx.From}}
+			c.Proposals = append(c.Proposals, p)
+			s.maybeResolveDAO(c, p)
+		case c.Template == types.TemplateDAO && (tx.Action == types.ActionApprove || tx.Action == types.ActionReject):
+			if !c.isSigner(tx.From) {
+				return errors.New("dao: only a member can vote")
+			}
+			if tx.Proposal >= uint64(len(c.Proposals)) {
+				return fmt.Errorf("dao: unknown proposal %d", tx.Proposal)
+			}
+			p := c.Proposals[tx.Proposal]
+			if p.Executed || p.Rejected {
+				return errors.New("dao: proposal already resolved")
+			}
+			if proposalHasVoter(p, tx.From) {
+				return errors.New("dao: already voted on this proposal")
+			}
+			if tx.Action == types.ActionApprove {
+				p.Approvals = append(p.Approvals, tx.From)
+			} else {
+				p.Against = append(p.Against, tx.From)
+			}
+			s.maybeResolveDAO(c, p)
 		default:
 			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
 		}
@@ -918,6 +953,48 @@ func (s *State) maybeExecuteMultisig(c *Contract, p *MultisigProposal) {
 	p.Executed = true
 	if c.Released == c.Amount {
 		c.Status = "completed"
+	}
+}
+
+// proposalHasVoter : l'adresse a-t-elle déjà voté (POUR ou CONTRE) ?
+func proposalHasVoter(p *MultisigProposal, addr string) bool {
+	for _, a := range p.Approvals {
+		if a == addr {
+			return true
+		}
+	}
+	for _, a := range p.Against {
+		if a == addr {
+			return true
+		}
+	}
+	return false
+}
+
+// maybeResolveDAO tranche une proposition DAO : l'EXÉCUTE si le quorum de votes
+// POUR (Threshold) est atteint et la trésorerie a les fonds ; la REJETTE si le
+// quorum POUR ne peut plus être atteint (trop de votes CONTRE). Déterministe.
+func (s *State) maybeResolveDAO(c *Contract, p *MultisigProposal) {
+	if p.Executed || p.Rejected {
+		return
+	}
+	if uint64(len(p.Approvals)) >= c.Threshold {
+		if c.Amount-c.Released < p.Amount {
+			return // trésorerie épuisée par d'autres propositions
+		}
+		s.acct(p.To).Balances[c.TokenID] += p.Amount
+		c.Released += p.Amount
+		p.Executed = true
+		if c.Released == c.Amount {
+			c.Status = "completed"
+		}
+		return
+	}
+	// POUR max atteignable = membres - (votes CONTRE). S'il passe sous le quorum,
+	// la proposition ne pourra jamais aboutir → rejet.
+	members := uint64(len(c.Signers))
+	if members-uint64(len(p.Against)) < c.Threshold {
+		p.Rejected = true
 	}
 }
 

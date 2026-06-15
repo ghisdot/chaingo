@@ -634,6 +634,41 @@ func cmdContract(args []string) error {
 		fmt.Printf("ID du contrat : %s\n", tx.Hash())
 		return nil
 
+	case "dao":
+		if *from == "" || *amount == "" || *signers == "" || *threshold == 0 {
+			return fmt.Errorf("--from, --amount (trésorerie), --signers (membres) et --threshold (quorum) sont requis")
+		}
+		kp, err := wallet.Load(*from, *pass)
+		if err != nil {
+			return err
+		}
+		var addrs []string
+		for _, s := range strings.Split(*signers, ",") {
+			s = strings.TrimSpace(s)
+			if s == "" {
+				continue
+			}
+			a, err := resolveAddress(s)
+			if err != nil {
+				return err
+			}
+			addrs = append(addrs, a)
+		}
+		amt, err := parseAmount(*amount, types.NativeDecimals)
+		if err != nil {
+			return err
+		}
+		cp := &types.ContractParams{Template: types.TemplateDAO, TokenID: types.NativeToken,
+			Amount: amt, Signers: addrs, Threshold: uint64(*threshold)}
+		tx := &types.Transaction{Type: types.TxContractCreate, Contract: cp}
+		fmt.Printf("DAO : %d membres, quorum %d POUR, trésorerie %s CGO\n", len(addrs), *threshold, *amount)
+		fmt.Println("Les membres proposent (propose), votent POUR (approve) ou CONTRE (reject).")
+		if err := signAndSubmit(*api, kp, tx); err != nil {
+			return err
+		}
+		fmt.Printf("ID du contrat : %s\n", tx.Hash())
+		return nil
+
 	case "propose":
 		if *from == "" || *id == "" || *to == "" || *amount == "" {
 			return fmt.Errorf("--from, --id, --to et --amount sont requis")
@@ -654,7 +689,8 @@ func cmdContract(args []string) error {
 		fmt.Printf("Proposition de paiement : %s CGO vers %s (à approuver par les autres signataires)\n", *amount, dest)
 		return signAndSubmit(*api, kp, tx)
 
-	case "approve":
+	case "approve", "reject":
+		// approve = voter POUR (multisig/dao) ; reject = voter CONTRE (dao).
 		if *from == "" || *id == "" {
 			return fmt.Errorf("--from et --id sont requis")
 		}
@@ -662,7 +698,7 @@ func cmdContract(args []string) error {
 		if err != nil {
 			return err
 		}
-		tx := &types.Transaction{Type: types.TxContractExec, ContractID: *id, Action: types.ActionApprove, Proposal: uint64(*proposal)}
+		tx := &types.Transaction{Type: types.TxContractExec, ContractID: *id, Action: sub, Proposal: uint64(*proposal)}
 		return signAndSubmit(*api, kp, tx)
 
 	case "claim", "release", "refund":
@@ -677,7 +713,7 @@ func cmdContract(args []string) error {
 		return signAndSubmit(*api, kp, tx)
 
 	default:
-		return fmt.Errorf("sous-commande inconnue %q (vesting|escrow|multisig|propose|approve|claim|release|refund|list)", sub)
+		return fmt.Errorf("sous-commande inconnue %q (vesting|escrow|multisig|dao|propose|approve|reject|claim|release|refund|list)", sub)
 	}
 }
 

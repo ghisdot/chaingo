@@ -35,6 +35,7 @@ const (
 	TemplateVesting  = "vesting"  // fonds débloqués linéairement vers un bénéficiaire
 	TemplateEscrow   = "escrow"   // séquestre acheteur/vendeur, arbitre optionnel
 	TemplateMultisig = "multisig" // coffre M-of-N : N signataires, M approbations pour dépenser
+	TemplateDAO      = "dao"      // gouvernance : membres, trésorerie, propositions votées POUR/CONTRE
 )
 
 // Actions exécutables sur un contrat.
@@ -42,8 +43,9 @@ const (
 	ActionClaim   = "claim"   // vesting : le bénéficiaire récupère la part débloquée
 	ActionRelease = "release" // escrow : libère les fonds vers le vendeur
 	ActionRefund  = "refund"  // escrow : rembourse l'acheteur
-	ActionPropose = "propose" // multisig : un signataire propose un paiement (To, Amount)
-	ActionApprove = "approve" // multisig : un signataire approuve la proposition (Proposal)
+	ActionPropose = "propose" // multisig/dao : proposer un paiement depuis la trésorerie (To, Amount)
+	ActionApprove = "approve" // multisig/dao : approuver / voter POUR la proposition (Proposal)
+	ActionReject  = "reject"  // dao : voter CONTRE la proposition (Proposal)
 )
 
 type ContractParams struct {
@@ -257,24 +259,42 @@ func (tx *Transaction) ValidateBasic() error {
 			if c.Threshold < 1 || c.Threshold > uint64(len(c.Signers)) {
 				return errors.New("multisig: threshold must be between 1 and the number of signers")
 			}
+		case TemplateDAO:
+			// Membres = Signers, quorum POUR = Threshold (même validation que multisig).
+			if len(c.Signers) < 1 {
+				return errors.New("dao: at least one member required")
+			}
+			seen := map[string]bool{}
+			for _, m := range c.Signers {
+				if !crypto.ValidAddress(m) {
+					return errors.New("dao: invalid member address")
+				}
+				if seen[m] {
+					return errors.New("dao: duplicate member")
+				}
+				seen[m] = true
+			}
+			if c.Threshold < 1 || c.Threshold > uint64(len(c.Signers)) {
+				return errors.New("dao: threshold (quorum) must be between 1 and the number of members")
+			}
 		default:
-			return fmt.Errorf("unknown contract template %q (vesting|escrow|multisig)", c.Template)
+			return fmt.Errorf("unknown contract template %q (vesting|escrow|multisig|dao)", c.Template)
 		}
 	case TxContractExec:
 		if tx.ContractID == "" {
 			return errors.New("contract_id required")
 		}
 		switch tx.Action {
-		case ActionClaim, ActionRelease, ActionRefund, ActionApprove:
+		case ActionClaim, ActionRelease, ActionRefund, ActionApprove, ActionReject:
 		case ActionPropose:
 			if !crypto.ValidAddress(tx.To) {
-				return errors.New("multisig propose: invalid recipient address")
+				return errors.New("propose: invalid recipient address")
 			}
 			if tx.Amount == 0 {
-				return errors.New("multisig propose: amount must be > 0")
+				return errors.New("propose: amount must be > 0")
 			}
 		default:
-			return fmt.Errorf("unknown action %q (claim|release|refund|propose|approve)", tx.Action)
+			return fmt.Errorf("unknown action %q (claim|release|refund|propose|approve|reject)", tx.Action)
 		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)

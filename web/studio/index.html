@@ -107,6 +107,7 @@
       <div class="tab" data-t="vesting" onclick="switchTab('vesting')">Vesting</div>
       <div class="tab" data-t="escrow" onclick="switchTab('escrow')">Séquestre</div>
       <div class="tab" data-t="multisig" onclick="switchTab('multisig')">Multisig</div>
+      <div class="tab" data-t="dao" onclick="switchTab('dao')">DAO</div>
       <div class="tab" data-t="mine" onclick="switchTab('mine')">Mes créations</div>
     </div>
 
@@ -179,6 +180,21 @@
       <button class="primary" onclick="createMultisig()">Déployer le coffre</button>
     </div>
 
+    <!-- DAO -->
+    <div id="tab-dao" class="card hidden">
+      <h2>DAO (gouvernance)</h2>
+      <p class="hint">Une trésorerie partagée gouvernée par des membres. Un membre propose un paiement ; les membres votent POUR ou CONTRE ; au quorum de POUR, le paiement s'exécute. Le vote/la gestion se font ensuite à la commande (<code>chaingo contract propose|approve|reject</code>).</p>
+      <label>Membres (une adresse cg… par ligne)</label>
+      <textarea id="daoMembers" placeholder="cg…&#10;cg…&#10;cg…"></textarea>
+      <div class="row">
+        <div><label>Quorum (votes POUR requis)</label><input id="daoThreshold" type="number" min="1" value="2"></div>
+        <div><label>Token de la trésorerie</label><input id="daoToken" value="CGO"></div>
+        <div><label>Trésorerie initiale à déposer</label><input id="daoTreasury" type="number" min="0" step="any" value="0"></div>
+      </div>
+      <div class="fee" id="feeDAO">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createDAO()">Déployer la DAO</button>
+    </div>
+
     <!-- MINE -->
     <div id="tab-mine" class="card hidden">
       <h2>Mes créations</h2>
@@ -245,7 +261,7 @@ function txToJSON(tx){
 
 function switchTab(t){
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
-  ["token","vesting","escrow","multisig","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
+  ["token","vesting","escrow","multisig","dao","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
   if (t === "mine") loadMine();
 }
 
@@ -301,7 +317,7 @@ function renderFees(){
   const tk = `${fmt(fees.token_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(tokenTotal)} CGO</b>`;
   const ct = `${fmt(fees.contract_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(ctrTotal)} CGO</b>`;
   $("feeToken").innerHTML = "Coût de déploiement : " + tk;
-  ["feeVesting","feeEscrow","feeMultisig"].forEach(id => $(id).innerHTML = "Coût de déploiement : " + ct);
+  ["feeVesting","feeEscrow","feeMultisig","feeDAO"].forEach(id => $(id).innerHTML = "Coût de déploiement : " + ct);
 }
 
 // Construit la base commune d'une tx (chain_id, nonce, frais).
@@ -393,6 +409,22 @@ async function createMultisig(){
     const tx = await buildBase("contract_create");
     tx.contract = { template: "multisig", token_id: token, amount: amount, signers, threshold };
     await signAndSend(tx, "Coffre multisig");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function createDAO(){
+  try{
+    const members = $("daoMembers").value.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+    if (members.length < 1) throw new Error("au moins 1 membre");
+    if (!members.every(s=>s.startsWith("cg"))) throw new Error("toutes les adresses doivent commencer par cg");
+    const threshold = parseInt($("daoThreshold").value, 10);
+    if (!(threshold>=1 && threshold<=members.length)) throw new Error("quorum entre 1 et "+members.length);
+    const token = ($("daoToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("daoTreasury").value || "0", dec);
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "dao", token_id: token, amount: amount, signers: members, threshold };
+    await signAndSend(tx, "DAO");
   }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
 }
 
