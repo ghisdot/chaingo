@@ -102,13 +102,34 @@ type Transaction struct {
 	Signature  []byte          `json:"signature,omitempty"`
 }
 
+// txCanonical : alias de Transaction sans méthodes. Sert à deux choses :
+//   - SigningBytes appelle json.Marshal sur (*txCanonical), donc PAS sur la
+//     MarshalJSON custom ci-dessous → pas de boucle infinie via tx.Hash().
+//   - Garantit que la SÉRIALISATION SIGNÉE reste exactement la même qu'avant
+//     l'ajout du champ "hash" en sortie API (invariant n°1 du projet).
+type txCanonical Transaction
+
 // SigningBytes returns the canonical bytes covered by the signature
 // (struct field order is fixed, []byte marshals to base64 — deterministic).
 func (tx *Transaction) SigningBytes() []byte {
 	clone := *tx
 	clone.Signature = nil
-	b, _ := json.Marshal(&clone)
+	b, _ := json.Marshal((*txCanonical)(&clone))
 	return b
+}
+
+// MarshalJSON enrichit la sortie API avec le hash de la transaction —
+// indispensable pour les explorateurs et les wallets (sinon le client devrait
+// recalculer SHA3-256(SigningBytes) lui-même). Le champ "hash" n'est PAS
+// dans SigningBytes : il dépend de la signature.
+//
+// Côté Unmarshal, le champ "hash" supplémentaire est silencieusement ignoré
+// (Go json ignore les champs inconnus par défaut), donc compat ascendante.
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		*txCanonical
+		Hash string `json:"hash"`
+	}{(*txCanonical)(tx), tx.Hash()})
 }
 
 func (tx *Transaction) Hash() string { return crypto.HashHex(tx.SigningBytes()) }

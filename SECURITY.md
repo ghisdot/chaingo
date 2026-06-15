@@ -9,7 +9,7 @@ sont planifiées en Phase 2 — voir [ROADMAP.md](ROADMAP.md).
 ## Signaler une vulnérabilité
 
 - **N'ouvrez pas d'issue publique** pour une faille exploitable.
-- Écrivez à : ghislain.ott@gmail.com avec le détail (impact, reproduction, version).
+- Écrivez à : ghisdot@proton.me avec le détail (impact, reproduction, version).
 - Réponse sous 72 h ; divulgation coordonnée une fois le correctif publié.
 
 ## Périmètre particulièrement sensible

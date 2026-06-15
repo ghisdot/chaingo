@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorateur ChainGO</title>
+<meta name="description" content="Explorateur public de la blockchain ChainGO : blocs, transactions, comptes, validateurs.">
+<style>
+  :root{--bg:#0b0f17;--bg2:#0f1522;--card:#131b2c;--border:#1f2a40;--text:#e6edf6;--muted:#8b9bb4;--cyan:#22d3ee;--violet:#8b5cf6;--green:#34d399;--amber:#fbbf24;--red:#f87171;--grad:linear-gradient(90deg,#22d3ee,#8b5cf6);}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;line-height:1.55;}
+  a{color:var(--cyan);text-decoration:none;}
+  a:hover{filter:brightness(1.2);}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px;}
+  nav{position:sticky;top:0;z-index:10;background:rgba(11,15,23,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);}
+  nav .wrap{display:flex;align-items:center;gap:14px;height:60px;}
+  .logo{font-weight:800;font-size:1.15rem;}.logo span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  nav a.link{color:var(--muted);font-size:.9rem;}
+  nav a.link:hover{color:var(--text);}
+  .spacer{flex:1;}
+  .search{flex:1;max-width:520px;display:flex;gap:6px;}
+  .search input{flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:.9rem;font-family:inherit;}
+  .search input:focus{outline:none;border-color:var(--cyan);}
+  .search button{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--cyan);font-weight:700;font-size:.85rem;cursor:pointer;}
+  .pill{font-size:.74rem;padding:3px 10px;border-radius:999px;border:1px solid var(--border);color:var(--green);}
+  .pill.ko{color:var(--red);}
+  h1{font-size:1.5rem;margin:26px 0 4px;font-weight:800;}
+  h2{font-size:1.1rem;margin:20px 0 12px;font-weight:700;}
+  .crumbs{font-size:.85rem;color:var(--muted);margin:18px 0 8px;}
+  .crumbs a{color:var(--muted);}
+  .crumbs a:hover{color:var(--cyan);}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0;}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:16px;text-align:center;}
+  .stat .v{font-size:1.35rem;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums;word-break:break-all;}
+  .stat .v.amber{color:var(--amber);}
+  .stat .v.red{color:var(--red);}
+  .stat .l{font-size:.78rem;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.4px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:12px;}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .card h2{padding:14px 16px;margin:0;border-bottom:1px solid var(--border);background:var(--bg2);font-size:.95rem;}
+  table{width:100%;border-collapse:collapse;font-size:.88rem;}
+  th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-weight:600;font-size:.74rem;text-transform:uppercase;letter-spacing:.4px;background:rgba(255,255,255,.02);}
+  tr:last-child td{border-bottom:none;}
+  td.mono{font-family:ui-monospace,monospace;font-size:.82rem;}
+  td.right{text-align:right;}
+  .tag{display:inline-block;font-size:.7rem;padding:2px 8px;border-radius:999px;font-weight:700;letter-spacing:.3px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);}
+  .tag.transfer{color:var(--cyan);} .tag.create_token{color:var(--violet);}
+  .tag.stake,.tag.delegate{color:var(--green);} .tag.unstake,.tag.undelegate{color:var(--amber);}
+  .tag.contract_create,.tag.contract_exec{color:var(--violet);} .tag.mint{color:var(--green);}
+  .tag.unjail{color:var(--amber);}
+  .kv{display:grid;grid-template-columns:180px 1fr;gap:10px 18px;padding:18px;font-size:.92rem;}
+  .kv > div:nth-child(odd){color:var(--muted);}
+  .kv > div:nth-child(even){word-break:break-all;font-family:ui-monospace,monospace;font-size:.85rem;}
+  .kv .plain{font-family:inherit;}
+  .empty{padding:24px;color:var(--muted);text-align:center;font-style:italic;}
+  .loading{padding:30px;text-align:center;color:var(--muted);}
+  .err{padding:20px;text-align:center;color:var(--red);background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.3);border-radius:11px;margin:18px 0;}
+  .copy{cursor:pointer;color:var(--muted);font-size:.78rem;margin-left:6px;}
+  .copy:hover{color:var(--cyan);}
+  .pager{display:flex;justify-content:center;gap:8px;padding:14px;}
+  .pager button{padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:.85rem;}
+  .pager button:hover{filter:brightness(1.15);}
+  .pager button:disabled{opacity:.4;cursor:not-allowed;}
+  footer{border-top:1px solid var(--border);padding:28px 0;color:var(--muted);font-size:.82rem;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="logo">Chain<span>GO</span> <span style="font-weight:400;font-size:.78rem;color:var(--muted);">Explorer</span></div>
+  <a class="link" href="/">Accueil</a>
+  <a class="link" href="/wallet/">Wallet</a>
+  <a class="link" href="/api/">API</a>
+  <div class="spacer"></div>
+  <form class="search" onsubmit="event.preventDefault(); doSearch(this.q.value);">
+    <input name="q" id="searchInput" placeholder="Hauteur, hash de bloc / tx, adresse cg…, symbole de token…">
+    <button type="submit">↵</button>
+  </form>
+  <span class="pill" id="netPill">…</span>
+</div></nav>
+
+<div class="wrap" id="content">
+  <div class="loading">Chargement…</div>
+</div>
+
+<footer><div class="wrap">
+  Explorateur ChainGO — données en direct via l'<a href="/api/">API publique</a>.
+</div></footer>
+
+<script>
+// ---------------- Config & helpers ----------------
+const API = (() => {
+  if (location.protocol === "file:") return "http://127.0.0.1:8545";
+  const h = location.hostname;
+  if (h === "chaingo.org" || h === "www.chaingo.org") return "https://node.chaingo.org";
+  return location.origin;
+})();
+const UNIT = 1_000_000_000n;
+const $ = id => document.getElementById(id);
+const el = (tag, attrs={}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const k in attrs) {
+    if (k === "html") e.innerHTML = attrs[k];
+    else if (k.startsWith("on") && typeof attrs[k] === "function") e.addEventListener(k.slice(2), attrs[k]);
+    else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]);
+  }
+  for (const k of kids) {
+    if (k == null) continue;
+    e.append(typeof k === "string" ? document.createTextNode(k) : k);
+  }
+  return e;
+};
+const fmtInt = n => new Intl.NumberFormat("fr-FR").format(n);
+const fmtCGO = (ucgo) => {
+  const u = BigInt(ucgo || 0);
+  const whole = u / UNIT, frac = u % UNIT;
+  if (frac === 0n) return fmtInt(whole) + " CGO";
+  const fracStr = frac.toString().padStart(9, "0").replace(/0+$/, "");
+  return fmtInt(whole) + (fracStr ? "." + fracStr : "") + " CGO";
+};
+const fmtDate = ms => {
+  const d = new Date(Number(ms));
+  return d.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "medium" });
+};
+const ago = ms => {
+  const s = Math.max(0, Math.floor((Date.now() - Number(ms)) / 1000));
+  if (s < 60) return s + " s";
+  if (s < 3600) return Math.floor(s / 60) + " min";
+  if (s < 86400) return Math.floor(s / 3600) + " h";
+  return Math.floor(s / 86400) + " j";
+};
+const short = (s, head=8, tail=6) => !s ? "" : (s.length <= head+tail+1 ? s : s.slice(0, head) + "…" + s.slice(-tail));
+const linkHash = h => "#/" + h.replace(/^\//, "");
+const a = (href, text, attrs={}) => el("a", {href, ...attrs}, text);
+const aBlock = h => a(`#/block/${h}`, "#" + fmtInt(h));
+const aBlockByHash = (hash, label) => a(`#/block/hash/${hash}`, label || short(hash, 10, 6), {class: "mono"});
+const aTx = hash => a(`#/tx/${hash}`, short(hash, 10, 6), {class: "mono"});
+const aAddr = addr => a(`#/account/${addr}`, short(addr, 10, 6), {class: "mono"});
+const copy = txt => navigator.clipboard.writeText(txt).then(() => {});
+const cpy = txt => el("span", {class: "copy", title: "Copier", onclick: () => copy(txt)}, "⎘");
+
+async function api(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) {
+    let msg = "HTTP " + r.status;
+    try { msg = (await r.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+// ---------------- Indicateur réseau ----------------
+async function refreshPill() {
+  try {
+    const s = await api("/v1/status");
+    $("netPill").classList.remove("ko");
+    $("netPill").textContent = "● " + s.chain_id + " #" + fmtInt(s.height);
+  } catch {
+    $("netPill").classList.add("ko");
+    $("netPill").textContent = "● hors-ligne";
+  }
+}
+setInterval(refreshPill, 4000);
+refreshPill();
+
+// ---------------- Recherche universelle ----------------
+async function doSearch(q) {
+  q = (q || "").trim();
+  if (!q) return;
+  try {
+    const r = await api("/v1/search?q=" + encodeURIComponent(q));
+    if (r.type === "block") {
+      if (typeof r.ref === "number") location.hash = "#/block/" + r.ref;
+      else location.hash = "#/block/hash/" + r.ref;
+    } else if (r.type === "tx") location.hash = "#/tx/" + r.ref;
+    else if (r.type === "account") location.hash = "#/account/" + r.ref;
+    else if (r.type === "token") location.hash = "#/token/" + r.ref;
+    else renderErr("Aucun résultat pour : " + q);
+  } catch (e) { renderErr(e.message); }
+}
+
+// ---------------- Routeur ----------------
+window.addEventListener("hashchange", route);
+window.addEventListener("DOMContentLoaded", () => { route(); });
+function route() {
+  const h = (location.hash || "#/").slice(2); // après "#/"
+  if (!h) return renderHome();
+  if (h.startsWith("block/hash/")) return renderBlockByHash(h.slice(11));
+  if (h.startsWith("block/"))      return renderBlock(h.slice(6));
+  if (h.startsWith("tx/"))         return renderTx(h.slice(3));
+  if (h.startsWith("account/"))    return renderAccount(h.slice(8));
+  if (h.startsWith("validator/"))  return renderValidator(h.slice(10));
+  if (h.startsWith("token/"))      return renderToken(h.slice(6));
+  if (h === "validators")          return renderValidators();
+  if (h === "tokens")              return renderTokens();
+  if (h === "contracts")           return renderContracts();
+  return renderHome();
+}
+
+function clearContent() { $("content").innerHTML = ""; }
+function setLoading() { $("content").innerHTML = '<div class="loading">Chargement…</div>'; }
+function renderErr(msg) { $("content").innerHTML = `<div class="err">${msg}</div>`; }
+
+// ---------------- Page : Accueil ----------------
+async function renderHome() {
+  setLoading();
+  try {
+    const [status, supply, blocks, validators] = await Promise.all([
+      api("/v1/status"), api("/v1/supply"), api("/v1/blocks?limit=12"), api("/v1/validators"),
+    ]);
+    const c = $("content");
+    c.innerHTML = "";
+
+    // Stats cards
+    const stats = el("div", {class: "stats"},
+      stat(fmtInt(status.height),                              "Hauteur"),
+      stat(fmtInt(status.finalized_height || 0),               "Finalisée"),
+      stat(fmtCGO(supply.total),                               "Supply"),
+      stat(fmtCGO(supply.burned), "Brûlé à jamais", "red"),
+      stat(validators.length,                                  "Validateurs"),
+      stat(fmtInt(status.mempool),                             "Tx en attente"),
+    );
+    c.append(el("h1", {}, "Explorateur ", el("span", {style:"color:var(--muted);font-weight:400;font-size:.8em;"}, status.chain_id)));
+    c.append(stats);
+
+    const cols = el("div", {class: "grid2"});
+
+    // Derniers blocs
+    const blocksCard = el("div", {class: "card"});
+    blocksCard.append(el("h2", {}, "Derniers blocs"));
+    const bt = el("table");
+    bt.innerHTML = "<thead><tr><th>#</th><th>Âge</th><th>Proposeur</th><th class='right'>Tx</th><th>Hash</th></tr></thead>";
+    const btb = el("tbody");
+    for (const b of blocks) {
+      btb.append(el("tr", {},
+        el("td", {}, aBlock(b.header.height)),
+        el("td", {}, ago(b.header.timestamp)),
+        el("td", {}, aAddr(b.header.proposer)),
+        el("td", {class: "right"}, String((b.txs||[]).length)),
+        el("td", {class: "mono"}, aBlockByHash(b.hash)),
+      ));
+    }
+    bt.append(btb);
+    blocksCard.append(bt);
+    cols.append(blocksCard);
+
+    // Dernières transactions (extraites des derniers blocs)
+    const txsCard = el("div", {class: "card"});
+    txsCard.append(el("h2", {}, "Dernières transactions"));
+    const tt = el("table");
+    tt.innerHTML = "<thead><tr><th>Hash</th><th>Type</th><th>De → vers</th><th class='right'>Bloc</th></tr></thead>";
+    const ttb = el("tbody");
+    let totalTx = 0;
+    for (const b of blocks) {
+      for (const tx of (b.txs || [])) {
+        if (totalTx++ >= 15) break;
+        ttb.append(el("tr", {},
+          el("td", {class: "mono"}, aTx(txHash(tx))),
+          el("td", {}, el("span", {class: "tag " + tx.type}, tx.type)),
+          el("td", {class:"mono"},
+            aAddr(tx.from),
+            tx.to ? document.createTextNode(" → ") : "",
+            tx.to ? aAddr(tx.to) : ""),
+          el("td", {class:"right"}, aBlock(b.header.height)),
+        ));
+      }
+      if (totalTx >= 15) break;
+    }
+    if (totalTx === 0) ttb.append(el("tr", {}, el("td", {colspan: "4", class:"empty"}, "Aucune transaction récente.")));
+    tt.append(ttb);
+    txsCard.append(tt);
+    cols.append(txsCard);
+
+    c.append(cols);
+
+    // Liens annexes
+    c.append(el("h2", {style:"margin-top:30px"}, "Explorer"));
+    const links = el("div", {class: "stats"},
+      el("a", {href: "#/validators", class: "stat"}, el("div", {class:"v plain", style:"font-size:1rem"}, "Validateurs")),
+      el("a", {href: "#/tokens",     class: "stat"}, el("div", {class:"v plain", style:"font-size:1rem"}, "Tokens")),
+      el("a", {href: "#/contracts",  class: "stat"}, el("div", {class:"v plain", style:"font-size:1rem"}, "Contrats")),
+    );
+    c.append(links);
+  } catch (e) { renderErr(e.message); }
+}
+
+function stat(value, label, cls) {
+  return el("div", {class: "stat"},
+    el("div", {class: "v" + (cls ? " " + cls : "")}, String(value)),
+    el("div", {class: "l"}, label),
+  );
+}
+
+// hash d'une tx — pour éviter un appel API on prend ce que le nœud nous renvoie
+// dans /v1/blocks (lui contient les tx avec leur signature qui suffit à recalculer
+// localement le hash). Mais c'est lourd et risqué. Plus simple : si tx a déjà un
+// champ "hash" on le prend ; sinon on calcule pas, on affiche un placeholder qui
+// pointe vers une recherche.
+function txHash(tx) {
+  if (tx.hash) return tx.hash;
+  // Pas de hash dans la tx ? On affiche la signature comme identifiant pour navigation
+  // (le user verra "manquant", c'est OK temporairement, le nœud renverra le hash si
+  // on ajoute le champ dans la sérialisation).
+  return tx.signature ? tx.signature.slice(0, 64) : "unknown";
+}
+
+// ---------------- Page : Bloc ----------------
+async function renderBlock(ref) {
+  setLoading();
+  try {
+    const b = await api("/v1/blocks/" + encodeURIComponent(ref));
+    renderBlockDetail(b);
+  } catch (e) { renderErr(e.message); }
+}
+async function renderBlockByHash(hash) {
+  setLoading();
+  try {
+    const b = await api("/v1/blocks/by-hash/" + encodeURIComponent(hash));
+    renderBlockDetail(b);
+  } catch (e) { renderErr(e.message); }
+}
+function renderBlockDetail(b) {
+  const c = $("content"); c.innerHTML = "";
+  const h = b.header;
+  c.append(el("div", {class: "crumbs"}, a("#/", "Accueil"), " › Bloc #" + fmtInt(h.height)));
+  c.append(el("h1", {}, "Bloc #" + fmtInt(h.height)));
+
+  const card = el("div", {class: "card"});
+  card.append(el("h2", {}, "En-tête"));
+  card.append(el("div", {class: "kv"},
+    el("div", {}, "Hauteur"),   el("div", {class:"plain"}, fmtInt(h.height)),
+    el("div", {}, "Hash"),      el("div", {}, b.hash || "—", cpy(b.hash || "")),
+    el("div", {}, "Hash parent"),el("div", {}, h.prev_hash ? (function(){
+      const span = document.createElement("span");
+      span.append(aBlockByHash(h.prev_hash, h.prev_hash));
+      return span;
+    })() : "—"),
+    el("div", {}, "Date"),      el("div", {class:"plain"}, fmtDate(h.timestamp) + " (il y a " + ago(h.timestamp) + ")"),
+    el("div", {}, "Proposeur"), el("div", {}, aAddr(h.proposer), cpy(h.proposer)),
+    el("div", {}, "Round"),     el("div", {class:"plain"}, h.round + (h.round > 0 ? " (round de secours)" : " (nominal)")),
+    el("div", {}, "Racine tx"),     el("div", {}, h.tx_root || "—"),
+    el("div", {}, "Racine état"),   el("div", {}, h.state_root || "—"),
+    el("div", {}, "Racine commit"), el("div", {}, h.last_commit_root || "—"),
+    el("div", {}, "Preuves"),       el("div", {class:"plain"}, String((b.evidence || []).length)),
+    el("div", {}, "Précommits parent"), el("div", {class:"plain"}, String((b.last_commit || []).length) + " votes ≥ 2/3 ⇒ parent finalisé"),
+  ));
+  c.append(card);
+
+  // Transactions
+  const txsCard = el("div", {class: "card", style:"margin-top:18px"});
+  txsCard.append(el("h2", {}, "Transactions (" + (b.txs || []).length + ")"));
+  if (!b.txs || !b.txs.length) {
+    txsCard.append(el("div", {class:"empty"}, "Aucune transaction dans ce bloc."));
+  } else {
+    const t = el("table");
+    t.innerHTML = "<thead><tr><th>Hash</th><th>Type</th><th>De</th><th>Vers</th><th class='right'>Montant</th></tr></thead>";
+    const tb = el("tbody");
+    for (const tx of b.txs) {
+      tb.append(el("tr", {},
+        el("td", {}, aTx(txHash(tx))),
+        el("td", {}, el("span", {class:"tag "+tx.type}, tx.type)),
+        el("td", {}, aAddr(tx.from)),
+        el("td", {}, tx.to ? aAddr(tx.to) : "—"),
+        el("td", {class:"right plain"}, tx.amount ? (tx.token_id === "CGO" || !tx.token_id ? fmtCGO(tx.amount) : (fmtInt(tx.amount) + " " + tx.token_id)) : "—"),
+      ));
+    }
+    t.append(tb);
+    txsCard.append(t);
+  }
+  c.append(txsCard);
+}
+
+// ---------------- Page : Transaction ----------------
+async function renderTx(hash) {
+  setLoading();
+  try {
+    const r = await api("/v1/tx/" + encodeURIComponent(hash));
+    const tx = r.tx;
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("div", {class: "crumbs"}, a("#/", "Accueil"), " › Transaction"));
+    c.append(el("h1", {}, "Transaction"));
+
+    const card = el("div", {class:"card"});
+    card.append(el("h2", {}, "Détail"));
+    const k = [
+      "Hash",        el("span", {}, hash, cpy(hash)),
+      "Bloc",        aBlock(r.block_height),
+      "Statut",      el("span", {class:"plain"}, r.status || "—"),
+      "Type",        el("span", {class:"tag "+tx.type}, tx.type),
+      "De",          el("span", {}, aAddr(tx.from), cpy(tx.from)),
+      "Vers",        tx.to ? el("span", {}, aAddr(tx.to), cpy(tx.to)) : el("span",{class:"plain"},"—"),
+      "Token",       el("span", {class:"plain"}, tx.token_id || "CGO"),
+      "Montant",     el("span", {class:"plain"}, tx.amount ? (tx.token_id && tx.token_id !== "CGO" ? fmtInt(tx.amount)+" "+tx.token_id : fmtCGO(tx.amount)) : "—"),
+      "Nonce",       el("span", {class:"plain"}, String(tx.nonce ?? 0)),
+      "Tip",         el("span", {class:"plain"}, fmtCGO(tx.tip || 0)),
+      "Max base fee",el("span", {class:"plain"}, fmtCGO(tx.max_base_fee || 0)),
+      "Privé",       el("span", {class:"plain"}, tx.private ? "oui" : "non"),
+      "Mémo",        el("span", {class:"plain"}, tx.memo || "—"),
+      "Horodatage",  el("span", {class:"plain"}, tx.timestamp ? fmtDate(tx.timestamp) : "—"),
+    ];
+    const kv = el("div", {class:"kv"});
+    for (let i=0; i<k.length; i+=2) {
+      kv.append(el("div", {}, k[i]));
+      kv.append(el("div", {}, k[i+1] instanceof Node ? k[i+1] : String(k[i+1])));
+    }
+    card.append(kv);
+    c.append(card);
+
+    // Détails contract si présent
+    if (tx.contract) {
+      const cc = el("div", {class:"card", style:"margin-top:18px"});
+      cc.append(el("h2", {}, "Paramètres du contrat (" + tx.contract.template + ")"));
+      const kk = el("div", {class:"kv"});
+      for (const [key, val] of Object.entries(tx.contract)) {
+        kk.append(el("div", {}, key));
+        if (Array.isArray(val)) kk.append(el("div", {class:"plain"}, val.join(", ")));
+        else kk.append(el("div", {class: key.endsWith("_ms") ? "plain" : ""}, key.endsWith("_ms") && val ? fmtDate(val) : String(val)));
+      }
+      cc.append(kk);
+      c.append(cc);
+    }
+  } catch (e) { renderErr(e.message); }
+}
+
+// ---------------- Page : Compte ----------------
+async function renderAccount(addr) {
+  setLoading();
+  try {
+    const acct = await api("/v1/accounts/" + encodeURIComponent(addr));
+    const txs = await api("/v1/accounts/" + encodeURIComponent(addr) + "/txs?limit=25").catch(() => []);
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("div", {class:"crumbs"}, a("#/", "Accueil"), " › Compte"));
+    c.append(el("h1", {}, "Compte"));
+    c.append(el("div", {class:"kv", style:"background:var(--card);border:1px solid var(--border);border-radius:11px;"},
+      el("div", {}, "Adresse"),  el("div", {}, addr, cpy(addr)),
+      el("div", {}, "Nonce"),    el("div", {class:"plain"}, String(acct.nonce || 0)),
+      el("div", {}, "Solde CGO"),el("div", {class:"plain"}, fmtCGO((acct.balances||{}).CGO || 0)),
+      el("div", {}, "Staké"),    el("div", {class:"plain"}, fmtCGO(acct.staked || 0)),
+      el("div", {}, "Unbonding"),el("div", {class:"plain"}, fmtCGO(acct.unbonding || 0)),
+    ));
+
+    // Autres tokens
+    const other = Object.entries(acct.balances || {}).filter(([t]) => t !== "CGO");
+    if (other.length) {
+      const tc = el("div", {class:"card", style:"margin-top:18px"});
+      tc.append(el("h2", {}, "Autres tokens"));
+      const tt = el("table");
+      tt.innerHTML = "<thead><tr><th>Token</th><th class='right'>Solde</th></tr></thead>";
+      const tb = el("tbody");
+      for (const [tok, bal] of other) tb.append(el("tr", {}, el("td", {}, a(`#/token/${tok}`, tok)), el("td", {class:"right plain"}, fmtInt(bal))));
+      tt.append(tb); tc.append(tt); c.append(tc);
+    }
+
+    // Délégations actives
+    const dels = Object.entries(acct.delegations || {});
+    if (dels.length) {
+      const dc = el("div", {class:"card", style:"margin-top:18px"});
+      dc.append(el("h2", {}, "Délégations"));
+      const dt = el("table");
+      dt.innerHTML = "<thead><tr><th>Validateur</th><th class='right'>Montant</th></tr></thead>";
+      const db = el("tbody");
+      for (const [v, amt] of dels) db.append(el("tr", {}, el("td", {}, aAddr(v)), el("td", {class:"right plain"}, fmtCGO(amt))));
+      dt.append(db); dc.append(dt); c.append(dc);
+    }
+
+    // Historique
+    const hc = el("div", {class:"card", style:"margin-top:18px"});
+    hc.append(el("h2", {}, "Historique (" + (txs.length || 0) + ")"));
+    if (!txs.length) {
+      hc.append(el("div", {class:"empty"}, "Aucune transaction encore indexée pour cette adresse."));
+    } else {
+      const ht = el("table");
+      ht.innerHTML = "<thead><tr><th>Bloc</th><th>Date</th><th>Type</th><th>De → Vers</th><th class='right'>Montant</th></tr></thead>";
+      const hb = el("tbody");
+      for (const e of txs) {
+        const t = e.tx;
+        hb.append(el("tr", {},
+          el("td", {}, aBlock(e.block_height)),
+          el("td", {class:"plain"}, fmtDate(e.timestamp)),
+          el("td", {}, el("span", {class:"tag "+t.type}, t.type)),
+          el("td", {}, aAddr(t.from), t.to ? document.createTextNode(" → ") : "", t.to ? aAddr(t.to) : ""),
+          el("td", {class:"right plain"}, t.amount ? fmtCGO(t.amount) : "—"),
+        ));
+      }
+      ht.append(hb); hc.append(ht);
+    }
+    c.append(hc);
+  } catch (e) { renderErr(e.message); }
+}
+
+// ---------------- Page : Validateur ----------------
+async function renderValidator(addr) {
+  setLoading();
+  try {
+    const vs = await api("/v1/validators");
+    const v = vs.find(x => x.address === addr);
+    if (!v) return renderErr("Validateur inconnu : " + addr);
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("div", {class:"crumbs"}, a("#/", "Accueil"), " › ", a("#/validators","Validateurs"), " › ", short(addr,10,6)));
+    c.append(el("h1", {}, "Validateur"));
+    c.append(el("div", {class:"kv", style:"background:var(--card);border:1px solid var(--border);border-radius:11px;"},
+      el("div", {}, "Adresse"),       el("div", {}, addr, cpy(addr)),
+      el("div", {}, "Stake propre"),  el("div", {class:"plain"}, fmtCGO(v.stake)),
+      el("div", {}, "Délégations"),   el("div", {class:"plain"}, fmtCGO(v.delegated || 0) + " (" + Object.keys(v.delegators||{}).length + " délégateurs)"),
+      el("div", {}, "Blocs proposés"),el("div", {class:"plain"}, fmtInt(v.blocks_proposed || 0)),
+      el("div", {}, "Récompenses"),   el("div", {class:"plain"}, fmtCGO(v.rewards_earned || 0)),
+      el("div", {}, "Slots manqués"), el("div", {class:"plain"}, String(v.missed || 0)),
+      el("div", {}, "Jailed"),        el("div", {class:"plain"}, v.jailed ? "OUI (jusqu'au " + fmtDate(v.jailed_until) + ")" : "non"),
+    ));
+    if (v.delegators && Object.keys(v.delegators).length) {
+      const dc = el("div", {class:"card", style:"margin-top:18px"});
+      dc.append(el("h2", {}, "Délégateurs"));
+      const dt = el("table");
+      dt.innerHTML = "<thead><tr><th>Adresse</th><th class='right'>Montant</th></tr></thead>";
+      const db = el("tbody");
+      for (const [a, amt] of Object.entries(v.delegators)) db.append(el("tr", {}, el("td", {}, aAddr(a)), el("td", {class:"right plain"}, fmtCGO(amt))));
+      dt.append(db); dc.append(dt); c.append(dc);
+    }
+  } catch (e) { renderErr(e.message); }
+}
+
+// ---------------- Page : Validateurs (liste) ----------------
+async function renderValidators() {
+  setLoading();
+  try {
+    const vs = await api("/v1/validators");
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("h1", {}, "Validateurs (" + vs.length + ")"));
+    const t = el("table", {class:"card"});
+    t.innerHTML = "<thead><tr><th>Adresse</th><th class='right'>Stake</th><th class='right'>Délégations</th><th class='right'>Blocs</th><th>État</th></tr></thead>";
+    const tb = el("tbody");
+    for (const v of vs) tb.append(el("tr", {},
+      el("td", {}, a(`#/validator/${v.address}`, short(v.address, 10, 6), {class:"mono"})),
+      el("td", {class:"right plain"}, fmtCGO(v.stake)),
+      el("td", {class:"right plain"}, fmtCGO(v.delegated || 0)),
+      el("td", {class:"right plain"}, fmtInt(v.blocks_proposed || 0)),
+      el("td", {}, v.jailed ? el("span", {class:"tag", style:"color:var(--red);"}, "jailed") : el("span", {class:"tag", style:"color:var(--green);"}, "actif")),
+    ));
+    t.append(tb); c.append(t);
+  } catch (e) { renderErr(e.message); }
+}
+
+// ---------------- Page : Tokens ----------------
+async function renderTokens() {
+  setLoading();
+  try {
+    const ts = await api("/v1/tokens");
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("h1", {}, "Tokens no-code (" + ts.length + ")"));
+    if (!ts.length) { c.append(el("div", {class:"empty"}, "Aucun token créé sur cette chaîne.")); return; }
+    const t = el("table", {class:"card"});
+    t.innerHTML = "<thead><tr><th>Symbole</th><th>Nom</th><th class='right'>Supply</th><th>Décimales</th><th>Créateur</th></tr></thead>";
+    const tb = el("tbody");
+    for (const k of ts) tb.append(el("tr", {},
+      el("td", {}, a(`#/token/${k.symbol}`, k.symbol)),
+      el("td", {}, k.name),
+      el("td", {class:"right plain"}, fmtInt(k.total_supply || k.supply)),
+      el("td", {class:"plain"}, String(k.decimals)),
+      el("td", {}, aAddr(k.creator)),
+    ));
+    t.append(tb); c.append(t);
+  } catch (e) { renderErr(e.message); }
+}
+async function renderToken(sym) {
+  setLoading();
+  try {
+    const k = await api("/v1/tokens/" + encodeURIComponent(sym));
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("div", {class:"crumbs"}, a("#/", "Accueil"), " › ", a("#/tokens", "Tokens"), " › " + sym));
+    c.append(el("h1", {}, sym + " — " + k.name));
+    c.append(el("div", {class:"kv", style:"background:var(--card);border:1px solid var(--border);border-radius:11px;"},
+      el("div", {}, "Symbole"),      el("div", {class:"plain"}, k.symbol),
+      el("div", {}, "Nom"),          el("div", {class:"plain"}, k.name),
+      el("div", {}, "Supply totale"),el("div", {class:"plain"}, fmtInt(k.total_supply || k.supply)),
+      el("div", {}, "Décimales"),    el("div", {class:"plain"}, String(k.decimals)),
+      el("div", {}, "Mintable"),     el("div", {class:"plain"}, k.mintable ? "oui" : "non"),
+      el("div", {}, "Créateur"),     el("div", {}, aAddr(k.creator)),
+      el("div", {}, "Créé au bloc"), el("div", {}, aBlock(k.created_at_height || 0)),
+    ));
+  } catch (e) { renderErr(e.message); }
+}
+
+// ---------------- Page : Contrats ----------------
+async function renderContracts() {
+  setLoading();
+  try {
+    const cs = await api("/v1/contracts");
+    const c = $("content"); c.innerHTML = "";
+    c.append(el("h1", {}, "Smart contracts no-code (" + cs.length + ")"));
+    if (!cs.length) { c.append(el("div", {class:"empty"}, "Aucun contrat sur cette chaîne pour l'instant.")); return; }
+    const t = el("table", {class:"card"});
+    t.innerHTML = "<thead><tr><th>Template</th><th class='right'>Montant</th><th>Statut</th><th>Créateur</th><th>Bloc</th></tr></thead>";
+    const tb = el("tbody");
+    for (const k of cs) tb.append(el("tr", {},
+      el("td", {}, el("span", {class:"tag contract_create"}, k.template)),
+      el("td", {class:"right plain"}, k.token_id === "CGO" ? fmtCGO(k.amount) : (fmtInt(k.amount) + " " + k.token_id)),
+      el("td", {}, el("span", {class:"tag"}, k.status)),
+      el("td", {}, aAddr(k.creator)),
+      el("td", {}, aBlock(k.created_at_height || 0)),
+    ));
+    t.append(tb); c.append(t);
+  } catch (e) { renderErr(e.message); }
+}
+</script>
+
+</body>
+</html>
