@@ -243,12 +243,12 @@ chaingo.org, www.chaingo.org {
 }
 
 # --- API publique du nœud testnet ---
+# Le nœud ChainGO gère déjà CORS (Access-Control-Allow-Origin: *) côté
+# applicatif — ne PAS le rajouter ici, sinon double header refusé par les
+# navigateurs.
 node.chaingo.org {
     reverse_proxy 127.0.0.1:8545
     encode gzip
-
-    # CORS ouvert (le nœud renvoie déjà les bons headers, c'est une ceinture)
-    header Access-Control-Allow-Origin "*"
 }
 EOF
 
@@ -468,7 +468,7 @@ Ajouter ce bloc à `/etc/caddy/Caddyfile` :
 mainnet.chaingo.org {
     reverse_proxy 127.0.0.1:8546
     encode gzip
-    header Access-Control-Allow-Origin "*"
+    # PAS de header Access-Control-Allow-Origin : le nœud le gère déjà.
 }
 ```
 
@@ -533,3 +533,5 @@ Recommandé à terme (sécurité + isolation des charges). Procédure :
 - **HTTPS ne marche pas** : vérifier que le port 80 est ouvert (challenge Let's Encrypt), et que le DNS pointe bien vers le VPS.
 - **Le nœud ne démarre pas** : `sudo journalctl -u chaingo-testnet -n 50` — souvent un port déjà pris (`netstat -tlnp | grep 8545`).
 - **L'API renvoie 502** : Caddy tourne mais le nœud non. `sudo systemctl restart chaingo-testnet`.
+- **Wallet web "hors-ligne" avec erreur CORS `multiple values '*, *'`** : Caddy ajoute un en-tête `Access-Control-Allow-Origin` alors que le nœud le renvoie déjà. Retirer la ligne `header Access-Control-Allow-Origin ...` du bloc node.* du Caddyfile, puis `systemctl reload caddy`.
+- **gpg : `Inappropriate ioctl for device`** : pinentry ne trouve pas de TTY graphique en SSH. Activer le loopback : `mkdir -p ~/.gnupg && echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf && gpgconf --kill gpg-agent`, puis utiliser `gpg --pinentry-mode loopback -c ...`.
