@@ -23,6 +23,7 @@ func (v *Vote) MarshalBinary() ([]byte, error) {
 	e := codec.NewEncoder(256)
 	e.WriteString(v.ChainID)
 	e.WriteUvarint(v.Height)
+	e.WriteUvarint(uint64(v.Round))
 	e.WriteString(v.Kind)
 	e.WriteString(v.BlockHash)
 	e.WriteString(v.Voter)
@@ -40,6 +41,11 @@ func (v *Vote) UnmarshalBinary(data []byte) error {
 	if v.Height, err = d.ReadUvarint(); err != nil {
 		return fmt.Errorf("vote.height: %w", err)
 	}
+	r, err := d.ReadUvarint()
+	if err != nil {
+		return fmt.Errorf("vote.round: %w", err)
+	}
+	v.Round = uint32(r)
 	if v.Kind, err = d.ReadString(); err != nil {
 		return fmt.Errorf("vote.kind: %w", err)
 	}

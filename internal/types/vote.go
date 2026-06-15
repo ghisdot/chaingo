@@ -19,8 +19,14 @@ const (
 // Comme pour Transaction, l'ordre des champs EST le format de signature
 // canonique — ne pas réordonner.
 type Vote struct {
-	ChainID   string `json:"chain_id"`
-	Height    uint64 `json:"height"`
+	ChainID string `json:"chain_id"`
+	Height  uint64 `json:"height"`
+	// Round : round du bloc voté (= round de l'en-tête). Sert au verrouillage
+	// POL (#6) — un vote n'a de sens que rattaché à un round. L'équivocation
+	// devient « deux votes du même kind à la même hauteur ET au même round pour
+	// des hash différents » ; changer de vote à un round supérieur (sur preuve
+	// d'une polka plus récente) est légitime.
+	Round     uint32 `json:"round"`
 	Kind      string `json:"kind"` // PrecommitKind | PrevoteKind
 	BlockHash string `json:"block_hash"`
 	Voter     string `json:"voter"`

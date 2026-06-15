@@ -211,7 +211,7 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	if e.OnBlock != nil {
 		e.OnBlock(b)
 	}
-	e.castVote(height, b.Hash)
+	e.castVote(height, round, b.Hash)
 	return b
 }
 
@@ -303,7 +303,7 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		delete(e.evidence, evidenceKey(ev.Voter, ev.Height))
 	}
 	log.Printf("[consensus] block #%d accepted from peer: %d tx(s), %d preuve(s)", b.Header.Height, len(b.Txs), len(b.Evidence))
-	e.castVote(b.Header.Height, b.Hash)
+	e.castVote(b.Header.Height, b.Header.Round, b.Hash)
 	return nil
 }
 
@@ -314,9 +314,9 @@ var errWrongVoteChain = errors.New("vote on wrong chain")
 // castVote : émet prevote puis précommit pour le bloc qu'on vient de
 // committer. Le précommit reste celui qui décide la finalité ; le prevote
 // est posé en préparation de la tranche 2 (locking). Suppose e.mu détenu.
-func (e *Engine) castVote(height uint64, hash string) {
-	e.castVoteKind(height, types.PrevoteKind, hash)
-	e.castVoteKind(height, types.PrecommitKind, hash)
+func (e *Engine) castVote(height uint64, round uint32, hash string) {
+	e.castVoteKind(height, round, types.PrevoteKind, hash)
+	e.castVoteKind(height, round, types.PrecommitKind, hash)
 }
 
 // castVoteKind : émet un vote d'un kind donné, l'ajoute au pool et le diffuse.
@@ -325,7 +325,7 @@ func (e *Engine) castVote(height uint64, hash string) {
 // kind à la même hauteur. Sinon il produit lui-même une preuve d'équivocation
 // et se fait slasher. Ce garde-fou est aussi le prérequis d'un futur
 // fork-choice (la règle de verrouillage POL viendra en tranche 2).
-func (e *Engine) castVoteKind(height uint64, kind, hash string) {
+func (e *Engine) castVoteKind(height uint64, round uint32, kind, hash string) {
 	if e.key == nil {
 		return
 	}
@@ -339,7 +339,7 @@ func (e *Engine) castVoteKind(height uint64, kind, hash string) {
 		return
 	}
 	e.voted[height][kind] = hash
-	v := &types.Vote{ChainID: e.chainID, Height: height, Kind: kind, BlockHash: hash}
+	v := &types.Vote{ChainID: e.chainID, Height: height, Round: round, Kind: kind, BlockHash: hash}
 	v.SignWith(e.key)
 	e.votes.add(v)
 	if e.OnVote != nil {

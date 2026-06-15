@@ -24,8 +24,8 @@ func TestNoSelfEquivocation(t *testing.T) {
 	var emitted []*types.Vote
 	e.OnVote = func(v *types.Vote) { emitted = append(emitted, v) }
 
-	// castVote émet désormais prevote + précommit pour la hauteur 5.
-	e.castVote(5, "HASH_A")
+	// castVote émet désormais prevote + précommit pour la hauteur 5 (round 0).
+	e.castVote(5, 0, "HASH_A")
 	if len(emitted) != 2 {
 		t.Fatalf("un prevote + un précommit attendus à la hauteur 5, %d émis", len(emitted))
 	}
@@ -35,19 +35,19 @@ func TestNoSelfEquivocation(t *testing.T) {
 
 	// Re-vote à la même hauteur sur un AUTRE hash → REFUSÉ (anti-auto-équivocation),
 	// pour les DEUX kinds. Aucun vote supplémentaire émis.
-	e.castVote(5, "HASH_B")
+	e.castVote(5, 0, "HASH_B")
 	if len(emitted) != 2 {
 		t.Fatalf("re-vote conflictuel à la hauteur 5 ne doit RIEN émettre de plus, got %d", len(emitted))
 	}
 
 	// Idempotent (même hash) : pas de nouvelle émission non plus.
-	e.castVote(5, "HASH_A")
+	e.castVote(5, 0, "HASH_A")
 	if len(emitted) != 2 {
 		t.Fatalf("idempotence : pas d'émission attendue, got %d", len(emitted))
 	}
 
 	// Une nouvelle hauteur reste votable → 2 votes de plus.
-	e.castVote(6, "HASH_C")
+	e.castVote(6, 0, "HASH_C")
 	if len(emitted) != 4 {
 		t.Fatalf("nouvelle hauteur : 2 votes attendus de plus, got %d (total)", len(emitted))
 	}

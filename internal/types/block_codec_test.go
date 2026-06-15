@@ -40,6 +40,38 @@ func makeSignedVote(t *testing.T, kp *crypto.KeyPair, height uint64, blockHash s
 	return v
 }
 
+// TestVoteRoundPreserved : le champ Round (ajouté pour le verrouillage POL #6)
+// est couvert par la signature et survit le round-trip binaire.
+func TestVoteRoundPreserved(t *testing.T) {
+	kp, _ := crypto.GenerateKeyPair()
+	v := &Vote{ChainID: "t", Height: 9, Round: 3, Kind: PrecommitKind, BlockHash: "h"}
+	v.SignWith(kp)
+	if err := v.Verify(); err != nil {
+		t.Fatalf("vote round=3 invalide: %v", err)
+	}
+	// Altérer le round doit invalider la signature (le round EST signé).
+	tampered := *v
+	tampered.Round = 4
+	if tampered.Verify() == nil {
+		t.Fatal("changer le round doit invalider la signature")
+	}
+	// Round-trip binaire.
+	bin, err := v.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+	var dec Vote
+	if err := dec.UnmarshalBinary(bin); err != nil {
+		t.Fatalf("UnmarshalBinary: %v", err)
+	}
+	if dec.Round != 3 {
+		t.Fatalf("round attendu 3 après round-trip, got %d", dec.Round)
+	}
+	if err := dec.Verify(); err != nil {
+		t.Fatalf("vote invalide après round-trip: %v", err)
+	}
+}
+
 // TestVoteBinaryRoundtripPreservesSignature : un vote signé survit le round-trip.
 func TestVoteBinaryRoundtripPreservesSignature(t *testing.T) {
 	kp, _ := crypto.GenerateKeyPair()
