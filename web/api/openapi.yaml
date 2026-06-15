@@ -367,7 +367,9 @@ paths:
               required: [address]
               properties:
                 address: { type: string, description: adresse cg... destinataire }
-                amount: { type: integer, description: ucgo (1 CGO = 10^9 ucgo) ; 0 ou absent = 100 CGO }
+                amount:
+                  type: integer
+                  description: "ucgo (1 CGO = 10^9 ucgo) ; 0 ou absent = 100 CGO"
       responses:
         "202":
           description: Acceptée
@@ -460,7 +462,9 @@ components:
           type: integer
           description: plafond conseillé pour le champ max_base_fee
         suggested_tip: { type: integer, description: tip standard (ucgo) }
-        fast_tip: { type: integer, description: tip "rapide" }
+        fast_tip:
+          type: integer
+          description: 'tip "rapide"'
         private_extra_burn: { type: integer }
         token_create_fee: { type: integer }
         min_validator_stake: { type: integer }
@@ -495,7 +499,9 @@ components:
         contract_create_fee: { type: integer }
         slash_double_sign_bps: { type: integer, description: 500 = 5 % }
         downtime_jail_threshold: { type: integer }
-        slash_downtime_bps: { type: integer, description: 10 = 0,1 % }
+        slash_downtime_bps:
+          type: integer
+          description: "10 = 0,1 %"
         jail_seconds: { type: integer }
 
     Transaction:
@@ -549,7 +555,9 @@ components:
         prev_hash: { type: string }
         timestamp: { type: integer }
         proposer: { type: string }
-        round: { type: integer, description: 0 = nominal, > 0 = round de secours }
+        round:
+          type: integer
+          description: "0 = nominal, > 0 = round de secours"
         tx_root: { type: string }
         evidence_root: { type: string }
         last_commit_root: { type: string }
