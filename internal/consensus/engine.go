@@ -53,6 +53,10 @@ type Engine struct {
 	votes   *votePool
 	chainID string
 	OnVote  func(*types.Vote) // hook broadcast p2p des votes
+	// voted : hauteur -> hash déjà précommit PAR CE NŒUD. Invariant de sûreté
+	// BFT : on ne signe JAMAIS deux précommits à la même hauteur (sinon on
+	// déclenche notre propre règle d'équivocation → auto-slash).
+	voted map[uint64]string
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -74,6 +78,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		heartbeat:    20,
 		lastProgress: time.Now(),
 		votes:        newVotePool(),
+		voted:        map[uint64]string{},
 		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
@@ -180,6 +185,7 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	if len(lastCommit) > 0 {
 		e.st.SetFinalized(height - 1)
 		e.votes.prune(height - 1)
+		e.pruneVotedLocked(height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -264,6 +270,7 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	if finalizesParent {
 		e.st.SetFinalized(b.Header.Height - 1)
 		e.votes.prune(b.Header.Height - 1)
+		e.pruneVotedLocked(b.Header.Height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -286,15 +293,42 @@ var errWrongVoteChain = errors.New("vote on wrong chain")
 // de committer, l'ajoute au pool et le diffuse. Suppose e.mu détenu. La
 // finalité n'est PAS décidée ici : elle l'est quand un bloc ultérieur porte
 // le commit ≥ 2/3 (buildLastCommit / verifyCommit).
+//
+// INVARIANT DE SÛRETÉ BFT : un validateur ne signe jamais deux précommits à
+// la même hauteur. Sinon il produit lui-même une preuve d'équivocation et se
+// fait slasher. Ce garde-fou est aussi le prérequis d'un futur fork-choice.
 func (e *Engine) castVote(height uint64, hash string) {
 	if e.key == nil {
 		return
 	}
+	if prev, ok := e.voted[height]; ok {
+		if prev != hash {
+			log.Printf("[consensus] SÛRETÉ : refus de précommit un 2e bloc (%s…) à la hauteur #%d — déjà voté %s… (anti-auto-équivocation)", short(hash), height, short(prev))
+		}
+		return // déjà voté à cette hauteur : on ne re-signe pas
+	}
+	e.voted[height] = hash
 	v := &types.Vote{ChainID: e.chainID, Height: height, BlockHash: hash}
 	v.SignWith(e.key)
 	e.votes.add(v)
 	if e.OnVote != nil {
 		e.OnVote(v)
+	}
+}
+
+func short(h string) string {
+	if len(h) > 8 {
+		return h[:8]
+	}
+	return h
+}
+
+// pruneVotedLocked oublie les précommits émis aux hauteurs déjà finalisées.
+func (e *Engine) pruneVotedLocked(upTo uint64) {
+	for h := range e.voted {
+		if h <= upTo {
+			delete(e.voted, h)
+		}
 	}
 }
 

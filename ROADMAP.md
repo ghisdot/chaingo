@@ -27,8 +27,10 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       `chaingo keygen`. **Finalité persistante & vérifiable** : chaque bloc porte le
       *commit* (≥ 2/3) du bloc parent (`LastCommit` + `LastCommitRoot` au header) →
       `finalized_height` dérivé de la chaîne, survit au redémarrage (vérifié) et
-      n'est plus recalculé localement. Reste : verrouillage type Tendermint complet
-      (prevote + locking), set de validateurs figé par hauteur.
+      n'est plus recalculé localement. **Invariant anti-auto-équivocation** enforced (un
+      nœud ne signe jamais 2 précommits à la même hauteur). Reste : verrouillage type
+      Tendermint complet (prevote + locking), set de validateurs figé par hauteur, fork-choice
+      — design : [docs/design/phase2-bft-safety.md](docs/design/phase2-bft-safety.md).
 - [x] Slashing — [#7](https://github.com/ghisdot/chaingo/issues/7) : **double-signature**
       (preuve d'équivocation dans le bloc, slash 5 % stake+délégations, idempotent) **et
       inactivité (downtime)** : round inscrit dans l'en-tête (déterministe), comptage des
