@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -20,6 +21,7 @@ import (
 	"chaingo/internal/state"
 	"chaingo/internal/types"
 	"chaingo/internal/wallet"
+	"chaingo/internal/wasmvm"
 )
 
 const usage = `ChainGO — blockchain post-quantique (ML-DSA-65 / FIPS 204)
@@ -48,10 +50,13 @@ Usage :
                [--token CGO] [--arbiter <adresse>] [--pass MDP] [--api URL]
   chaingo contract multisig --from <wallet> --signers a,b,c --threshold 2 --amount 100
                [--pass MDP] [--api URL]
-  chaingo contract propose --from <wallet> --id <coffre> --to <adresse> --amount 50 [--api URL]
-  chaingo contract approve --from <wallet> --id <coffre> [--proposal 0] [--api URL]
+  chaingo contract dao --from <wallet> --signers a,b,c --threshold 2 --amount 5000
+               [--pass MDP] [--api URL]   (membres + quorum + trésorerie)
+  chaingo contract propose --from <wallet> --id <coffre|dao> --to <adresse> --amount 50 [--api URL]
+  chaingo contract approve|reject --from <wallet> --id <coffre|dao> [--proposal 0] [--api URL]
   chaingo contract claim|release|refund --from <wallet> --id <contrat> [--pass MDP] [--api URL]
   chaingo contract list [--api URL]
+  chaingo wasm run <fichier.wasm> <fonction> [arg_u64 ...]   (PREVIEW WASM, sandbox locale)
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo keygen [--out validator.seed]      (génère une seed de validateur ML-DSA-65)
   chaingo genesis template [--chain-id ID] [--out genesis.json] [--seed-out FILE]
@@ -102,6 +107,8 @@ func main() {
 		err = cmdBench(os.Args[2:])
 	case "loadtest":
 		err = cmdLoadtest(os.Args[2:])
+	case "wasm":
+		err = cmdWasm(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -1020,4 +1027,36 @@ func formatAmount(v uint64, d uint8) string {
 		return strconv.FormatUint(whole, 10)
 	}
 	return strconv.FormatUint(whole, 10) + "." + frac
+}
+
+// cmdWasm : PREVIEW expérimentale du moteur WASM (hors-consensus). Exécute une
+// fonction d'un fichier .wasm en SANDBOX locale — PAS sur la chaîne.
+//   chaingo wasm run <fichier.wasm> <fonction> [arg_u64 ...]
+func cmdWasm(args []string) error {
+	if len(args) < 3 || args[0] != "run" {
+		return fmt.Errorf("usage : chaingo wasm run <fichier.wasm> <fonction> [arg_u64 ...]")
+	}
+	code, err := os.ReadFile(args[1])
+	if err != nil {
+		return err
+	}
+	fn := args[2]
+	var callArgs []uint64
+	for _, a := range args[3:] {
+		v, err := strconv.ParseUint(a, 10, 64)
+		if err != nil {
+			return fmt.Errorf("argument %q invalide (entier u64 attendu)", a)
+		}
+		callArgs = append(callArgs, v)
+	}
+	fmt.Println("⚠ PREVIEW expérimentale — exécution en sandbox LOCALE, pas sur la chaîne (voir docs/design/wasm-vm.md)")
+	res, err := wasmvm.Run(context.Background(), code, fn, 2*time.Second, callArgs...)
+	if err != nil {
+		return err
+	}
+	for _, l := range res.Logs {
+		fmt.Printf("[log] %s\n", l)
+	}
+	fmt.Printf("retour : %v\n", res.Returns)
+	return nil
 }
