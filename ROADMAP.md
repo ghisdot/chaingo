@@ -38,12 +38,13 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       tant que jailé, sortie via `chaingo unjail` après le délai.
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
-- [ ] **Codec binaire compact** (remplace JSON+base64 sur le réseau et en DB) — [#8](https://github.com/ghisdot/chaingo/issues/8)
-      Priorité haute : les signatures ML-DSA-65 font ~3,3 Ko ; encodées en base64 dans
-      du JSON elles passent à ~4,4 Ko + structure. Avec un codec binaire (varint +
-      length-prefixed), on gagne ~25 % de bande passante P2P et de stockage. Critique
-      pour tenir la charge d'un testnet public bien fréquenté. `SigningBytes` reste JSON
-      canonique (sinon casse toutes les signatures existantes).
+- [~] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
+      Tranche 1 livrée : primitives `internal/codec/` (varint, length-prefixed,
+      protections taille max et octets parasites) + `Transaction.MarshalBinary/UnmarshalBinary`.
+      Gain mesuré **27 %** sur une tx signée typique (7,4 Ko JSON → 5,4 Ko binaire).
+      `SigningBytes` reste JSON canonique → toutes les signatures existantes
+      restent valides après round-trip binaire (vérifié par test).
+      Reste : `Block`, `Vote`, `DoubleSignEvidence`, intégration P2P, stockage DB.
 - [~] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)) :
       unitaires (consensus, state, genesis) + **intégration multi-validateurs en mémoire**
       (4 nœuds convergent + finalisent, synchro d'un nœud tardif). À étendre : fuzzing réseau,
