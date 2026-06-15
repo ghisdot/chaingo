@@ -405,10 +405,16 @@ func (e *Engine) pruneVotedLocked(upTo uint64) {
 }
 
 // recordEquivocation : transforme un précommit conflictuel en preuve à
-// inclure dans un futur bloc (sauf si la faute est déjà punie ou déjà
-// connue). Pour cette tranche, seuls les précommits déclenchent un slash.
+// inclure dans un futur bloc (sauf si la faute est déjà punie ou déjà connue).
+//
+// #8 : les PREVOTES équivoques sont désormais punis comme les précommits.
+// Signer deux votes (du même kind) pour des blocs différents à la même hauteur
+// ET au même round est une faute byzantine prouvable — que ce soit un prevote
+// ou un précommit. (`prev` et `cur` partagent kind et round : le votePool les
+// détecte par (hauteur, round, kind, voter), donc un changement cross-round
+// légitime n'arrive jamais ici.) Le chemin de slash en aval est kind-agnostique.
 func (e *Engine) recordEquivocation(prev, cur *types.Vote) {
-	if cur.Kind != types.PrecommitKind {
+	if cur.Kind != types.PrecommitKind && cur.Kind != types.PrevoteKind {
 		return
 	}
 	key := evidenceKey(cur.Voter, cur.Height)
@@ -418,7 +424,7 @@ func (e *Engine) recordEquivocation(prev, cur *types.Vote) {
 	e.evidence[key] = &types.DoubleSignEvidence{
 		Height: cur.Height, Voter: cur.Voter, VoteA: prev, VoteB: cur,
 	}
-	log.Printf("[consensus] ÉQUIVOCATION détectée : %s a précommit 2 blocs à la hauteur #%d — preuve en attente de slash", cur.Voter, cur.Height)
+	log.Printf("[consensus] ÉQUIVOCATION détectée : %s a signé 2 %ss en conflit à la hauteur #%d round %d — preuve en attente de slash", cur.Voter, cur.Kind, cur.Height, cur.Round)
 }
 
 // AddVote : vote reçu d'un pair (prevote ou précommit). Renvoie true s'il est
