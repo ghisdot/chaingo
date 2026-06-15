@@ -61,9 +61,13 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       (tx/block/vote + frames P2P) qui a révélé et corrigé une faille DoS (allocation non
       bornée sur compteur de slice). À étendre : scénarios de fautes (proposeur hors-ligne,
       équivocation) bout-en-bout.
-- [x] Mode `--testnet` (chain_id `chaingo-testnet-1`, faucet ouvert, unbonding 24 h) — prêt à héberger
-- [ ] Testnet public multi-validateurs en ligne 24/24 (nécessite un serveur)
-- [ ] Audit de sécurité externe
+- [x] Mode `--testnet` (chain_id `chaingo-testnet-1`, faucet ouvert, unbonding 24 h) + faucet rate-limité
+- [x] **Gouvernance des mises à jour réseau** : version de protocole au handshake P2P, **kick** des
+      nœuds trop vieux + **alerte** si le nœud local est en retard — voir [network-upgrades.md](docs/design/network-upgrades.md)
+- [x] Testnet public **en ligne 24/24** (chaingo.org) — la chaîne finalise en continu
+- [ ] **Validateurs INDÉPENDANTS** (≥ 4 entités distinctes) — aujourd'hui sur les machines du mainteneur ;
+      c'est le vrai jalon de décentralisation avant mainnet ([#12](https://github.com/ghisdot/chaingo/issues/12))
+- [ ] Audit de sécurité externe (communautaire/gratuit envisagé)
 
 ## Phase 3 — Anonymat fort
 
@@ -79,8 +83,14 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 - [x] Déploiement en un appel API / une commande (`chaingo contract …`)
 - [x] **Template multisig M-of-N** : coffre à N signataires, M approbations pour dépenser
       (propose/approve), exécution au seuil — pour les coffres trésorerie/communauté
-- [ ] Template DAO (gouvernance on-chain)
-- [ ] VM WASM déterministe pour les développeurs
+- [x] **Template DAO** (gouvernance on-chain) : trésorerie partagée, membres, propositions
+      de paiement votées POUR/CONTRE, exécution au quorum, rejet automatique si le quorum
+      devient inatteignable. CLI + studio + tests.
+- [~] **Moteur WASM** (contrats arbitraires façon ETH/BNB, en WebAssembly) — **preview
+      expérimentale livrée** (`internal/wasmvm`, runtime wazero Go pur) : charge et exécute
+      réellement du WASM, mais **HORS-CONSENSUS** (gas wall-clock non déterministe). Le moteur
+      consensus-grade (gas déterministe par instrumentation, API hôte d'état, tx deploy/call,
+      audit) est le plus gros chantier restant — voir [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 
 ## Phase 5 — Écosystème
 
@@ -92,7 +102,10 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       (hauteur, mempool, base fee, brûlé), signature ML-DSA-65 dans le navigateur via WASM
 - [x] **Test de distribution mainnet** (1 Md CGO réparti 50/20/15/10/5) vérifié on-chain :
       supply pile, vesting équipe réclamable à mi-parcours et au-delà
-- [~] Explorateur de blocs public — couche API livrée (bloc-par-hash, historique tx d'une adresse, recherche universelle). Front explorateur à venir.
+- [x] **Explorateur de blocs public** (`/explorer/`) — blocs, tx, comptes, validateurs, tokens en direct
+- [x] **Studio no-code** (`/studio/`) — créer un token et déployer vesting/escrow/multisig/DAO depuis
+      le navigateur, signature ML-DSA-65 locale, coût de déploiement « gas » affiché
+- [x] **Validator Dashboard** (`/validator/`) — état, stake/unstake/unjail, liste publique, alerte « nœud à jour »
 - [ ] SDK JavaScript et Python ([#4](https://github.com/ghisdot/chaingo/issues/4))
 - [ ] Documentation (docs/) traduite en anglais
 - [x] Outillage de genèse (`chaingo genesis template|validate`, vesting on-chain à la genèse, empreinte déterministe)

@@ -17,8 +17,8 @@ finalisation du consensus BFT (Phase 2).
 - 🔐 **Sécurité post-quantique** native, partout dans la chaîne.
 - ⚡ **~31 000 TPS** mesurés bout-en-bout (vérification PQ parallèle + exécution).
 - 🔥 **Économie déflationniste** : frais EIP-1559 brûlés, supply élastique.
-- 🪙 **No-code** : tokens, vesting, escrow, multisig — sans écrire de smart contract.
-- 🌐 **P2P** pair-à-pair, rejoignable par n'importe qui.
+- 🪙 **No-code** : tokens, vesting, escrow, multisig, DAO — déployables **depuis le navigateur** (studio), sans écrire de smart contract.
+- 🌐 **P2P** pair-à-pair, rejoignable par n'importe qui, avec gouvernance des mises à jour (version de protocole).
 
 ---
 
@@ -33,8 +33,13 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
   tokens et contrats no-code. Les clés sont générées et conservées **dans
   votre navigateur** (jamais envoyées à un serveur).
 - **Obtenir des CGO de test** : voir [docs/GET-CGO.md](docs/GET-CGO.md).
+- **Studio no-code** : <https://chaingo.org/studio/>
+  Créer un token ou déployer un contrat (vesting, escrow, multisig, DAO) en
+  quelques clics, signature post-quantique dans le navigateur.
 - **Explorateur de blocs** : <https://chaingo.org/explorer/>
   Parcourir les blocs, transactions, comptes, validateurs et tokens en direct.
+- **Validator Dashboard** : <https://chaingo.org/validator/>
+  Gérer son nœud validateur (stake, délégations, sortie de prison) et voir le set.
 - **Référence API** : <https://chaingo.org/api/>
 
 ### 🛡️ Vous voulez faire tourner un nœud ou devenir validateur
@@ -67,7 +72,7 @@ réseau ChainGO choisit les siennes. Valeurs par défaut :
 | Émission | **~3 %/an sur le stake total** | mintée au proposeur de chaque bloc, pondéré par le stake |
 | Frais | **EIP-1559 dynamiques** | base fee ajusté à la congestion et **brûlé** ; tip libre au validateur |
 | Création de token | 10 CGO brûlés | anti-spam |
-| Smart contracts no-code | vesting, escrow, multisig | templates natifs paramétrés, 1 CGO brûlé à la création |
+| Smart contracts no-code | vesting, escrow, multisig, DAO | templates natifs paramétrés, 1 CGO brûlé à la création |
 | Stake validateur | **minimum 10 000 CGO** | en dessous : transaction rejetée |
 | Délégation | dès **1 CGO**, commission 10 % | les petits holders délèguent à un validateur et touchent leur part au pro-rata |
 | Unbonding | **21 jours** (mainnet), 24 h (testnet) | s'applique au stake et aux délégations retirées |
@@ -126,11 +131,20 @@ Documentation complète :
 
 ## État du projet
 
-Phase 1 (fondations) et la majeure partie des Phases 4 et 5 sont livrées. La
-Phase 2 (sécurité de production : consensus BFT durci, audit) est en cours et
-conditionne le passage en mainnet. La Phase 3 (anonymat fort via zk-STARK) suit.
+- **Phase 1 — Fondations** : ✅ complète.
+- **Phase 2 — Sécurité de production** : 🟢 consensus BFT durci (set de validateurs figé
+  par hauteur, verrouillage POL, slashing complet, fork-choice + reorg testé en partition),
+  codec binaire, fuzzing, gouvernance des mises à jour. **Reste** : audit externe et, surtout,
+  des **validateurs indépendants** (aujourd'hui sur les machines du mainteneur — c'est le vrai
+  jalon de décentralisation avant mainnet).
+- **Phase 4 — Smart contracts no-code** : 🟢 templates vesting / escrow / multisig / **DAO**
+  livrés + déployables depuis le studio. **Preview** d'un moteur WASM (contrats arbitraires)
+  livrée mais **hors-consensus** ; le moteur consensus-grade reste à construire et auditer.
+- **Phase 5 — Écosystème** : 🟢 wallet web, explorateur, studio, dashboard validateur, banc d'essai.
+  **Reste** : SDK JS/Python, doc EN complète.
+- **Phase 3 — Anonymat fort (zk-STARK)** : ⬜ post-mainnet.
 
-Voir [ROADMAP.md](ROADMAP.md) pour le détail.
+Voir [ROADMAP.md](ROADMAP.md) pour le détail complet et honnête.
 
 ## Licence
 

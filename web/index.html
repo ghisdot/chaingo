@@ -227,10 +227,10 @@
       </div>
       <div class="card" data-i18n="p.c4">
         <h3><span class="ico">🪙</span> Tokens &amp; contrats no-code <span class="tag live">ACTIF</span></h3>
-        <p>Créez votre token en une commande — nom, supply, décimales. Et déployez des
-        <b>smart contracts sans code</b> : vesting (déblocage progressif), escrow
-        (séquestre) et <b>multisig M-of-N</b> (coffre à plusieurs signataires), des
-        templates natifs audités une fois pour tous.</p>
+        <p>Créez votre token et déployez des <b>smart contracts sans code</b> depuis le
+        <a href="/studio/">studio</a> : vesting (déblocage progressif), escrow (séquestre),
+        <b>multisig M-of-N</b> et <b>DAO</b> (gouvernance : trésorerie votée par les membres) —
+        des templates natifs audités une fois pour tous.</p>
       </div>
       <div class="card" data-i18n="p.c5">
         <h3><span class="ico">🕶️</span> Anonymat renforcé <span class="tag soon">PHASE 3</span></h3>
@@ -353,24 +353,27 @@
         <b>premiers smart contracts no-code (vesting, escrow)</b>, wallets, P2P, API REST,
         31 000 TPS au bench.</p>
       </div>
-      <div class="phase next" data-i18n="r.p2">
-        <h3>Phase 2 — Consensus BFT &amp; slashing</h3>
-        <p>Votes de finalité multi-validateurs (2f+1), pénalités pour validateurs malhonnêtes,
-        arbre de Merkle creux, codec binaire compact.</p>
+      <div class="phase done" data-i18n="r.p2">
+        <h3>Phase 2 — Consensus BFT &amp; slashing <span class="tag live">QUASI LIVRÉ</span></h3>
+        <p>Finalité multi-validateurs (2f+1), set de validateurs figé par hauteur, verrouillage POL,
+        slashing complet (double-signature + inactivité), fork-choice + reorg testé en partition,
+        codec binaire. Reste : audit externe et des validateurs indépendants.</p>
       </div>
       <div class="phase" data-i18n="r.p3">
         <h3>Phase 3 — Anonymat fort</h3>
         <p>Transferts confidentiels zk-STARK (résistants au quantique) + adresses furtives.
-        Le mode <i>private</i> actuel deviendra un vrai bouclier de confidentialité.</p>
+        Le mode <i>private</i> actuel deviendra un vrai bouclier de confidentialité. (Post-mainnet.)</p>
       </div>
-      <div class="phase" data-i18n="r.p4">
-        <h3>Phase 4 — Smart contracts no-code</h3>
-        <p>Vesting, escrow et multisig M-of-N sont en ligne. La suite : template DAO,
-        puis VM WASM déterministe pour les développeurs.</p>
+      <div class="phase done" data-i18n="r.p4">
+        <h3>Phase 4 — Smart contracts no-code <span class="tag live">ACTIF</span></h3>
+        <p>Vesting, escrow, multisig et <b>DAO</b> sont en ligne, déployables depuis le studio.
+        Une <b>preview</b> de moteur WASM (contrats arbitraires) existe, mais hors-consensus —
+        le moteur consensus-grade reste à construire et auditer.</p>
       </div>
-      <div class="phase" data-i18n="r.p5">
-        <h3>Phase 5 — Explorateur &amp; SDK</h3>
-        <p>Explorateur de blocs public, SDK JavaScript et Python, documentation interactive.</p>
+      <div class="phase done" data-i18n="r.p5">
+        <h3>Phase 5 — Écosystème <span class="tag live">ACTIF</span></h3>
+        <p>Explorateur, studio no-code, dashboard validateur et banc d'essai en ligne.
+        La suite : SDK JavaScript &amp; Python et documentation complète.</p>
       </div>
     </div>
   </div>
@@ -435,7 +438,7 @@ const EN = {
   'p.c1': `<h3><span class="ico">🛡️</span> Post-quantum security <span class="tag live">LIVE</span></h3><p>Every wallet, transaction and block is signed with ML-DSA-65 (FIPS 204, NIST level 3). SHA3-256 hashing. No quantum-vulnerable elliptic curves, anywhere.</p>`,
   'p.c2': `<h3><span class="ico">⚡</span> Speed <span class="tag live">LIVE</span></h3><p>31,000 transactions/second measured (verification + execution) thanks to parallel verification across all cores. Blocks every 500 ms, confirmation in ~1 second. Optional <b>tip</b> to jump the queue.</p>`,
   'p.c3': `<h3><span class="ico">🔥</span> Deflationary economics <span class="tag live">LIVE</span></h3><p>Base fees are <b>destroyed</b> (burned) on every transaction, automatically adjusted to congestion (EIP-1559 model). The more the network is used, the scarcer CGO becomes.</p>`,
-  'p.c4': `<h3><span class="ico">🪙</span> No-code tokens &amp; contracts <span class="tag live">LIVE</span></h3><p>Create your token with one command — name, supply, decimals. And deploy <b>smart contracts without code</b>: vesting (gradual release), escrow and <b>M-of-N multisig</b> (multi-signer vault), native templates audited once for everyone.</p>`,
+  'p.c4': `<h3><span class="ico">🪙</span> No-code tokens &amp; contracts <span class="tag live">LIVE</span></h3><p>Create your token and deploy <b>smart contracts without code</b> from the <a href="/studio/">studio</a>: vesting (gradual release), escrow, <b>M-of-N multisig</b> and <b>DAO</b> (member-governed treasury) — native templates audited once for everyone.</p>`,
   'p.c5': `<h3><span class="ico">🕶️</span> Enhanced anonymity <span class="tag soon">PHASE 3</span></h3><p>Today: pseudonymity (non-nominative addresses, public history). Tomorrow: confidential transfers via <b>zk-STARK</b> proofs — the only quantum-resistant zero-knowledge family — and stealth addresses.</p>`,
   'p.c6': `<h3><span class="ico">🌐</span> Decentralization <span class="tag live">LIVE</span></h3><p>Peer-to-peer network: every node syncs and relays. Validate with 10,000 CGO or <b>delegate from 1 CGO</b> — block proposers are drawn weighted by stake, and fallback rounds keep the chain moving even when validators go offline.</p>`,
   'f.h2': `How it works`,
@@ -464,10 +467,10 @@ const EN = {
   'r.h2': `Roadmap`,
   'r.lead': `Transparent — including about what doesn't exist yet.`,
   'r.p1': `<h3>Phase 1 — Foundations <span class="tag live">SHIPPED</span></h3><p>Complete post-quantum chain: Aurora PoS consensus with fallback rounds, burned EIP-1559 fees, staking + delegation + unbonding, no-code tokens, <b>first no-code smart contracts (vesting, escrow)</b>, wallets, P2P, REST API, 31,000 TPS benchmarked.</p>`,
-  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing</h3><p>Multi-validator finality votes (2f+1), penalties for dishonest validators, sparse Merkle tree, compact binary codec.</p>`,
-  'r.p3': `<h3>Phase 3 — Strong anonymity</h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield.</p>`,
-  'r.p4': `<h3>Phase 4 — No-code smart contracts</h3><p>Vesting, escrow and M-of-N multisig are live. Next: a DAO template, then a deterministic WASM VM for developers.</p>`,
-  'r.p5': `<h3>Phase 5 — Explorer &amp; SDKs</h3><p>Public block explorer, JavaScript and Python SDKs, interactive documentation.</p>`,
+  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag live">NEARLY SHIPPED</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec. Remaining: external audit and independent validators.</p>`,
+  'r.p3': `<h3>Phase 3 — Strong anonymity</h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield. (Post-mainnet.)</p>`,
+  'r.p4': `<h3>Phase 4 — No-code smart contracts <span class="tag live">LIVE</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> are live, deployable from the studio. A WASM engine (arbitrary contracts) <b>preview</b> exists but is out-of-consensus — the consensus-grade engine still has to be built and audited.</p>`,
+  'r.p5': `<h3>Phase 5 — Ecosystem <span class="tag live">LIVE</span></h3><p>Explorer, no-code studio, validator dashboard and load tester are online. Next: JavaScript &amp; Python SDKs and full documentation.</p>`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
   'd.links': `Don't want the command line? <a href="/wallet/">Create your wallet in the browser</a> or <a href="/explorer/">browse the chain live</a>. Want to run your own node or integrate ChainGO? <a href="/api/">API reference</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">source code</a>.`,

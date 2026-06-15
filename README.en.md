@@ -16,7 +16,7 @@ finalization of the BFT consensus (Phase 2).
 - 🔐 **Native post-quantum security**, end-to-end.
 - ⚡ **~31,000 TPS** end-to-end (parallel PQ verification + execution).
 - 🔥 **Deflationary economics**: burned EIP-1559 base fees, elastic supply.
-- 🪙 **No-code**: tokens, vesting, escrow, multisig — without writing a smart contract.
+- 🪙 **No-code**: tokens, vesting, escrow, multisig, DAO — deploy **from the browser** (studio), without writing a smart contract.
 - 🌐 **P2P** network, anyone can join.
 
 ---
@@ -64,7 +64,7 @@ picks its own. Defaults:
 | Emission | ~3 %/year on total stake, minted to block proposers |
 | Fees | dynamic EIP-1559: **burned** base fee + free-market tip |
 | Token creation | 10 CGO burned (anti-spam), fully no-code |
-| No-code smart contracts | vesting, escrow, multisig — 1 CGO burned per contract |
+| No-code smart contracts | vesting, escrow, multisig, DAO — 1 CGO burned per contract |
 | Validators | 10,000 CGO minimum stake; fallback rounds keep liveness when validators go offline |
 | Delegation | from 1 CGO, 10 % validator commission, pro-rata rewards every block |
 | Unbonding | 21 days (mainnet), 24 h (testnet) |
@@ -116,11 +116,20 @@ Full documentation:
 
 ## Project status
 
-Phase 1 (foundations) and most of Phases 4 and 5 are shipped. Phase 2
-(production security: hardened BFT, audit) is in progress and gates the
-mainnet launch. Phase 3 (strong anonymity via zk-STARK) follows.
+- **Phase 1 — Foundations**: ✅ complete.
+- **Phase 2 — Production security**: 🟢 hardened BFT (height-frozen validator set, POL
+  locking, full slashing, fork-choice + reorg with a partition test), binary codec, fuzzing,
+  network-upgrade governance. **Remaining**: external audit and — above all — **independent
+  validators** (today on the maintainer's machines; this is the real decentralization milestone
+  before mainnet).
+- **Phase 4 — No-code smart contracts**: 🟢 vesting / escrow / multisig / **DAO** templates
+  shipped and deployable from the studio. A WASM engine (arbitrary contracts) **preview** is
+  shipped but **out-of-consensus**; the consensus-grade engine still has to be built and audited.
+- **Phase 5 — Ecosystem**: 🟢 web wallet, explorer, studio, validator dashboard, load tester.
+  **Remaining**: JS/Python SDKs, full EN docs.
+- **Phase 3 — Strong anonymity (zk-STARK)**: ⬜ post-mainnet.
 
-See [ROADMAP.md](ROADMAP.md) for details.
+See [ROADMAP.md](ROADMAP.md) for the full, honest breakdown.
 
 ## License
 
