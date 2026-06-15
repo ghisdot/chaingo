@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChainGO API — référence</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; }
+    .topbar {
+      background: #0b0f17; color: #e6edf6;
+      padding: 14px 24px; border-bottom: 1px solid #1f2a40;
+      display: flex; gap: 18px; align-items: center;
+    }
+    .topbar a { color: #22d3ee; text-decoration: none; font-size: .92rem; }
+    .topbar a:hover { color: #fff; }
+    .topbar .logo { font-weight: 800; font-size: 1.1rem; margin-right: 14px; }
+    .topbar .logo span {
+      background: linear-gradient(90deg, #22d3ee, #8b5cf6);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .spacer { flex: 1; }
+    .download {
+      font-size: .82rem; padding: 5px 12px; border-radius: 8px;
+      border: 1px solid #1f2a40; background: #131b2c; color: #22d3ee;
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="logo">Chain<span>GO</span> API</span>
+  <a href="/">Accueil</a>
+  <a href="/wallet/">Wallet</a>
+  <a href="https://github.com/ghisdot/chaingo" target="_blank" rel="noopener">GitHub</a>
+  <div class="spacer"></div>
+  <a class="download" href="openapi.yaml" download>Télécharger openapi.yaml</a>
+</div>
+
+<redoc spec-url="openapi.yaml"
+       theme='{"colors":{"primary":{"main":"#22d3ee"}},"typography":{"fontFamily":"Segoe UI, system-ui, sans-serif"}}'>
+</redoc>
+
+<script src="https://cdn.redocly.com/redoc/v2.1.5/bundles/redoc.standalone.js"></script>
+</body>
+</html>

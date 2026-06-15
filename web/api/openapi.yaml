@@ -1,0 +1,714 @@
+openapi: 3.1.0
+info:
+  title: ChainGO API
+  version: "1.0"
+  summary: API REST publique de la blockchain post-quantique ChainGO
+  description: |
+    API JSON pour interroger une chaîne ChainGO et y soumettre des transactions.
+    Toutes les signatures (transactions, blocs, votes) utilisent **ML-DSA-65**
+    (FIPS 204, post-quantique). Hachage SHA3-256. Adresses préfixées `cg`.
+
+    - **Source officielle** : https://github.com/ghisdot/chaingo
+    - **Wallet web** : https://chaingo.org/wallet/
+    - **Testnet public** : https://node.chaingo.org
+
+    Erreurs uniformes : statut HTTP ≥ 400 → `{ "error": "message" }`.
+    CORS ouvert (`Access-Control-Allow-Origin: *`).
+  license:
+    name: MIT
+    url: https://github.com/ghisdot/chaingo/blob/main/LICENSE
+  contact:
+    name: ChainGO
+    url: https://chaingo.org
+
+servers:
+  - url: https://node.chaingo.org
+    description: Testnet public (chain_id chaingo-testnet-1)
+  - url: http://127.0.0.1:8545
+    description: Nœud local
+
+tags:
+  - name: État
+    description: État global de la chaîne, paramètres économiques, supply
+  - name: Blocs
+    description: Lecture des blocs (par hauteur ou par hash)
+  - name: Transactions
+    description: Lecture et soumission de transactions
+  - name: Comptes
+    description: Soldes, nonce, délégations, historique des transactions
+  - name: Validateurs
+    description: Set actif, stake, récompenses, jail
+  - name: Tokens & contrats
+    description: Tokens no-code, contrats no-code (vesting, escrow, multisig)
+  - name: Recherche
+    description: Recherche universelle pour l'explorateur
+  - name: Devnet
+    description: Endpoints disponibles uniquement en mode --dev ou --testnet
+
+paths:
+  /v1/status:
+    get:
+      tags: [État]
+      summary: État synthétique du nœud et de la chaîne
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+
+  /v1/fees:
+    get:
+      tags: [État]
+      summary: Tout ce qu'il faut savoir pour construire une transaction
+      description: |
+        Renvoie le base fee courant (EIP-1559, brûlé), un plafond conseillé,
+        les tips recommandés, et les seuils de stake/délégation/unbonding.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Fees" }
+
+  /v1/supply:
+    get:
+      tags: [État]
+      summary: Supply totale, mintée, brûlée
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Supply" }
+
+  /v1/mempool:
+    get:
+      tags: [Transactions]
+      summary: Taille de la file d'attente de transactions
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  size: { type: integer }
+
+  /v1/genesis:
+    get:
+      tags: [État]
+      summary: Document de genèse complet
+      description: |
+        Pour rejoindre un réseau ChainGO existant : `chaingo node start
+        --genesis-url <cette URL>`.
+      responses:
+        "200":
+          description: Document JSON de genèse
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Genesis" }
+
+  /v1/blocks:
+    get:
+      tags: [Blocs]
+      summary: Derniers blocs
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Block" }
+
+  /v1/blocks/{ref}:
+    get:
+      tags: [Blocs]
+      summary: Un bloc par hauteur (ou "latest")
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          schema:
+            oneOf:
+              - { type: integer, minimum: 0 }
+              - { type: string, enum: [latest] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Block" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/blocks/by-hash/{hash}:
+    get:
+      tags: [Blocs]
+      summary: Un bloc par son hash
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Block" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/tx:
+    post:
+      tags: [Transactions]
+      summary: Soumettre une transaction signée
+      description: |
+        La transaction doit être signée en **ML-DSA-65** sur sa
+        sérialisation JSON canonique (champ `signature` exclus, ordre des
+        champs fixe : voir [tx.go](https://github.com/ghisdot/chaingo/blob/main/internal/types/tx.go)).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Transaction" }
+      responses:
+        "202":
+          description: Acceptée par le mempool (pas encore incluse dans un bloc)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hash: { type: string }
+                  status: { type: string, enum: [pending] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /v1/tx/{hash}:
+    get:
+      tags: [Transactions]
+      summary: Une transaction confirmée
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx: { $ref: "#/components/schemas/Transaction" }
+                  block_height: { type: integer }
+                  status: { type: string, enum: [confirmed] }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/accounts/{addr}:
+    get:
+      tags: [Comptes]
+      summary: État d'un compte
+      parameters: [{ $ref: "#/components/parameters/Addr" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+
+  /v1/accounts/{addr}/txs:
+    get:
+      tags: [Comptes]
+      summary: Historique des transactions impliquant l'adresse
+      description: |
+        Renvoie les transactions où l'adresse apparaît en `from`, `to`, ou
+        comme bénéficiaire/signataire d'un contrat. Triées des plus récentes
+        aux plus anciennes. Pagination via `before=<height>`.
+      parameters:
+        - { $ref: "#/components/parameters/Addr" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+        - name: before
+          in: query
+          description: ne renvoyer que les tx strictement antérieures à cette hauteur
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    tx: { $ref: "#/components/schemas/Transaction" }
+                    block_height: { type: integer }
+                    timestamp: { type: integer, description: ms epoch }
+
+  /v1/search:
+    get:
+      tags: [Recherche]
+      summary: Recherche universelle (hauteur, hash, adresse, token)
+      description: |
+        Détecte automatiquement le type de `q` et renvoie la ressource
+        correspondante. Type `none` si rien trouvé.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [block, tx, account, token, none]
+                  ref: {}
+                  url: { type: string }
+
+  /v1/validators:
+    get:
+      tags: [Validateurs]
+      summary: Set de validateurs actifs
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Validator" }
+
+  /v1/tokens:
+    get:
+      tags: [Tokens & contrats]
+      summary: Registre des tokens no-code
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Token" }
+
+  /v1/tokens/{symbol}:
+    get:
+      tags: [Tokens & contrats]
+      summary: Un token par symbole
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[A-Z][A-Z0-9]{2,7}$" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Token" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/contracts:
+    get:
+      tags: [Tokens & contrats]
+      summary: Liste des smart contracts no-code
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contract" }
+
+  /v1/contracts/{id}:
+    get:
+      tags: [Tokens & contrats]
+      summary: Un contrat par son ID (= hash de sa tx de création)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contract" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/dev/faucet:
+    post:
+      tags: [Devnet]
+      summary: Recevoir des CGO de test
+      description: Disponible UNIQUEMENT en mode `--dev` ou `--testnet`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address: { type: string, description: adresse cg... destinataire }
+                amount: { type: integer, description: ucgo (1 CGO = 10^9 ucgo) ; 0 ou absent = 100 CGO }
+      responses:
+        "202":
+          description: Acceptée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hash: { type: string }
+                  status: { type: string, enum: [pending] }
+        "403": { description: Faucet désactivé sur ce réseau }
+
+  /v1/dev/wallet:
+    post:
+      tags: [Devnet]
+      summary: Générer un wallet (révèle la seed)
+      description: |
+        UNIQUEMENT en mode `--dev` (jamais sur testnet ni mainnet : révèle
+        la seed côté serveur).
+      responses:
+        "201":
+          description: Créé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address: { type: string }
+                  seed_hex: { type: string }
+                  warning: { type: string }
+        "403": { description: Endpoint désactivé hors --dev }
+
+components:
+  parameters:
+    Addr:
+      name: addr
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^cg[0-9a-f]{40}$"
+        example: "cg982fbc54bcbe39cc078d1ed519a0cf228309f44a"
+
+  responses:
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadRequest:
+      description: Requête invalide
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    Status:
+      type: object
+      properties:
+        version: { type: string }
+        chain_id: { type: string }
+        network: { type: string, enum: [dev, testnet, custom] }
+        height: { type: integer }
+        finalized_height:
+          type: integer
+          description: dernière hauteur finalisée par un commit ≥ 2/3 du stake
+        last_hash: { type: string }
+        mempool: { type: integer }
+        peers: { type: integer }
+        validators: { type: integer }
+        supply: { $ref: "#/components/schemas/Supply" }
+        base_fee:
+          type: integer
+          description: base fee actuel (ucgo, EIP-1559, brûlé)
+        params: { $ref: "#/components/schemas/Params" }
+        pq_signature: { type: string, example: "ML-DSA-65" }
+        dev_mode: { type: boolean }
+        uptime_s: { type: integer }
+
+    Fees:
+      type: object
+      properties:
+        base_fee: { type: integer, description: brûlé sur chaque tx (ucgo) }
+        suggested_max_base:
+          type: integer
+          description: plafond conseillé pour le champ max_base_fee
+        suggested_tip: { type: integer, description: tip standard (ucgo) }
+        fast_tip: { type: integer, description: tip "rapide" }
+        private_extra_burn: { type: integer }
+        token_create_fee: { type: integer }
+        min_validator_stake: { type: integer }
+        unbonding_seconds: { type: integer }
+        min_delegation: { type: integer }
+        delegation_commission_bps: { type: integer }
+        contract_create_fee: { type: integer }
+
+    Supply:
+      type: object
+      properties:
+        total: { type: integer, description: supply en circulation (ucgo) }
+        minted: { type: integer, description: cumulé minté (genèse + récompenses) }
+        burned: { type: integer, description: cumulé brûlé (base fees + …) }
+
+    Params:
+      type: object
+      description: Règles économiques de la chaîne (vivent dans la genèse)
+      properties:
+        block_interval_ms: { type: integer }
+        max_block_txs: { type: integer }
+        inflation_rate_bps: { type: integer, description: 300 = 3 %/an sur le stake }
+        min_base_fee: { type: integer }
+        target_block_txs: { type: integer }
+        base_fee_change_denom: { type: integer }
+        privacy_fee_mult: { type: integer }
+        token_create_fee: { type: integer }
+        min_validator_stake: { type: integer }
+        unbonding_seconds: { type: integer }
+        min_delegation: { type: integer }
+        delegation_commission_bps: { type: integer }
+        contract_create_fee: { type: integer }
+        slash_double_sign_bps: { type: integer, description: 500 = 5 % }
+        downtime_jail_threshold: { type: integer }
+        slash_downtime_bps: { type: integer, description: 10 = 0,1 % }
+        jail_seconds: { type: integer }
+
+    Transaction:
+      type: object
+      required: [chain_id, type, from, from_pub_key, nonce, max_base_fee, tip, timestamp, signature]
+      properties:
+        chain_id: { type: string }
+        type:
+          type: string
+          enum:
+            - transfer
+            - create_token
+            - mint
+            - stake
+            - unstake
+            - delegate
+            - undelegate
+            - unjail
+            - contract_create
+            - contract_exec
+        from: { type: string }
+        from_pub_key:
+          type: string
+          format: byte
+          description: clé publique ML-DSA-65 (1952 octets, base64)
+        to: { type: string }
+        token_id: { type: string, description: "CGO pour la monnaie native" }
+        amount: { type: integer, description: ucgo (ou unité du token) }
+        nonce: { type: integer }
+        max_base_fee: { type: integer, description: plafond de base fee accepté (anti-pic) }
+        tip: { type: integer, description: pourboire au validateur (priorité) }
+        private: { type: boolean }
+        memo: { type: string, maxLength: 256 }
+        token: { $ref: "#/components/schemas/TokenParams" }
+        contract: { $ref: "#/components/schemas/ContractParams" }
+        contract_id: { type: string }
+        action:
+          type: string
+          enum: [claim, release, refund, propose, approve]
+        proposal: { type: integer, description: index pour multisig approve }
+        timestamp: { type: integer, description: ms epoch }
+        signature:
+          type: string
+          format: byte
+          description: signature ML-DSA-65 (base64)
+
+    BlockHeader:
+      type: object
+      properties:
+        height: { type: integer }
+        prev_hash: { type: string }
+        timestamp: { type: integer }
+        proposer: { type: string }
+        round: { type: integer, description: 0 = nominal, > 0 = round de secours }
+        tx_root: { type: string }
+        evidence_root: { type: string }
+        last_commit_root: { type: string }
+        state_root: { type: string }
+
+    Block:
+      type: object
+      properties:
+        header: { $ref: "#/components/schemas/BlockHeader" }
+        txs:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/DoubleSignEvidence" }
+        last_commit:
+          type: array
+          description: précommits ≥ 2/3 du bloc parent (finalité)
+          items: { $ref: "#/components/schemas/Vote" }
+        hash: { type: string }
+        proposer_pub_key: { type: string, format: byte }
+        proposer_signature: { type: string, format: byte }
+
+    Vote:
+      type: object
+      properties:
+        chain_id: { type: string }
+        height: { type: integer }
+        kind: { type: string, enum: [precommit, prevote] }
+        block_hash: { type: string }
+        voter: { type: string }
+        voter_pub: { type: string, format: byte }
+        signature: { type: string, format: byte }
+
+    DoubleSignEvidence:
+      type: object
+      properties:
+        height: { type: integer }
+        voter: { type: string }
+        vote_a: { $ref: "#/components/schemas/Vote" }
+        vote_b: { $ref: "#/components/schemas/Vote" }
+
+    Account:
+      type: object
+      properties:
+        address: { type: string }
+        balances:
+          type: object
+          additionalProperties: { type: integer }
+          description: token → solde (ucgo pour CGO)
+        nonce: { type: integer }
+        staked: { type: integer }
+        unbonding: { type: integer, description: agrégé depuis la file globale }
+        delegations:
+          type: object
+          additionalProperties: { type: integer }
+          description: validateur → montant délégué
+
+    Validator:
+      type: object
+      properties:
+        address: { type: string }
+        stake: { type: integer }
+        blocks_proposed: { type: integer }
+        rewards_earned: { type: integer }
+        delegated: { type: integer }
+        delegators:
+          type: object
+          additionalProperties: { type: integer }
+        missed: { type: integer, description: slots de proposeur manqués consécutifs }
+        jailed: { type: boolean }
+        jailed_until: { type: integer, description: ms epoch }
+
+    TokenParams:
+      type: object
+      properties:
+        symbol: { type: string, pattern: "^[A-Z][A-Z0-9]{2,7}$" }
+        name: { type: string }
+        decimals: { type: integer, maximum: 12 }
+        supply: { type: integer }
+        mintable: { type: boolean }
+
+    Token:
+      allOf:
+        - { $ref: "#/components/schemas/TokenParams" }
+        - type: object
+          properties:
+            creator: { type: string }
+            total_supply: { type: integer }
+            created_at_height: { type: integer }
+
+    ContractParams:
+      type: object
+      properties:
+        template:
+          type: string
+          enum: [vesting, escrow, multisig]
+        token_id: { type: string }
+        amount: { type: integer }
+        beneficiary: { type: string }
+        start_ms: { type: integer }
+        end_ms: { type: integer }
+        seller: { type: string }
+        arbiter: { type: string }
+        signers:
+          type: array
+          items: { type: string }
+        threshold: { type: integer }
+
+    Contract:
+      type: object
+      properties:
+        id: { type: string }
+        template: { type: string, enum: [vesting, escrow, multisig] }
+        creator: { type: string }
+        token_id: { type: string }
+        amount: { type: integer }
+        released: { type: integer }
+        beneficiary: { type: string }
+        start_ms: { type: integer }
+        end_ms: { type: integer }
+        seller: { type: string }
+        arbiter: { type: string }
+        signers:
+          type: array
+          items: { type: string }
+        threshold: { type: integer }
+        proposals:
+          type: array
+          items:
+            type: object
+            properties:
+              to: { type: string }
+              amount: { type: integer }
+              approvals:
+                type: array
+                items: { type: string }
+              executed: { type: boolean }
+        status: { type: string, enum: [active, completed, refunded] }
+        created_at_height: { type: integer }
+
+    Genesis:
+      type: object
+      properties:
+        chain_id: { type: string }
+        timestamp: { type: integer }
+        params: { $ref: "#/components/schemas/Params" }
+        alloc:
+          type: object
+          additionalProperties: { type: integer }
+        stakes:
+          type: object
+          additionalProperties: { type: integer }
+        vesting:
+          type: array
+          items:
+            type: object
+            properties:
+              beneficiary: { type: string }
+              amount: { type: integer }
+              start_ms: { type: integer }
+              end_ms: { type: integer }
