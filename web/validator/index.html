@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainGO — Validator Dashboard</title>
+<style>
+  :root{--bg:#0b0f17;--bg2:#0f1522;--card:#131b2c;--border:#1f2a40;--text:#e6edf6;--muted:#8b9bb4;--cyan:#22d3ee;--violet:#8b5cf6;--green:#34d399;--amber:#fbbf24;--red:#f87171;--grad:linear-gradient(90deg,var(--cyan),var(--violet));}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;line-height:1.55;}
+  a{color:var(--cyan);text-decoration:none;}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px;}
+  nav{border-bottom:1px solid var(--border);background:rgba(11,15,23,.85);backdrop-filter:blur(10px);}
+  nav .wrap{display:flex;align-items:center;gap:18px;height:58px;}
+  .logo{font-weight:800;font-size:1.2rem;}.logo span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .spacer{flex:1;}
+  nav a.link{color:var(--muted);font-size:.9rem;} nav a.link:hover{color:var(--text);}
+  h1{font-size:1.55rem;margin:26px 0 4px;}
+  h2{font-size:1.05rem;margin-bottom:14px;}
+  .muted{color:var(--muted);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin:16px 0;}
+  label{display:block;font-size:.82rem;color:var(--muted);margin:10px 0 4px;}
+  input,select,textarea{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:.95rem;font-family:inherit;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan);}
+  textarea{font-family:ui-monospace,monospace;font-size:.82rem;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;}.row>div{flex:1;min-width:160px;}
+  button{cursor:pointer;padding:10px 16px;border-radius:9px;font-weight:700;font-size:.92rem;border:1px solid var(--border);background:var(--card);color:var(--text);margin-top:14px;}
+  button.primary{background:var(--grad);color:#06121a;border:none;}
+  button.danger{border-color:rgba(248,113,113,.4);color:var(--red);background:transparent;}
+  button:hover{filter:brightness(1.15);} button:disabled{opacity:.5;cursor:not-allowed;}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;}
+  .warn{border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.07);color:var(--amber);border-radius:11px;padding:12px 15px;font-size:.86rem;margin:14px 0;}
+  .info{border:1px solid rgba(34,211,238,.3);background:rgba(34,211,238,.06);color:var(--cyan);border-radius:11px;padding:12px 15px;font-size:.86rem;margin:14px 0;}
+  .ok{color:var(--green);} .ko{color:var(--red);}
+  .addr{font-family:ui-monospace,monospace;font-size:.82rem;word-break:break-all;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;}
+  .stat{display:flex;flex-direction:column;gap:4px;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:14px;}
+  .stat .k{font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .stat .v{font-size:1.4rem;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums;}
+  .stat.green .v{color:var(--green);} .stat.amber .v{color:var(--amber);} .stat.red .v{color:var(--red);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;}
+  .hidden{display:none;}
+  .pill{font-size:.72rem;padding:3px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
+  .pill.active{color:var(--green);border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.08);}
+  .pill.jailed{color:var(--red);border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.08);}
+  .nodecfg{display:flex;gap:8px;align-items:center;font-size:.8rem;}
+  .nodecfg input{padding:6px 9px;font-size:.8rem;}
+  table{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:10px;}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--border);}
+  th{font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;}
+  td.mono{font-family:ui-monospace,monospace;font-size:.78rem;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr:hover td{background:rgba(34,211,238,.04);}
+  #status{font-size:.86rem;margin-top:10px;min-height:1.2em;}
+  footer{color:var(--muted);font-size:.8rem;text-align:center;padding:30px 0;}
+  .seedbox{font-family:ui-monospace,monospace;font-size:.78rem;word-break:break-all;background:#1a1206;border:1px solid var(--amber);border-radius:9px;padding:12px;color:var(--amber);}
+  .tabs{display:flex;gap:4px;margin-top:14px;border-bottom:1px solid var(--border);}
+  .tab{padding:10px 16px;font-size:.92rem;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-weight:600;}
+  .tab.on{color:var(--text);border-bottom-color:var(--cyan);}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <div class="logo">Chain<span>GO</span> <span style="font-weight:400;font-size:.8rem;color:var(--muted)">Validator</span></div>
+  <div class="spacer"></div>
+  <a class="link" href="/">Accueil</a>
+  <a class="link" href="/wallet/">Wallet</a>
+  <a class="link" href="/explorer/">Explorateur</a>
+  <a class="link" href="/loadtest/">Banc d'essai</a>
+  <a class="link" href="/api/">API</a>
+</div></nav>
+
+<div class="wrap">
+  <h1>Validator Dashboard</h1>
+  <p class="muted">Gérez votre nœud validateur — état, stake, délégations, sortie de prison. Toutes les signatures sont produites localement en ML-DSA-65 dans votre navigateur.</p>
+
+  <div class="warn" id="wasmWarn">Chargement du moteur cryptographique post-quantique…</div>
+
+  <div class="card">
+    <div class="nodecfg">
+      <span class="muted">Nœud :</span>
+      <input id="nodeUrl" placeholder="https://node.chaingo.org" style="flex:1">
+      <button style="margin:0;padding:6px 12px" onclick="saveNode()">OK</button>
+      <span id="netState" class="pill">…</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on" data-t="mine" onclick="switchTab('mine')">Mon validateur</div>
+    <div class="tab" data-t="all" onclick="switchTab('all')">Tous les validateurs</div>
+  </div>
+
+  <!-- TAB 1 : MON VALIDATEUR -->
+  <div id="tab-mine">
+
+    <!-- ÉTAT : pas encore identifié -->
+    <div id="connect" class="card">
+      <h2>Identifier votre validateur</h2>
+      <p class="muted" style="font-size:.86rem;margin-bottom:10px">
+        Collez le contenu de votre fichier <code>validator.seed</code> (64 caractères hex). La seed reste dans ce navigateur, jamais envoyée au serveur.
+      </p>
+      <label>Seed du validateur (hex)</label>
+      <input id="seedInput" placeholder="ex : 1271a825235207ec797601d923ca0bfccaca83c9ef4bf28cc5e3a2eed2de46d0" spellcheck="false" autocomplete="off">
+      <div class="btnrow">
+        <button class="primary" onclick="loadSeed()">Charger</button>
+        <button onclick="loadFromWallet()">Utiliser mon wallet ChainGO</button>
+      </div>
+      <p class="muted" style="font-size:.78rem;margin-top:10px">
+        Sur un serveur, lisez la seed avec : <code>sudo cat /var/lib/chaingo/validator.seed</code>
+      </p>
+    </div>
+
+    <!-- ÉTAT : identifié -->
+    <div id="dash" class="hidden">
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:280px">
+            <h2 style="margin-bottom:6px">Identité</h2>
+            <div class="addr" id="myAddr"></div>
+          </div>
+          <div>
+            <span id="myStatus" class="pill">…</span>
+            <button class="danger" style="margin:0;padding:7px 12px" onclick="forgetSeed()">Oublier</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="stat"><div class="k">Solde disponible</div><div class="v" id="sBal">—</div></div>
+        <div class="stat green"><div class="k">Stake propre</div><div class="v" id="sStake">—</div></div>
+        <div class="stat"><div class="k">Délégations reçues</div><div class="v" id="sDeleg">—</div></div>
+        <div class="stat"><div class="k">Pouvoir total</div><div class="v" id="sPower">—</div></div>
+        <div class="stat"><div class="k">Blocs proposés</div><div class="v" id="sBlocks">—</div></div>
+        <div class="stat green"><div class="k">Récompenses gagnées</div><div class="v" id="sRew">—</div></div>
+        <div class="stat amber"><div class="k">Slots manqués</div><div class="v" id="sMiss">—</div></div>
+        <div class="stat"><div class="k">Délégateurs</div><div class="v" id="sDgCount">—</div></div>
+      </div>
+
+      <!-- Action : devenir validateur (pas encore staké) -->
+      <div id="actNew" class="card hidden">
+        <h2>Devenir validateur</h2>
+        <p class="muted" style="font-size:.86rem">
+          Vous n'avez pas encore de stake propre. Stakez au moins <b>10 000 CGO</b> (minimum réseau) pour entrer dans le set actif.
+        </p>
+        <div class="row">
+          <div>
+            <label>Montant à staker (CGO)</label>
+            <input id="stakeNewAmt" type="number" min="10000" step="100" value="10000">
+          </div>
+        </div>
+        <button class="primary" onclick="doStake('new')">Staker et activer</button>
+      </div>
+
+      <!-- Action : déjà validateur -->
+      <div id="actExist" class="card hidden">
+        <h2>Gérer mon stake</h2>
+        <div class="row">
+          <div>
+            <label>Augmenter le stake (CGO)</label>
+            <input id="stakeAddAmt" type="number" min="1" step="100" placeholder="ex : 5000">
+            <button onclick="doStake('add')">+ Ajouter</button>
+          </div>
+          <div>
+            <label>Retirer du stake (CGO)</label>
+            <input id="unstakeAmt" type="number" min="1" step="100" placeholder="ex : 1000">
+            <button onclick="doUnstake()">− Retirer</button>
+          </div>
+        </div>
+        <p class="muted" style="font-size:.78rem;margin-top:10px">
+          Le retrait passe par une période d'unbonding (24&nbsp;h sur testnet, 21&nbsp;j sur mainnet) avant d'être à nouveau dépensable.
+        </p>
+      </div>
+
+      <!-- Action : sortir de prison -->
+      <div id="actUnjail" class="card hidden">
+        <h2 style="color:var(--red)">Validateur en prison</h2>
+        <p class="muted" style="font-size:.86rem">
+          Votre validateur a été jailé pour inactivité prolongée. Vous pouvez sortir une fois la période purgée. Vérifiez d'abord que le nœud tourne correctement.
+        </p>
+        <div id="jailDetails" class="info" style="font-size:.84rem">…</div>
+        <button class="primary" onclick="doUnjail()">Sortir de prison</button>
+      </div>
+
+      <div id="status"></div>
+      <div id="seedReveal" class="hidden card" style="border-color:var(--amber)">
+        <h2 style="color:var(--amber)">Seed en clair — ne partagez jamais</h2>
+        <div class="seedbox" id="seedText"></div>
+      </div>
+      <div style="text-align:right">
+        <button onclick="toggleSeed()" style="font-size:.8rem">Afficher / cacher la seed</button>
+        <button onclick="refresh()" style="font-size:.8rem">Rafraîchir</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TAB 2 : LISTE COMPLÈTE -->
+  <div id="tab-all" class="hidden">
+    <div class="card">
+      <h2>Tous les validateurs</h2>
+      <p class="muted" style="font-size:.86rem">Triés par stake total décroissant. Cliquez sur une adresse pour la copier.</p>
+      <div style="overflow-x:auto">
+        <table id="vTable">
+          <thead><tr><th>#</th><th>Adresse</th><th class="num">Stake</th><th class="num">Délégations</th><th class="num">Pouvoir</th><th class="num">Blocs</th><th>État</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Open-source &nbsp;·&nbsp; <a href="https://github.com/ghisdot/chaingo">github.com/ghisdot/chaingo</a>
+  </footer>
+</div>
+
+<script src="../wallet/wasm_exec.js"></script>
+<script>
+const KEY_NODE = "chaingo_node_url", KEY_SEED = "chaingo_validator_seed_v1";
+const UNIT = 1_000_000_000;
+let nodeUrl = "", wasmReady = false, seedHex = null, myAddress = null;
+let lastValidators = null, myInfo = null, myAccount = null;
+
+const $ = id => document.getElementById(id);
+
+function defaultNode(){
+  const saved = localStorage.getItem(KEY_NODE);
+  if (saved) return saved;
+  if (location.protocol === "file:") return "http://127.0.0.1:8545";
+  const h = location.hostname;
+  if (h === "chaingo.org" || h === "www.chaingo.org") return "https://node.chaingo.org";
+  return location.origin;
+}
+function saveNode(){ nodeUrl = $("nodeUrl").value.trim().replace(/\/$/, ""); localStorage.setItem(KEY_NODE, nodeUrl); pingNode(); }
+
+async function api(path, opts){
+  const r = await fetch(nodeUrl + path, opts);
+  if (!r.ok){ let e; try{ e = (await r.json()).error; }catch{} throw new Error(e || ("HTTP " + r.status)); }
+  return r.json();
+}
+async function pingNode(){
+  try { const s = await api("/v1/status"); $("netState").innerHTML = '<span class="ok">● ' + s.chain_id + " #" + s.height + "</span>"; return s; }
+  catch { $("netState").innerHTML = '<span class="ko">● hors-ligne</span>'; return null; }
+}
+
+function switchTab(t){
+  document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
+  $("tab-mine").classList.toggle("hidden", t !== "mine");
+  $("tab-all").classList.toggle("hidden", t !== "all");
+  if (t === "all") refreshList();
+}
+
+function fmt(u){ return (u / UNIT).toLocaleString("fr-FR", { maximumFractionDigits: 9 }); }
+function fmtInt(u){ return (u / UNIT).toLocaleString("fr-FR", { maximumFractionDigits: 0 }); }
+
+function loadSeed(){
+  const s = $("seedInput").value.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(s)) return alert("Seed invalide : 64 caractères hex attendus.");
+  if (!wasmReady) return alert("Module WASM pas encore chargé.");
+  const res = chaingoAddressFromSeed(s);
+  if (res.error) return alert("Seed invalide : " + res.error);
+  seedHex = s; myAddress = res.address;
+  localStorage.setItem(KEY_SEED, s);
+  $("seedInput").value = "";
+  showDash();
+}
+async function loadFromWallet(){
+  const raw = localStorage.getItem("chaingo_wallet_v1");
+  if (!raw) return alert("Aucun wallet ChainGO trouvé dans ce navigateur. Allez sur /wallet/ d'abord.");
+  const pass = prompt("Mot de passe du wallet (pour déchiffrer la seed) :");
+  if (pass === null) return;
+  try {
+    const w = JSON.parse(raw);
+    const enc = new TextEncoder(), dec = new TextDecoder();
+    const b64ToBuf = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    const base = await crypto.subtle.importKey("raw", enc.encode(pass), "PBKDF2", false, ["deriveKey"]);
+    const key = await crypto.subtle.deriveKey(
+      { name:"PBKDF2", salt:b64ToBuf(w.salt), iterations:250000, hash:"SHA-256" },
+      base, { name:"AES-GCM", length:256 }, false, ["decrypt"]);
+    const pt = await crypto.subtle.decrypt({ name:"AES-GCM", iv:b64ToBuf(w.iv) }, key, b64ToBuf(w.ct));
+    seedHex = dec.decode(pt); myAddress = w.address;
+    localStorage.setItem(KEY_SEED, seedHex);
+    showDash();
+  } catch(e){ alert("Mot de passe incorrect ou wallet corrompu."); }
+}
+function forgetSeed(){
+  if (!confirm("Oublier cette seed dans ce navigateur ? (la seed sur le serveur reste intacte)")) return;
+  localStorage.removeItem(KEY_SEED); seedHex = null; myAddress = null;
+  $("connect").classList.remove("hidden"); $("dash").classList.add("hidden");
+}
+function toggleSeed(){
+  const box = $("seedReveal");
+  if (box.classList.contains("hidden")){ $("seedText").textContent = seedHex; box.classList.remove("hidden"); }
+  else { box.classList.add("hidden"); }
+}
+
+function showDash(){
+  $("connect").classList.add("hidden");
+  $("dash").classList.remove("hidden");
+  $("myAddr").textContent = myAddress;
+  refresh();
+}
+
+async function refresh(){
+  if (!await pingNode()) return;
+  try {
+    [myAccount, lastValidators] = await Promise.all([
+      api("/v1/accounts/" + myAddress),
+      api("/v1/validators"),
+    ]);
+    myInfo = (lastValidators || []).find(v => v.address === myAddress) || null;
+    renderDash();
+  } catch(e){ $("status").innerHTML = '<span class="ko">' + e.message + '</span>'; }
+}
+
+function renderDash(){
+  $("sBal").textContent = fmtInt(myAccount.balances?.CGO || 0) + " CGO";
+  if (!myInfo){
+    $("sStake").textContent = "—";
+    $("sDeleg").textContent = "—";
+    $("sPower").textContent = "—";
+    $("sBlocks").textContent = "—";
+    $("sRew").textContent = "—";
+    $("sMiss").textContent = "—";
+    $("sDgCount").textContent = "—";
+    $("myStatus").textContent = "non-validateur"; $("myStatus").className = "pill";
+    $("actNew").classList.remove("hidden");
+    $("actExist").classList.add("hidden");
+    $("actUnjail").classList.add("hidden");
+    return;
+  }
+  const stake = myInfo.stake || 0;
+  const deleg = myInfo.delegated || 0;
+  $("sStake").textContent = fmtInt(stake) + " CGO";
+  $("sDeleg").textContent = fmtInt(deleg) + " CGO";
+  $("sPower").textContent = fmtInt(stake + deleg) + " CGO";
+  $("sBlocks").textContent = (myInfo.blocks_proposed || 0).toLocaleString("fr-FR");
+  $("sRew").textContent = fmt(myInfo.rewards_earned || 0) + " CGO";
+  $("sMiss").textContent = (myInfo.missed || 0).toLocaleString("fr-FR");
+  $("sDgCount").textContent = Object.keys(myInfo.delegators || {}).length;
+  if (myInfo.jailed){
+    $("myStatus").textContent = "EN PRISON"; $("myStatus").className = "pill jailed";
+    const until = myInfo.jailed_until ? new Date(myInfo.jailed_until * 1000).toLocaleString("fr-FR") : "inconnu";
+    $("jailDetails").innerHTML = "Sortie possible après : <b>" + until + "</b>";
+    $("actUnjail").classList.remove("hidden");
+    $("actExist").classList.add("hidden");
+    $("actNew").classList.add("hidden");
+  } else {
+    $("myStatus").textContent = "ACTIF"; $("myStatus").className = "pill active";
+    $("actUnjail").classList.add("hidden");
+    $("actExist").classList.remove("hidden");
+    $("actNew").classList.add("hidden");
+  }
+}
+
+function parseCgo(s){
+  const n = Number(s);
+  if (!isFinite(n) || n <= 0) throw new Error("montant invalide");
+  return BigInt(Math.round(n * 1e9));
+}
+
+async function signSendTx(unsignedTx, label){
+  $("status").innerHTML = label + " — signature post-quantique…";
+  const signed = chaingoSignTransaction(seedHex, JSON.stringify(unsignedTx));
+  if (signed.error) throw new Error(signed.error);
+  const res = await api("/v1/tx", { method:"POST", headers:{"Content-Type":"application/json"}, body: signed.signed });
+  $("status").innerHTML = `<span class="ok">${label} envoyée ✓</span> tx ${res.hash.slice(0, 16)}…`;
+  for (let i = 0; i < 20; i++){
+    await new Promise(r => setTimeout(r, 600));
+    try {
+      const c = await api("/v1/tx/" + res.hash);
+      if (c.status === "confirmed"){
+        $("status").innerHTML = `<span class="ok">${label} confirmée bloc #${c.block_height} ✓</span>`;
+        refresh();
+        return;
+      }
+    } catch {}
+  }
+  $("status").innerHTML += " — en attente";
+  refresh();
+}
+
+async function buildBase(type){
+  const [status, acct, fees] = await Promise.all([api("/v1/status"), api("/v1/accounts/" + myAddress), api("/v1/fees")]);
+  return {
+    chain_id: status.chain_id, type, nonce: acct.nonce,
+    max_base_fee: fees.suggested_max_base, tip: fees.suggested_tip,
+    timestamp: Date.now(),
+  };
+}
+
+async function doStake(mode){
+  try {
+    const amt = mode === "new" ? parseCgo($("stakeNewAmt").value) : parseCgo($("stakeAddAmt").value);
+    const tx = await buildBase("stake");
+    tx.amount = Number(amt);
+    await signSendTx(tx, "Stake");
+  } catch(e){ $("status").innerHTML = '<span class="ko">' + e.message + '</span>'; }
+}
+async function doUnstake(){
+  try {
+    const amt = parseCgo($("unstakeAmt").value);
+    if (!confirm("Retirer " + ($("unstakeAmt").value) + " CGO du stake ? Le montant sera bloqué en unbonding 24h avant d'être à nouveau dépensable.")) return;
+    const tx = await buildBase("unstake");
+    tx.amount = Number(amt);
+    await signSendTx(tx, "Unstake");
+  } catch(e){ $("status").innerHTML = '<span class="ko">' + e.message + '</span>'; }
+}
+async function doUnjail(){
+  try {
+    const tx = await buildBase("unjail");
+    tx.amount = 0;
+    await signSendTx(tx, "Sortie de prison");
+  } catch(e){ $("status").innerHTML = '<span class="ko">' + e.message + '</span>'; }
+}
+
+async function refreshList(){
+  try {
+    const v = await api("/v1/validators");
+    lastValidators = v;
+    const tbody = $("vTable").querySelector("tbody");
+    tbody.innerHTML = "";
+    v.forEach((it, i) => {
+      const stake = it.stake || 0, deleg = it.delegated || 0;
+      const tr = document.createElement("tr");
+      const stateLabel = it.jailed
+        ? '<span class="pill jailed">jailé</span>'
+        : '<span class="pill active">actif</span>';
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td class="mono" style="cursor:pointer" onclick="navigator.clipboard.writeText('${it.address}')">${it.address.slice(0, 16)}…${it.address.slice(-6)}</td>
+        <td class="num">${fmtInt(stake)} CGO</td>
+        <td class="num">${fmtInt(deleg)} CGO</td>
+        <td class="num">${fmtInt(stake + deleg)} CGO</td>
+        <td class="num">${(it.blocks_proposed || 0).toLocaleString("fr-FR")}</td>
+        <td>${stateLabel}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch(e){ /* silencieux : le tab est secondaire */ }
+}
+
+// ---------------- init ----------------
+nodeUrl = defaultNode(); $("nodeUrl").value = nodeUrl;
+const go = new Go();
+async function loadWasm(){
+  try {
+    const r = await WebAssembly.instantiateStreaming(fetch("../wallet/chaingo.wasm"), go.importObject);
+    return r.instance;
+  } catch {
+    const buf = await (await fetch("../wallet/chaingo.wasm")).arrayBuffer();
+    const r = await WebAssembly.instantiate(buf, go.importObject);
+    return r.instance;
+  }
+}
+loadWasm().then(inst => {
+  go.run(inst); wasmReady = true;
+  $("wasmWarn").textContent = "Moteur post-quantique prêt — vos signatures sont produites localement.";
+  $("wasmWarn").classList.add("ok");
+  pingNode();
+  // Reprendre une seed déjà chargée précédemment
+  const saved = localStorage.getItem(KEY_SEED);
+  if (saved && /^[0-9a-f]{64}$/.test(saved)){
+    const r = chaingoAddressFromSeed(saved);
+    if (!r.error){ seedHex = saved; myAddress = r.address; showDash(); }
+  }
+}).catch(e => { $("wasmWarn").innerHTML = '<span class="ko">Erreur de chargement WASM : ' + e.message + '</span>'; });
+</script>
+</body>
+</html>
