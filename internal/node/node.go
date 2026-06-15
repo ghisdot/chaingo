@@ -419,7 +419,8 @@ func (n *Node) Tokens() []*state.Token                { return n.st.ListTokens()
 func (n *Node) GetToken(sym string) *state.Token      { return n.st.GetToken(sym) }
 func (n *Node) Contracts() []*state.Contract          { return n.st.ListContracts() }
 func (n *Node) GetContract(id string) *state.Contract { return n.st.GetContract(id) }
-func (n *Node) MempoolSize() int                      { return n.pool.Size() }
+func (n *Node) MempoolSize() int                                  { return n.pool.Size() }
+func (n *Node) MempoolPending(limit int) []mempool.PendingInfo    { return n.pool.Snapshot(limit) }
 func (n *Node) SupplyInfo() state.Supply              { return n.st.GetSupply() }
 func (n *Node) Height() uint64                        { return n.st.GetHeight() }
 func (n *Node) IsDev() bool                           { return n.cfg.Dev }

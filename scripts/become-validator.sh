@@ -45,6 +45,32 @@ done
 command -v chaingo >/dev/null || { echo "Binaire 'chaingo' introuvable. Suivez d'abord docs/TESTNET-DEPLOY.md."; exit 1; }
 command -v curl >/dev/null || { echo "curl requis."; exit 1; }
 
+# ---- Détection chain_id pour adapter le comportement ----
+# Le faucet n'est dispo qu'en --dev / --testnet (mainnet répond 403). L'unbonding
+# affiché doit refléter la chaîne ciblée. On lit /v1/status ; si l'API est
+# injoignable, on garde les valeurs par défaut testnet.
+CHAIN_ID=$(curl -sS --max-time 5 "$API/v1/status" 2>/dev/null \
+  | grep -oE '"chain_id":"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+if [ -n "$CHAIN_ID" ]; then
+  echo "Réseau détecté : $CHAIN_ID"
+  case "$CHAIN_ID" in
+    *testnet*|*devnet*)
+      UNBONDING_LABEL="24 h"
+      ;;
+    *)
+      UNBONDING_LABEL="21 jours"
+      # Mainnet : aucun faucet, le compte du validateur doit être pré-financé.
+      if [ "$SKIP_FAUCET" = 0 ]; then
+        echo "Mainnet détecté : faucet automatiquement désactivé (--skip-faucet implicite)."
+        SKIP_FAUCET=1
+      fi
+      ;;
+  esac
+else
+  echo "API $API injoignable — comportement testnet par défaut."
+  UNBONDING_LABEL="24 h"
+fi
+
 # ---- Helpers ----
 log()  { printf "\n\033[1;36m▸ %s\033[0m\n" "$*"; }
 ok()   { printf "  \033[1;32m✓\033[0m %s\n" "$*"; }
@@ -171,7 +197,7 @@ if echo "$VALIDATORS_JSON" | grep -q "\"address\":\"$ADDR\""; then
   echo "$VALIDATORS_JSON" | python3 -m json.tool 2>/dev/null | grep -A4 "$ADDR" | head -7 || true
 else
   log "Staking $STAKE_AMOUNT_CGO CGO…"
-  if ! confirm "Confirmer le stake de $STAKE_AMOUNT_CGO CGO (irréversible avant unbonding 24 h) ?"; then
+  if ! confirm "Confirmer le stake de $STAKE_AMOUNT_CGO CGO (irréversible avant unbonding $UNBONDING_LABEL) ?"; then
     warn "Stake annulé. Relancez le script quand vous êtes prêt."
     exit 0
   fi

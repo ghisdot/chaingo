@@ -141,6 +141,14 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	if e.st.SelectProposer(height, prev, round) != e.addr {
 		return nil
 	}
+	// Purge les tx croupies (trou de nonce qui ne se résoudra jamais, ou
+	// auteur qui a abandonné). 10 min : assez court pour ne pas accumuler,
+	// assez long pour absorber des creux d'inclusion liés à un mempool
+	// saturé. Le purge n'est pas dans le state path (pas dans Execute) :
+	// la non-déterminisme de time.Now() ne casse rien ici.
+	if n := e.pool.PurgeExpired(10 * time.Minute); n > 0 {
+		log.Printf("[mempool] %d tx purgée(s) (TTL 10 min — trous de nonce probables)", n)
+	}
 	txs := e.pool.Take(e.maxTxs, e.st.NonceOf)
 	evid := e.drainEvidenceLocked()
 	if len(txs) == 0 && len(evid) == 0 && !force {

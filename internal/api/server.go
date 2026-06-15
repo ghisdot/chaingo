@@ -4,12 +4,14 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"chaingo/internal/crypto"
+	"chaingo/internal/mempool"
 	"chaingo/internal/state"
 	"chaingo/internal/types"
 )
@@ -30,6 +32,7 @@ type Backend interface {
 	Contracts() []*state.Contract
 	GetContract(id string) *state.Contract
 	MempoolSize() int
+	MempoolPending(limit int) []mempool.PendingInfo
 	SupplyInfo() state.Supply
 	Fees() map[string]any
 	Height() uint64
@@ -169,7 +172,22 @@ func (s *Server) Start() error {
 		writeJSON(w, 200, t)
 	})
 	mux.HandleFunc("GET /v1/mempool", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"size": s.b.MempoolSize()})
+		// Par défaut compact (size seulement). ?details=1[&limit=N] retourne
+		// les from/nonce/tip/age des tx en attente, triées par âge décroissant —
+		// permet de diagnostiquer les trous de nonce (plusieurs entrées du
+		// même `from` avec des nonces non consécutifs).
+		if r.URL.Query().Get("details") == "" {
+			writeJSON(w, 200, map[string]any{"size": s.b.MempoolSize()})
+			return
+		}
+		limit := 100
+		if v := r.URL.Query().Get("limit"); v != "" {
+			fmt.Sscanf(v, "%d", &limit)
+		}
+		writeJSON(w, 200, map[string]any{
+			"size":    s.b.MempoolSize(),
+			"pending": s.b.MempoolPending(limit),
+		})
 	})
 	mux.HandleFunc("GET /v1/fees", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, s.b.Fees())
