@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChainGO — Banc d'essai réseau</title>
+<style>
+  :root{--bg:#0b0f17;--bg2:#0f1522;--card:#131b2c;--border:#1f2a40;--text:#e6edf6;--muted:#8b9bb4;--cyan:#22d3ee;--violet:#8b5cf6;--green:#34d399;--amber:#fbbf24;--red:#f87171;--grad:linear-gradient(90deg,#22d3ee,#8b5cf6);}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;line-height:1.45;}
+  a{color:var(--cyan);text-decoration:none;} a:hover{filter:brightness(1.2);}
+  .wrap{max-width:1280px;margin:0 auto;padding:0 22px;}
+  nav{position:sticky;top:0;z-index:10;background:rgba(11,15,23,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);}
+  nav .wrap{display:flex;align-items:center;gap:18px;height:60px;}
+  .logo{font-weight:800;font-size:1.15rem;}.logo span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  nav a.link{color:var(--muted);font-size:.9rem;} nav a.link:hover{color:var(--text);}
+  .spacer{flex:1;}
+  .pill{font-size:.74rem;padding:3px 10px;border-radius:999px;border:1px solid var(--border);color:var(--green);}
+  .pill.ko{color:var(--red);}
+  h1{font-size:1.5rem;margin:24px 0 4px;font-weight:800;}
+  .lead{color:var(--muted);max-width:760px;margin-bottom:18px;font-size:.95rem;}
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start;margin-top:8px;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .card h2{padding:13px 16px;margin:0;border-bottom:1px solid var(--border);background:var(--bg2);font-size:.95rem;}
+  .card .body{padding:16px;}
+  label{display:block;font-size:.78rem;color:var(--muted);margin:11px 0 5px;}
+  input[type=text],input[type=number],select{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:.9rem;font-family:inherit;}
+  input:focus,select:focus{outline:none;border-color:var(--cyan);}
+  input[type=range]{width:100%;}
+  .rangerow{display:flex;align-items:center;gap:10px;}
+  .rangerow .v{font-family:ui-monospace,monospace;color:var(--cyan);min-width:50px;text-align:right;font-size:.95rem;}
+  .checkrow{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:.88rem;}
+  .checkrow input{width:auto;}
+  button.go{margin-top:18px;width:100%;padding:13px;border-radius:9px;border:none;background:var(--grad);color:#06121a;font-weight:800;font-size:.96rem;cursor:pointer;letter-spacing:.3px;}
+  button.go:disabled{filter:grayscale(.8) brightness(.7);cursor:not-allowed;}
+  button.stop{background:transparent;border:1px solid var(--red);color:var(--red);margin-top:10px;width:100%;padding:10px;border-radius:9px;cursor:pointer;font-weight:700;}
+  .warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);color:var(--amber);padding:10px 13px;border-radius:9px;font-size:.84rem;margin:12px 0;}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;padding:14px;}
+  .stat{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:11px;text-align:center;}
+  .stat .v{font-size:1.3rem;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums;}
+  .stat .v.green{color:var(--green);} .stat .v.red{color:var(--red);} .stat .v.amber{color:var(--amber);}
+  .stat .l{font-size:.7rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
+  .logbox{font-family:ui-monospace,monospace;font-size:.78rem;background:#0a0f18;border-top:1px solid var(--border);padding:12px;height:140px;overflow-y:auto;}
+  .logbox div{padding:1px 0;}
+  .logbox .ok{color:var(--green);} .logbox .err{color:var(--red);} .logbox .info{color:var(--muted);}
+  canvas{width:100%;height:auto;}
+  .chartrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px;}
+  @media(max-width:760px){.chartrow{grid-template-columns:1fr;}}
+  .chartbox{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:8px;}
+  .chartbox h3{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;padding-left:4px;}
+  footer{border-top:1px solid var(--border);padding:24px 0;color:var(--muted);font-size:.82rem;text-align:center;margin-top:30px;}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <div class="logo">Chain<span>GO</span> <span style="font-weight:400;font-size:.78rem;color:var(--muted);">Banc d'essai</span></div>
+  <a class="link" href="/">Accueil</a>
+  <a class="link" href="/wallet/">Wallet</a>
+  <a class="link" href="/explorer/">Explorateur</a>
+  <a class="link" href="/api/">API</a>
+  <div class="spacer"></div>
+  <span class="pill" id="netPill">…</span>
+</div></nav>
+
+<div class="wrap">
+  <h1>Banc d'essai réseau</h1>
+  <p class="lead">
+    Soumettre une rafale de transactions réelles signées en ML-DSA-65 contre un nœud
+    ChainGO, et observer en direct la chaîne réagir : hauteur, mempool, base fee
+    EIP-1559, CGO brûlés, latence de soumission. Wallets éphémères créés à la volée
+    et financés par le faucet (testnet uniquement).
+  </p>
+
+  <div class="grid">
+    <!-- Paramètres -->
+    <div class="card">
+      <h2>Paramètres</h2>
+      <div class="body">
+        <label>URL du nœud</label>
+        <input type="text" id="api" value="">
+
+        <label>Nombre de wallets éphémères</label>
+        <div class="rangerow">
+          <input type="range" id="wallets" min="2" max="50" value="10">
+          <span class="v" id="walletsV">10</span>
+        </div>
+
+        <label>Nombre de transferts</label>
+        <div class="rangerow">
+          <input type="range" id="txs" min="10" max="2000" step="10" value="200">
+          <span class="v" id="txsV">200</span>
+        </div>
+
+        <label>Concurrence (signatures parallèles)</label>
+        <div class="rangerow">
+          <input type="range" id="workers" min="1" max="16" value="4">
+          <span class="v" id="workersV">4</span>
+        </div>
+
+        <label>Montant CGO par transfert</label>
+        <div class="rangerow">
+          <input type="range" id="amount" min="0.0001" max="1" step="0.0001" value="0.01">
+          <span class="v" id="amountV">0.01</span>
+        </div>
+
+        <label>Faucet — CGO par wallet</label>
+        <div class="rangerow">
+          <input type="range" id="faucet" min="10" max="500" step="10" value="100">
+          <span class="v" id="faucetV">100</span>
+        </div>
+
+        <div class="checkrow">
+          <input type="checkbox" id="fast">
+          <label for="fast" style="margin:0;color:var(--text);font-size:.88rem;">Mode rapide (tip × 4)</label>
+        </div>
+
+        <div class="warn" id="wasmBanner">Chargement du moteur cryptographique…</div>
+
+        <button class="go" id="goBtn" disabled>Lancer le test</button>
+        <button class="stop" id="stopBtn" style="display:none;">Arrêter</button>
+      </div>
+    </div>
+
+    <!-- Live monitoring -->
+    <div>
+      <div class="card">
+        <h2>État de la chaîne — en direct</h2>
+        <div class="stats">
+          <div class="stat"><div class="v" id="sHeight">—</div><div class="l">Hauteur</div></div>
+          <div class="stat"><div class="v" id="sFinalized">—</div><div class="l">Finalisée</div></div>
+          <div class="stat"><div class="v" id="sMempool">—</div><div class="l">Mempool</div></div>
+          <div class="stat"><div class="v" id="sBaseFee">—</div><div class="l">Base fee (ucgo)</div></div>
+          <div class="stat"><div class="v red" id="sBurned">—</div><div class="l">Brûlé total (CGO)</div></div>
+        </div>
+
+        <div class="chartrow">
+          <div class="chartbox">
+            <h3>Hauteur de bloc</h3>
+            <canvas id="chHeight" width="500" height="160"></canvas>
+          </div>
+          <div class="chartbox">
+            <h3>Mempool (tx en attente)</h3>
+            <canvas id="chMempool" width="500" height="160"></canvas>
+          </div>
+          <div class="chartbox">
+            <h3>Base fee (ucgo)</h3>
+            <canvas id="chBaseFee" width="500" height="160"></canvas>
+          </div>
+          <div class="chartbox">
+            <h3>Brûlé cumulé (CGO)</h3>
+            <canvas id="chBurned" width="500" height="160"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Test en cours</h2>
+        <div class="stats">
+          <div class="stat"><div class="v" id="tSubmitted">0</div><div class="l">Soumises</div></div>
+          <div class="stat"><div class="v green" id="tOk">0</div><div class="l">Succès</div></div>
+          <div class="stat"><div class="v red" id="tErr">0</div><div class="l">Échecs</div></div>
+          <div class="stat"><div class="v" id="tTPS">—</div><div class="l">tx/s soumises</div></div>
+          <div class="stat"><div class="v amber" id="tP50">—</div><div class="l">Latence p50</div></div>
+          <div class="stat"><div class="v amber" id="tP95">—</div><div class="l">Latence p95</div></div>
+        </div>
+        <div class="logbox" id="log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer><div class="wrap">
+  Test contre le testnet public — utilisez le mode loadtest CLI pour des cibles plus lourdes.
+  <a href="https://github.com/ghisdot/chaingo">Code source</a>
+</div></footer>
+
+<script src="/wallet/wasm_exec.js"></script>
+<script>
+// ---------------- Config ----------------
+const defaultAPI = (() => {
+  if (location.protocol === "file:") return "http://127.0.0.1:8545";
+  const h = location.hostname;
+  if (h === "chaingo.org" || h === "www.chaingo.org") return "https://node.chaingo.org";
+  return location.origin;
+})();
+document.getElementById("api").value = defaultAPI;
+const UNIT = 1_000_000_000n;
+const $ = id => document.getElementById(id);
+
+// Bind range inputs to their display
+for (const id of ["wallets","txs","workers","amount","faucet"]) {
+  const el = $(id), v = $(id+"V");
+  el.addEventListener("input", () => v.textContent = el.value);
+  v.textContent = el.value;
+}
+
+const fmtCGO = (ucgo) => {
+  const u = BigInt(ucgo || 0);
+  const whole = u / UNIT, frac = u % UNIT;
+  if (frac === 0n) return whole.toLocaleString("fr-FR");
+  const fracStr = frac.toString().padStart(9, "0").replace(/0+$/, "");
+  return whole.toLocaleString("fr-FR") + (fracStr ? "." + fracStr : "");
+};
+
+// ---------------- Mini chart (canvas pur, pas de dépendance) ----------------
+class Chart {
+  constructor(canvas, opts={}) {
+    this.cv = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.data = [];
+    this.max = opts.maxPoints || 60;
+    this.color = opts.color || "#22d3ee";
+    this.fill = opts.fill || "rgba(34,211,238,.12)";
+    // HiDPI
+    const dpr = window.devicePixelRatio || 1;
+    const r = canvas.getBoundingClientRect();
+    canvas.width = r.width * dpr;
+    canvas.height = r.height * dpr;
+    this.ctx.scale(dpr, dpr);
+    this.w = r.width; this.h = r.height;
+  }
+  push(v) {
+    this.data.push(Number(v));
+    if (this.data.length > this.max) this.data.shift();
+    this.draw();
+  }
+  draw() {
+    const c = this.ctx, w = this.w, h = this.h, d = this.data;
+    c.clearRect(0,0,w,h);
+    if (!d.length) return;
+    const min = Math.min(...d), max = Math.max(...d);
+    const range = max - min || 1;
+    const stepX = w / Math.max(1, d.length - 1);
+    // Fill
+    c.beginPath();
+    c.moveTo(0, h);
+    d.forEach((v,i) => c.lineTo(i*stepX, h - ((v-min)/range)*(h-8) - 4));
+    c.lineTo(w, h);
+    c.closePath();
+    c.fillStyle = this.fill;
+    c.fill();
+    // Line
+    c.beginPath();
+    d.forEach((v,i) => {
+      const x = i*stepX, y = h - ((v-min)/range)*(h-8) - 4;
+      i===0 ? c.moveTo(x,y) : c.lineTo(x,y);
+    });
+    c.lineWidth = 2;
+    c.strokeStyle = this.color;
+    c.stroke();
+    // Min/max labels
+    c.fillStyle = "#8b9bb4";
+    c.font = "10px ui-monospace,monospace";
+    c.fillText(Math.round(max).toLocaleString("fr-FR"), 4, 12);
+    c.fillText(Math.round(min).toLocaleString("fr-FR"), 4, h - 4);
+  }
+}
+const chHeight  = new Chart($("chHeight"),  {color:"#22d3ee", fill:"rgba(34,211,238,.12)"});
+const chMempool = new Chart($("chMempool"), {color:"#8b5cf6", fill:"rgba(139,92,246,.12)"});
+const chBaseFee = new Chart($("chBaseFee"), {color:"#fbbf24", fill:"rgba(251,191,36,.12)"});
+const chBurned  = new Chart($("chBurned"),  {color:"#f87171", fill:"rgba(248,113,113,.12)"});
+
+// ---------------- API helpers ----------------
+function getAPI() { return $("api").value.trim().replace(/\/$/,""); }
+async function jget(path) {
+  const r = await fetch(getAPI() + path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function jpost(path, body) {
+  const r = await fetch(getAPI() + path, {
+    method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
+  });
+  const t = await r.text();
+  let j; try { j = t ? JSON.parse(t) : {}; } catch { j = { raw: t }; }
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+
+// ---------------- Live status polling ----------------
+let lastBurned = 0;
+async function pollStatus() {
+  try {
+    const s = await jget("/v1/status");
+    $("netPill").classList.remove("ko");
+    $("netPill").textContent = "● " + s.chain_id + " #" + s.height;
+    $("sHeight").textContent = s.height.toLocaleString("fr-FR");
+    $("sFinalized").textContent = (s.finalized_height || 0).toLocaleString("fr-FR");
+    $("sMempool").textContent = (s.mempool || 0).toLocaleString("fr-FR");
+    $("sBaseFee").textContent = (s.base_fee || 0).toLocaleString("fr-FR");
+    $("sBurned").textContent = fmtCGO(s.supply.burned);
+    chHeight.push(s.height);
+    chMempool.push(s.mempool || 0);
+    chBaseFee.push(s.base_fee || 0);
+    chBurned.push(Number(BigInt(s.supply.burned) / UNIT));
+    lastBurned = s.supply.burned;
+  } catch (e) {
+    $("netPill").classList.add("ko");
+    $("netPill").textContent = "● hors-ligne";
+  }
+}
+setInterval(pollStatus, 1500);
+pollStatus();
+
+// ---------------- WASM ----------------
+let wasmReady = false;
+async function loadWasm() {
+  const go = new Go();
+  let inst;
+  try {
+    const r = await WebAssembly.instantiateStreaming(fetch("/wallet/chaingo.wasm"), go.importObject);
+    inst = r.instance;
+  } catch {
+    const buf = await (await fetch("/wallet/chaingo.wasm")).arrayBuffer();
+    const r = await WebAssembly.instantiate(buf, go.importObject);
+    inst = r.instance;
+  }
+  go.run(inst);
+  wasmReady = true;
+  $("wasmBanner").style.display = "none";
+  $("goBtn").disabled = false;
+}
+loadWasm().catch(e => { $("wasmBanner").innerHTML = "Erreur WASM : " + e.message; });
+
+// ---------------- Logging ----------------
+const logEl = $("log");
+function log(msg, cls="info") {
+  const d = document.createElement("div");
+  d.className = cls;
+  const t = new Date().toLocaleTimeString("fr-FR");
+  d.textContent = "[" + t + "] " + msg;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.childElementCount > 200) logEl.removeChild(logEl.firstChild);
+}
+
+// ---------------- Loadtest core ----------------
+let running = false;
+let abortCtrl = null;
+
+$("goBtn").addEventListener("click", run);
+$("stopBtn").addEventListener("click", () => { if (abortCtrl) abortCtrl.abort(); });
+
+async function run() {
+  if (running) return;
+  running = true;
+  abortCtrl = new AbortController();
+  $("goBtn").style.display = "none";
+  $("stopBtn").style.display = "block";
+
+  // Reset counters
+  let submitted = 0, ok = 0, err = 0;
+  const lats = [];
+  const tStart = performance.now();
+  $("tSubmitted").textContent = "0";
+  $("tOk").textContent = "0";
+  $("tErr").textContent = "0";
+  $("tTPS").textContent = "—";
+  $("tP50").textContent = "—"; $("tP95").textContent = "—";
+  logEl.innerHTML = "";
+
+  try {
+    // Status + fees
+    const status = await jget("/v1/status");
+    if (status.network !== "testnet" && status.network !== "dev") {
+      throw new Error("Réseau cible non testnet/dev : " + status.network);
+    }
+    const fees = await jget("/v1/fees");
+    log(`Cible : ${status.chain_id} (h=${status.height})`, "ok");
+
+    // Params
+    const nWallets = parseInt($("wallets").value);
+    const nTxs     = parseInt($("txs").value);
+    const nWorkers = parseInt($("workers").value);
+    const faucetAmt= parseInt($("faucet").value);
+    const fastMode = $("fast").checked;
+    const tip = fastMode ? fees.fast_tip : fees.suggested_tip;
+
+    const amountCGO = parseFloat($("amount").value);
+    const amount = BigInt(Math.round(amountCGO * 1e9));
+
+    // 1) Créer les wallets
+    log(`Création de ${nWallets} wallets éphémères…`);
+    const ws = [];
+    for (let i=0; i<nWallets; i++) {
+      const w = chaingoNewWallet();
+      if (w.error) throw new Error(w.error);
+      ws.push({ seedHex: w.seedHex, address: w.address, nonce: 0 });
+    }
+
+    // 2) Faucet en parallèle
+    log(`Faucet : ${nWallets} × ${faucetAmt} CGO…`);
+    const faucetUcgo = BigInt(faucetAmt) * UNIT;
+    await Promise.all(ws.map(async w => {
+      try { await jpost("/v1/dev/faucet", { address: w.address, amount: Number(faucetUcgo) }); }
+      catch (e) { log("faucet : " + e.message, "err"); }
+    }));
+    log("Attente confirmation des faucets (3 s)…");
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 3) Pool de tx à émettre
+    const queue = [];
+    for (let i=0; i<nTxs; i++) {
+      queue.push({ from: i % nWallets, to: (i+1) % nWallets, idx: i });
+    }
+
+    async function worker() {
+      while (queue.length > 0) {
+        if (abortCtrl.signal.aborted) return;
+        const job = queue.shift();
+        if (!job) return;
+        const w = ws[job.from];
+        const nonce = w.nonce++;
+        const tx = {
+          chain_id: status.chain_id,
+          type: "transfer",
+          to: ws[job.to].address,
+          token_id: "CGO",
+          amount: Number(amount),
+          nonce,
+          max_base_fee: fees.suggested_max_base,
+          tip,
+          memo: "ui-loadtest #" + job.idx,
+          timestamp: Date.now(),
+        };
+        const signed = chaingoSignTransaction(w.seedHex, JSON.stringify(tx));
+        if (signed.error) {
+          err++;
+          $("tErr").textContent = err;
+          if (err < 5) log("sign: " + signed.error, "err");
+          continue;
+        }
+        const t0 = performance.now();
+        try {
+          await fetch(getAPI() + "/v1/tx", {
+            method:"POST", headers:{"Content-Type":"application/json"}, body: signed.signed
+          }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+          const lat = performance.now() - t0;
+          lats.push(lat);
+          ok++;
+        } catch (e) {
+          err++;
+          if (err < 5) log("submit: " + e.message, "err");
+        }
+        submitted++;
+        if (submitted % 25 === 0) updateTestStats(submitted, ok, err, lats, tStart);
+      }
+    }
+
+    const workers = [];
+    for (let i=0; i<nWorkers; i++) workers.push(worker());
+    await Promise.all(workers);
+    updateTestStats(submitted, ok, err, lats, tStart);
+
+    // Final summary
+    const elapsed = (performance.now() - tStart) / 1000;
+    const burnedDelta = Number(BigInt(lastBurned)) - (status.supply.burned || 0);
+    log(`Terminé — ${ok}/${submitted} succès en ${elapsed.toFixed(1)} s`, ok === submitted ? "ok" : "err");
+    if (burnedDelta > 0) log(`Brûlé pendant ce test : ${fmtCGO(burnedDelta)} CGO`, "ok");
+  } catch (e) {
+    log("ERREUR : " + e.message, "err");
+  } finally {
+    running = false;
+    abortCtrl = null;
+    $("goBtn").style.display = "block";
+    $("stopBtn").style.display = "none";
+  }
+}
+
+function updateTestStats(submitted, ok, err, lats, tStart) {
+  $("tSubmitted").textContent = submitted;
+  $("tOk").textContent = ok;
+  $("tErr").textContent = err;
+  const elapsed = (performance.now() - tStart) / 1000;
+  $("tTPS").textContent = elapsed > 0 ? (submitted/elapsed).toFixed(0) : "—";
+  if (lats.length > 0) {
+    const s = [...lats].sort((a,b) => a-b);
+    const p50 = s[Math.floor(s.length*0.5)];
+    const p95 = s[Math.floor(s.length*0.95)];
+    $("tP50").textContent = p50.toFixed(0) + " ms";
+    $("tP95").textContent = p95.toFixed(0) + " ms";
+  }
+}
+</script>
+
+</body>
+</html>

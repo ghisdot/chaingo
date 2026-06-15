@@ -38,7 +38,12 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       tant que jailé, sortie via `chaingo unjail` après le délai.
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
-- [ ] Codec binaire compact (remplace JSON+base64 sur le réseau) — [#8](https://github.com/ghisdot/chaingo/issues/8)
+- [ ] **Codec binaire compact** (remplace JSON+base64 sur le réseau et en DB) — [#8](https://github.com/ghisdot/chaingo/issues/8)
+      Priorité haute : les signatures ML-DSA-65 font ~3,3 Ko ; encodées en base64 dans
+      du JSON elles passent à ~4,4 Ko + structure. Avec un codec binaire (varint +
+      length-prefixed), on gagne ~25 % de bande passante P2P et de stockage. Critique
+      pour tenir la charge d'un testnet public bien fréquenté. `SigningBytes` reste JSON
+      canonique (sinon casse toutes les signatures existantes).
 - [~] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)) :
       unitaires (consensus, state, genesis) + **intégration multi-validateurs en mémoire**
       (4 nœuds convergent + finalisent, synchro d'un nœud tardif). À étendre : fuzzing réseau,
@@ -70,6 +75,10 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       seed chiffrée AES-256-GCM côté client — créer/importer, solde, envoyer
 - [x] **Hébergement gratuit** du site + wallet sur GitHub Pages (CI rebuild du WASM)
 - [x] Site bilingue FR/EN (README EN + bascule de langue sur le site et le wallet)
+- [x] **Banc d'essai web** (`/loadtest/`) — UI pour stresser le testnet, courbes live
+      (hauteur, mempool, base fee, brûlé), signature ML-DSA-65 dans le navigateur via WASM
+- [x] **Test de distribution mainnet** (1 Md CGO réparti 50/20/15/10/5) vérifié on-chain :
+      supply pile, vesting équipe réclamable à mi-parcours et au-delà
 - [~] Explorateur de blocs public — couche API livrée (bloc-par-hash, historique tx d'une adresse, recherche universelle). Front explorateur à venir.
 - [ ] SDK JavaScript et Python ([#4](https://github.com/ghisdot/chaingo/issues/4))
 - [ ] Documentation (docs/) traduite en anglais
