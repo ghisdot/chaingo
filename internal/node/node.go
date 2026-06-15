@@ -298,6 +298,11 @@ func (n *Node) Status() map[string]any {
 		"dev_mode":         n.cfg.Dev,
 		"network":          n.network(),
 		"uptime_s":         int(time.Since(n.start).Seconds()),
+		// Version de protocole réseau + alerte de mise à jour : `outdated` passe
+		// à true si un pair annonce une version supérieure à la nôtre (le
+		// dashboard/explorer peut alors afficher « ce nœud doit être mis à jour »).
+		"protocol_version": p2p.ProtocolVersion,
+		"outdated":         n.p2p.Outdated(),
 	}
 }
 

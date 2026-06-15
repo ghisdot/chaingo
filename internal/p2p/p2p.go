@@ -50,15 +50,29 @@ var (
 
 // Hello et GetBlocks : encodage binaire trivial via codec.
 
+// ProtocolVersion : version du protocole réseau (handshake, format des frames,
+// règles de gossip). À INCRÉMENTER quand un changement rend les anciens nœuds
+// incompatibles (codec, nouveau type de message, changement de consensus
+// véhiculé). Le protocole binaire actuel = v2.
+const ProtocolVersion uint32 = 2
+
+// MinPeerProtocol : version minimale acceptée d'un pair. Un pair en-dessous est
+// KICKÉ au handshake (un retardataire ne peut pas rester connecté → forcé de se
+// mettre à jour). Var (pas const) pour pouvoir l'ajuster au démarrage.
+var MinPeerProtocol uint32 = 2
+
 type Hello struct {
 	ChainID string
 	Height  uint64
+	// ProtocolVersion : version du pair (0 = ancien nœud sans le champ → legacy).
+	ProtocolVersion uint32
 }
 
 func (h *Hello) MarshalBinary() ([]byte, error) {
 	e := codec.NewEncoder(64)
 	e.WriteString(h.ChainID)
 	e.WriteUvarint(h.Height)
+	e.WriteUvarint(uint64(h.ProtocolVersion))
 	return e.Bytes(), nil
 }
 
@@ -70,6 +84,17 @@ func (h *Hello) UnmarshalBinary(data []byte) error {
 	}
 	if h.Height, err = d.ReadUvarint(); err != nil {
 		return err
+	}
+	// Version : champ AJOUTÉ — optionnel en lecture pour classer un ancien hello
+	// (sans version) comme legacy (v0) au lieu d'échouer. Un ancien nœud, lui,
+	// échouera sur MustFinish en lisant notre hello plus long → il se déconnecte
+	// (comportement voulu : il doit se mettre à jour).
+	if d.Remaining() > 0 {
+		v, e := d.ReadUvarint()
+		if e != nil {
+			return e
+		}
+		h.ProtocolVersion = uint32(v)
 	}
 	return d.MustFinish()
 }
@@ -122,10 +147,26 @@ type Server struct {
 	mu       sync.Mutex
 	peers    map[string]*peer
 	listener net.Listener
+	// maxPeerProto : version de protocole la plus élevée vue chez un pair. Si
+	// elle dépasse la nôtre, CE nœud est en retard → alerte (exposée au status).
+	maxPeerProto uint32
 }
 
 func NewServer(addr, chainID string, h Handlers) *Server {
 	return &Server{addr: addr, chainID: chainID, h: h, peers: map[string]*peer{}}
+}
+
+// PeerProtocolMax : plus haute version de protocole annoncée par un pair.
+func (s *Server) PeerProtocolMax() uint32 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.maxPeerProto
+}
+
+// Outdated : true si un pair annonce une version de protocole supérieure à la
+// nôtre — signal que ce nœud doit être mis à jour.
+func (s *Server) Outdated() bool {
+	return s.PeerProtocolMax() > ProtocolVersion
 }
 
 func (s *Server) Start() error {
@@ -227,8 +268,8 @@ func (s *Server) handle(conn net.Conn) {
 		log.Printf("[p2p] peer %s disconnected", key)
 	}()
 
-	// Envoi du hello dès la connexion.
-	hello := Hello{ChainID: s.chainID, Height: s.h.Height()}
+	// Envoi du hello dès la connexion (avec NOTRE version de protocole).
+	hello := Hello{ChainID: s.chainID, Height: s.h.Height(), ProtocolVersion: ProtocolVersion}
 	helloBin, _ := hello.MarshalBinary()
 	if p.send(msgHello, helloBin) != nil {
 		return
@@ -251,6 +292,23 @@ func (s *Server) handle(conn net.Conn) {
 			if h.UnmarshalBinary(payload) != nil || h.ChainID != s.chainID {
 				log.Printf("[p2p] peer %s on wrong chain, dropping", key)
 				return
+			}
+			// KICK des pairs trop vieux : un retardataire ne peut pas rester
+			// connecté → forcé de se mettre à jour.
+			if h.ProtocolVersion < MinPeerProtocol {
+				log.Printf("[p2p] KICK %s : protocole v%d < minimum v%d — pair pas à jour", key, h.ProtocolVersion, MinPeerProtocol)
+				return
+			}
+			// ALERTE : si le pair annonce une version SUPÉRIEURE à la nôtre,
+			// c'est NOUS qui sommes en retard. On le signale (et /v1/status
+			// exposera le drapeau pour le dashboard).
+			if h.ProtocolVersion > ProtocolVersion {
+				s.mu.Lock()
+				if h.ProtocolVersion > s.maxPeerProto {
+					s.maxPeerProto = h.ProtocolVersion
+				}
+				s.mu.Unlock()
+				log.Printf("[p2p] ⚠ NŒUD PAS À JOUR : un pair annonce le protocole v%d > le nôtre v%d — METTEZ À JOUR ce nœud", h.ProtocolVersion, ProtocolVersion)
 			}
 			if h.Height > s.h.Height() {
 				s.requestBlocks(p)

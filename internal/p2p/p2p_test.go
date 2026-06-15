@@ -1,13 +1,24 @@
 package p2p
 
 import (
+	"net"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"chaingo/internal/codec"
 	"chaingo/internal/crypto"
 	"chaingo/internal/types"
 )
+
+// legacyHelloBytes : un hello à l'ANCIEN format (chainID + height, sans la
+// version de protocole) — pour vérifier la rétro-décodage en version 0.
+func legacyHelloBytes(chainID string, height uint64) []byte {
+	e := codec.NewEncoder(64)
+	e.WriteString(chainID)
+	e.WriteUvarint(height)
+	return e.Bytes()
+}
 
 // TestBinaryProtocolHelloAndGossip : smoke test du protocole binaire
 // (tranche 3 du codec). Deux serveurs se connectent, doivent :
@@ -86,6 +97,73 @@ func TestBinaryProtocolHelloAndGossip(t *testing.T) {
 	v.SignWith(kp)
 	b.Broadcast("vote", v, nil)
 	waitFor(t, "vote received by A", func() bool { return aGotVote.Load() >= 1 })
+}
+
+// TestHelloVersionRoundtrip : la version de protocole survit l'encodage, et un
+// hello legacy (sans le champ) se décode en version 0.
+func TestHelloVersionRoundtrip(t *testing.T) {
+	h := Hello{ChainID: "c", Height: 7, ProtocolVersion: 2}
+	bin, _ := h.MarshalBinary()
+	var got Hello
+	if err := got.UnmarshalBinary(bin); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ProtocolVersion != 2 || got.Height != 7 || got.ChainID != "c" {
+		t.Fatalf("roundtrip: %+v", got)
+	}
+	// Hello legacy : seulement chainID + height (pas de version) → v0.
+	e := legacyHelloBytes("c", 7)
+	var legacy Hello
+	if err := legacy.UnmarshalBinary(e); err != nil {
+		t.Fatalf("decode legacy: %v", err)
+	}
+	if legacy.ProtocolVersion != 0 {
+		t.Fatalf("hello legacy doit donner version 0, got %d", legacy.ProtocolVersion)
+	}
+}
+
+// TestKicksOutdatedPeer : un pair annonçant une version < MinPeerProtocol est
+// déconnecté (kické) ; un pair à jour reste connecté.
+func TestKicksOutdatedPeer(t *testing.T) {
+	chainID := "kick-test"
+	noop := Handlers{
+		OnTx: func(*types.Transaction) bool { return false }, OnVote: func(*types.Vote) bool { return false },
+		OnBlock: func(*types.Block) (bool, bool) { return true, false },
+		Height:  func() uint64 { return 0 }, Block: func(uint64) *types.Block { return nil },
+	}
+	srv := NewServer("127.0.0.1:0", chainID, noop)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer srv.Stop()
+
+	old := MinPeerProtocol
+	MinPeerProtocol = 2
+	defer func() { MinPeerProtocol = old }()
+
+	dial := func(ver uint32) {
+		c, err := net.Dial("tcp", srv.listener.Addr().String())
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		defer c.Close()
+		h := Hello{ChainID: chainID, Height: 0, ProtocolVersion: ver}
+		hb, _ := h.MarshalBinary()
+		writeFrame(c, msgHello, hb)
+		time.Sleep(60 * time.Millisecond)
+	}
+
+	// Pair v1 (trop vieux) → kické : le serveur ne doit pas le garder.
+	dial(1)
+	waitFor(t, "peer v1 kické", func() bool { return srv.PeerCount() == 0 })
+
+	// Pair v2 (à jour) → accepté (reste au moins brièvement).
+	c, _ := net.Dial("tcp", srv.listener.Addr().String())
+	defer c.Close()
+	h := Hello{ChainID: chainID, Height: 0, ProtocolVersion: 2}
+	hb, _ := h.MarshalBinary()
+	writeFrame(c, msgHello, hb)
+	waitFor(t, "peer v2 accepté", func() bool { return srv.PeerCount() >= 1 })
 }
 
 // TestFrameTooLargeRejected : un frame qui annonce une taille au-delà de

@@ -76,6 +76,10 @@
 
   <div class="warn" id="wasmWarn">Chargement du moteur cryptographique post-quantique…</div>
 
+  <div class="warn hidden" id="outdatedBanner" style="border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.1);color:var(--red)">
+    ⚠ Ce nœud est <b>EN RETARD</b> : des pairs annoncent une version de protocole plus récente. Mettez-le à jour (git pull + rebuild + restart), sinon il finira par être déconnecté du réseau.
+  </div>
+
   <div class="card">
     <div class="nodecfg">
       <span class="muted">Nœud :</span>
@@ -239,7 +243,12 @@ async function api(path, opts){
   return r.json();
 }
 async function pingNode(){
-  try { const s = await api("/v1/status"); $("netState").innerHTML = '<span class="ok">● ' + s.chain_id + " #" + s.height + "</span>"; return s; }
+  try {
+    const s = await api("/v1/status");
+    $("netState").innerHTML = '<span class="ok">● ' + s.chain_id + " #" + s.height + "</span>";
+    $("outdatedBanner").classList.toggle("hidden", !s.outdated); // alerte mise à jour
+    return s;
+  }
   catch { $("netState").innerHTML = '<span class="ko">● hors-ligne</span>'; return null; }
 }
 
