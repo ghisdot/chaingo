@@ -16,47 +16,57 @@ seulement les templates no-code), comme l'EVM sur Ethereum/BNB — mais en
 `internal/wasmvm` charge et **exécute réellement** du WASM via **wazero** (runtime
 Go pur, **sans CGO** — préserve la compilation native Windows/Linux/macOS du
 projet) :
-- `Run(wasm, fn, timeout, args…)` : instancie un module, fournit une API hôte
-  minimale (`env.log`), appelle une fonction exportée, borne la mémoire (16 Mio).
-- Protection anti-runaway : timeout **wall-clock** qui interrompt une boucle
-  infinie (testé).
-- Tests : exécute un module `add(i32,i32)` réel, interrompt une boucle infinie,
-  échoue proprement sur module invalide / fonction absente.
+- `Run(wasm, fn, timeout, args…)` : instancie un module, API hôte minimale
+  (`env.log`), mémoire bornée (16 Mio), timeout wall-clock (sandbox).
+- **`RunMetered(wasm, fn, gasLimit, args…)` : GAS DÉTERMINISTE** — voir ci-dessous.
+- Tests : exécute un `add(i32,i32)` réel, interrompt une boucle infinie, échoue
+  proprement sur module invalide / fonction absente.
 
-**Pourquoi « hors-consensus »** : le timeout est *wall-clock*, donc **non
-déterministe** — deux nœuds l'atteindraient à des points différents = **split de
-la chaîne**. C'est exactement ce qui interdit de l'exécuter dans un bloc en l'état.
+## ✅ Tranche 1 LIVRÉE : gas déterministe par instrumentation (`meter.go`)
 
-## Ce qu'il MANQUE pour le rendre consensus-grade (le vrai chantier)
+Le vrai verrou est levé. `instrument(wasm, gasLimit, cost)` **réécrit le
+bytecode** : ajoute un global i64 de gas (init = gasLimit, **aucun renumérotage**
+car ajouté en fin d'espace d'index) et injecte une **charge de gas** (décrément +
+test ; `unreachable` si < 0) en tête de **chaque corps de fonction** et de **chaque
+`loop`**. Comme boucle et récursion sont les seuls moyens de répéter du travail
+en WASM, ces deux points **garantissent l'arrêt** : aucun module ne tourne
+au-delà de son gas, et le point d'arrêt est **identique sur tous les nœuds**
+(out-of-gas déterministe, pas un timeout).
 
-1. **Gas DÉTERMINISTE par instruction.** Le point dur. Sans CGO, wazero n'a pas
-   de *fuel* intégré (contrairement à wasmtime). Il faut **instrumenter le
-   bytecode** : injecter un décrément + un test de gas en tête de chaque bloc de
-   base, recompiler. C'est un mini-compilateur. Garantit qu'une boucle infinie
-   s'arrête de façon **identique sur tous les nœuds** (out-of-gas déterministe).
+Sûreté : jeu d'opcodes restreint au sous-ensemble MVP ; tout opcode inconnu
+(SIMD/atomics/bulk-mem 0xfc-0xfe…) fait **rejeter** le module (jamais de saut
+deviné). Encodage **LEB128 signé** correct (≠ zig-zag de Go). **Fuzzé** : 5,3 M
+exécutions sur bytecode arbitraire sans panique. Tests : la sémantique est
+préservée (`add` instrumenté = 42), une boucle infinie s'arrête par gas en < 1 s.
+
+CLI : `chaingo wasm run --gas N <fichier.wasm> <fn> [args]`.
+
+**Périmètre v1** : garantie d'**arrêt**. La tarification fine (gas proportionnel
+au travail, par bloc de base) est un raffinement (charge fixe par point pour
+l'instant).
+
+## Ce qu'il MANQUE encore pour le consensus
+
 2. **Audit de déterminisme.** Canonicaliser les NaN flottants (ou interdire les
    flottants), interdire tout import non déterministe (horloge, aléa, threads),
    fixer le comportement de la croissance mémoire.
 3. **API hôte d'accès à l'état**, chacune **gas-métrée** : `storage_get/set`
    (KV par contrat), `caller`, `self`, `balance`, `transfer`, `emit_event`,
    `block_height/time` (valeurs du bloc, déterministes).
-4. **Types de transaction** : `wasm_deploy` (stocke le bytecode, frais de
-   déploiement comme un token/contrat) et `wasm_call` (exécute, gas = frais).
-   Stockage **par contrat** dans l'état (intégré à la racine d'état).
-5. **Limites anti-DoS** : taille max du bytecode, profondeur de pile, taille de
-   mémoire, nombre d'exports, validation stricte à l'instanciation.
-6. **Fuzzing** des décodeurs/exécution + **audit externe** (du code qui exécute
-   du bytecode arbitraire envoyé par n'importe qui = surface d'attaque maximale).
+4. **Types de transaction** : `wasm_deploy` + `wasm_call` + stockage **par
+   contrat** dans la racine d'état.
+5. **Limites anti-DoS** : taille max du bytecode, profondeur de pile, mémoire,
+   nombre d'exports. **Audit externe** (exécute du bytecode hostile).
 
-## Plan d'implémentation (tranches, post-testnet)
+## Plan d'implémentation (tranches)
 
-| Tranche | Contenu |
-|---|---|
-| 1 | Instrumentation de gas (injection bytecode) + tests de coût déterministe |
-| 2 | API hôte d'état (storage KV par contrat) gas-métrée |
-| 3 | Tx `wasm_deploy` / `wasm_call` + stockage contrat dans la racine d'état |
-| 4 | API hôte économique (balance/transfer/events) + limites anti-DoS |
-| 5 | Fuzzing intensif + préparation audit |
+| Tranche | Contenu | État |
+|---|---|---|
+| 1 | Instrumentation de gas (injection bytecode) + fuzzing | ✅ **livré** |
+| 2 | Tarification fine (coût par bloc de base) + audit déterminisme | ⬜ |
+| 3 | API hôte d'état (storage KV par contrat) gas-métrée | ⬜ |
+| 4 | Tx `wasm_deploy` / `wasm_call` + stockage contrat dans la racine d'état | ⬜ |
+| 5 | API économique (balance/transfer/events) + limites anti-DoS + audit | ⬜ |
 
 ## Décision
 

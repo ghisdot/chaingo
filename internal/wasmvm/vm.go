@@ -43,6 +43,37 @@ type Result struct {
 // contre les boucles infinies — wall-clock, donc NON déterministe).
 var ErrTimeout = errors.New("wasm: execution timed out (sandbox wall-clock limit)")
 
+// ErrOutOfGas : le contrat a épuisé son gas (arrêt DÉTERMINISTE — identique sur
+// tous les nœuds, contrairement à ErrTimeout). C'est le mécanisme qui rendrait
+// l'exécution consensus-safe.
+var ErrOutOfGas = errors.New("wasm: out of gas")
+
+// RunMetered instrumente `wasm` avec un compteur de gas DÉTERMINISTE
+// (cf meter.go) puis l'exécute. L'exécution est bornée par `gasLimit`, pas par
+// l'horloge : une boucle infinie épuise son gas et s'arrête au MÊME point sur
+// tous les nœuds. Un timeout wall-clock généreux reste en filet de sécurité (au
+// cas où l'instrumentation aurait un trou — défense en profondeur).
+//
+// Toujours HORS-CONSENSUS (il manque l'API hôte d'état, les tx, l'audit). Mais
+// c'est le cœur du problème — la garantie d'arrêt déterministe — qui est résolu.
+func RunMetered(parent context.Context, wasm []byte, fn string, gasLimit int64, args ...uint64) (*Result, error) {
+	instrumented, err := instrument(wasm, gasLimit, 1)
+	if err != nil {
+		return nil, err
+	}
+	res, err := Run(parent, instrumented, fn, 10*time.Second, args...)
+	if err != nil {
+		if errors.Is(err, ErrTimeout) {
+			return nil, err // le filet wall-clock a sauté AVANT le gas → instrumentation suspecte
+		}
+		// Un trap (unreachable) sur out-of-gas ressort ici comme une erreur
+		// d'exécution. On la mappe sur ErrOutOfGas (best-effort : en v1 on ne
+		// distingue pas un trap-gas d'un trap-logique du contrat).
+		return nil, fmt.Errorf("%w (ou trap du contrat) : %v", ErrOutOfGas, err)
+	}
+	return res, nil
+}
+
 // maxMemoryPages : 256 pages × 64 Kio = 16 Mio max de mémoire linéaire.
 const maxMemoryPages = 256
 

@@ -56,7 +56,7 @@ Usage :
   chaingo contract approve|reject --from <wallet> --id <coffre|dao> [--proposal 0] [--api URL]
   chaingo contract claim|release|refund --from <wallet> --id <contrat> [--pass MDP] [--api URL]
   chaingo contract list [--api URL]
-  chaingo wasm run <fichier.wasm> <fonction> [arg_u64 ...]   (PREVIEW WASM, sandbox locale)
+  chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]   (PREVIEW WASM ; --gas = compteur déterministe)
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo keygen [--out validator.seed]      (génère une seed de validateur ML-DSA-65)
   chaingo genesis template [--chain-id ID] [--out genesis.json] [--seed-out FILE]
@@ -1031,18 +1031,26 @@ func formatAmount(v uint64, d uint8) string {
 
 // cmdWasm : PREVIEW expérimentale du moteur WASM (hors-consensus). Exécute une
 // fonction d'un fichier .wasm en SANDBOX locale — PAS sur la chaîne.
-//   chaingo wasm run <fichier.wasm> <fonction> [arg_u64 ...]
+//   chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]
+// Avec --gas, l'exécution est bornée par un compteur de gas DÉTERMINISTE
+// (instrumentation du bytecode) ; sinon par un simple timeout wall-clock.
 func cmdWasm(args []string) error {
-	if len(args) < 3 || args[0] != "run" {
-		return fmt.Errorf("usage : chaingo wasm run <fichier.wasm> <fonction> [arg_u64 ...]")
+	if len(args) < 1 || args[0] != "run" {
+		return fmt.Errorf("usage : chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]")
 	}
-	code, err := os.ReadFile(args[1])
+	fs := flag.NewFlagSet("wasm run", flag.ExitOnError)
+	gas := fs.Int64("gas", 0, "limite de gas DÉTERMINISTE (0 = sandbox wall-clock simple)")
+	fs.Parse(args[1:])
+	if fs.NArg() < 2 {
+		return fmt.Errorf("usage : chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]")
+	}
+	code, err := os.ReadFile(fs.Arg(0))
 	if err != nil {
 		return err
 	}
-	fn := args[2]
+	fn := fs.Arg(1)
 	var callArgs []uint64
-	for _, a := range args[3:] {
+	for _, a := range fs.Args()[2:] {
 		v, err := strconv.ParseUint(a, 10, 64)
 		if err != nil {
 			return fmt.Errorf("argument %q invalide (entier u64 attendu)", a)
@@ -1050,7 +1058,13 @@ func cmdWasm(args []string) error {
 		callArgs = append(callArgs, v)
 	}
 	fmt.Println("⚠ PREVIEW expérimentale — exécution en sandbox LOCALE, pas sur la chaîne (voir docs/design/wasm-vm.md)")
-	res, err := wasmvm.Run(context.Background(), code, fn, 2*time.Second, callArgs...)
+	var res *wasmvm.Result
+	if *gas > 0 {
+		fmt.Printf("Gas déterministe : %d unités\n", *gas)
+		res, err = wasmvm.RunMetered(context.Background(), code, fn, *gas, callArgs...)
+	} else {
+		res, err = wasmvm.Run(context.Background(), code, fn, 2*time.Second, callArgs...)
+	}
 	if err != nil {
 		return err
 	}
