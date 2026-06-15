@@ -49,8 +49,10 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       round-trip binaire. Doc : [docs/design/binary-codec.md](docs/design/binary-codec.md).
 - [~] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)) :
       unitaires (consensus, state, genesis) + **intégration multi-validateurs en mémoire**
-      (4 nœuds convergent + finalisent, synchro d'un nœud tardif). À étendre : fuzzing réseau,
-      scénarios de fautes (proposeur hors-ligne, équivocation) bout-en-bout.
+      (4 nœuds convergent + finalisent, synchro d'un nœud tardif) + **fuzzing des décodeurs**
+      (tx/block/vote + frames P2P) qui a révélé et corrigé une faille DoS (allocation non
+      bornée sur compteur de slice). À étendre : scénarios de fautes (proposeur hors-ligne,
+      équivocation) bout-en-bout.
 - [x] Mode `--testnet` (chain_id `chaingo-testnet-1`, faucet ouvert, unbonding 24 h) — prêt à héberger
 - [ ] Testnet public multi-validateurs en ligne 24/24 (nécessite un serveur)
 - [ ] Audit de sécurité externe
