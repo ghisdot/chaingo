@@ -125,11 +125,16 @@ sudo useradd -r -m -d /var/lib/chaingo -s /usr/sbin/nologin chaingo
 sudo git clone https://github.com/ghisdot/chaingo /opt/chaingo
 cd /opt/chaingo
 
-# Compiler le binaire (~1 min)
+# Compiler le binaire du nœud (~1 min)
 sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo
+
+# Compiler le WASM du wallet web (~30 s) — sinon /wallet/ affichera "Chargement…" sans jamais finir
+sudo GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm
+sudo cp "$(/usr/local/go/bin/go env GOROOT)/lib/wasm/wasm_exec.js" web/wallet/wasm_exec.js
 
 # Sanity check
 chaingo help | head -3
+ls -lh /opt/chaingo/web/wallet/chaingo.wasm
 ```
 
 ---
@@ -356,8 +361,11 @@ ssh ghislain@chaingo.org
 cd /opt/chaingo
 sudo git pull
 sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo
+# Rebuild aussi le WASM (le code du wallet peut avoir évolué)
+sudo GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm
+sudo cp "$(/usr/local/go/bin/go env GOROOT)/lib/wasm/wasm_exec.js" web/wallet/wasm_exec.js
 sudo systemctl restart chaingo-testnet
-# Le site /opt/chaingo/web est servi tel quel par Caddy : git pull suffit pour le mettre à jour
+# Le site /opt/chaingo/web est servi tel quel par Caddy : git pull + rebuild WASM suffisent
 ```
 
 ### Logs
@@ -512,7 +520,7 @@ Recommandé à terme (sécurité + isolation des charges). Procédure :
 | Logs nœud | `sudo journalctl -u chaingo-testnet -f` |
 | Logs Caddy | `sudo journalctl -u caddy -f` |
 | Statut chaîne | `curl https://node.chaingo.org/v1/status` |
-| Mise à jour | `cd /opt/chaingo && sudo git pull && sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo && sudo systemctl restart chaingo-testnet` |
+| Mise à jour (binaire + WASM wallet) | `cd /opt/chaingo && sudo git pull && sudo /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo && sudo GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm && sudo cp "$(/usr/local/go/bin/go env GOROOT)/lib/wasm/wasm_exec.js" web/wallet/wasm_exec.js && sudo systemctl restart chaingo-testnet` |
 | Backup seeds | `sudo tar czf - /var/lib/chaingo/*.seed \| gpg -c > seeds.tgz.gpg` |
 | Recharger Caddy | `sudo systemctl reload caddy` |
 | Taille de la db | `sudo du -sh /var/lib/chaingo` |

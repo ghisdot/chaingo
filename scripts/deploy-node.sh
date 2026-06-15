@@ -59,6 +59,11 @@ rm -rf /opt/chaingo
 git clone --depth 1 --branch "$BRANCH" "$REPO" /opt/chaingo
 ( cd /opt/chaingo && /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o /usr/local/bin/chaingo ./cmd/chaingo )
 
+echo "==> Compilation du wallet web (WASM)"
+GOROOT="$(/usr/local/go/bin/go env GOROOT)"
+( cd /opt/chaingo && GOOS=js GOARCH=wasm /usr/local/go/bin/go build -trimpath -ldflags="-s -w" -o web/wallet/chaingo.wasm ./cmd/wallet-wasm )
+cp "$GOROOT/lib/wasm/wasm_exec.js" /opt/chaingo/web/wallet/wasm_exec.js
+
 echo "==> Pare-feu (SSH, web, P2P)"
 ufw allow 22/tcp
 ufw allow 80/tcp
