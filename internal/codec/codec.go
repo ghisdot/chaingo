@@ -135,6 +135,27 @@ func (d *Decoder) ReadUvarint() (uint64, error) {
 	return v, nil
 }
 
+// ReadLen lit un compteur d'éléments (uvarint) destiné à dimensionner un
+// `make([]T, n)`, et le BORNE par le nombre d'octets restants. Chaque
+// élément d'une slice consomme au moins 1 octet (longueur uvarint d'un
+// blob, ou d'une string, ≥ 1 octet même pour une valeur vide). Donc un
+// compteur supérieur aux octets restants est forcément invalide.
+//
+// Sans cette borne, un attaquant annonce `n = 2^60` et provoque une
+// allocation gigantesque (OOM / nœud tué) AVANT même qu'on lise le 1er
+// élément. Trouvé par fuzzing — à utiliser pour TOUTE longueur de slice
+// lue depuis une entrée non fiable.
+func (d *Decoder) ReadLen() (int, error) {
+	n, err := d.ReadUvarint()
+	if err != nil {
+		return 0, err
+	}
+	if n > uint64(d.Remaining()) {
+		return 0, fmt.Errorf("%w: slice count %d > remaining %d", ErrTruncated, n, d.Remaining())
+	}
+	return int(n), nil
+}
+
 func (d *Decoder) ReadVarint() (int64, error) {
 	v, n := binary.Varint(d.buf[d.pos:])
 	if n == 0 {

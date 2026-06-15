@@ -213,7 +213,7 @@ func readContractParams(d *codec.Decoder, c *ContractParams) error {
 	if c.Arbiter, err = d.ReadString(); err != nil {
 		return err
 	}
-	n, err := d.ReadUvarint()
+	n, err := d.ReadLen()
 	if err != nil {
 		return err
 	}

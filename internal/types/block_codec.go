@@ -202,7 +202,7 @@ func (b *Block) UnmarshalBinary(data []byte) error {
 	if err := readBlockHeader(d, &b.Header); err != nil {
 		return err
 	}
-	nTx, err := d.ReadUvarint()
+	nTx, err := d.ReadLen()
 	if err != nil {
 		return fmt.Errorf("block.txs len: %w", err)
 	}
@@ -220,7 +220,7 @@ func (b *Block) UnmarshalBinary(data []byte) error {
 			b.Txs[i] = tx
 		}
 	}
-	nEv, err := d.ReadUvarint()
+	nEv, err := d.ReadLen()
 	if err != nil {
 		return fmt.Errorf("block.evidence len: %w", err)
 	}
@@ -238,7 +238,7 @@ func (b *Block) UnmarshalBinary(data []byte) error {
 			b.Evidence[i] = ev
 		}
 	}
-	nVotes, err := d.ReadUvarint()
+	nVotes, err := d.ReadLen()
 	if err != nil {
 		return fmt.Errorf("block.last_commit len: %w", err)
 	}
