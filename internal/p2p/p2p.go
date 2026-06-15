@@ -1,31 +1,97 @@
 // Package p2p : gossip TCP minimaliste — handshake (hello), diffusion
 // des transactions et des blocs, synchronisation par lots.
+//
+// Protocole de transport (tranche 3 du codec binaire) :
+//
+//   [1 byte type code][uvarint payload_len][payload bytes]
+//
+// Plus de wrapper JSON. Les payloads tx/block/vote utilisent leur
+// MarshalBinary (tranches 1 et 2) — gain mesuré ~26-27 %. Hello et
+// GetBlocks sont triviaux et encodés inline avec les primitives codec.
+//
+// Limite de frame : 16 MB (assez pour un bloc complet, refuse les
+// frames énormes — protection DoS).
 package p2p
 
 import (
-	"encoding/json"
+	"bufio"
+	"encoding/binary"
+	"errors"
+	"io"
 	"log"
 	"net"
 	"sync"
 
+	"chaingo/internal/codec"
 	"chaingo/internal/types"
 )
 
-type Message struct {
-	Type string          `json:"type"` // hello | tx | block | get_blocks | blocks
-	Data json.RawMessage `json:"data,omitempty"`
-}
+// Codes de type — un seul byte. Toute valeur inconnue déclenche le drop
+// du peer (anti-prompt-injection P2P) car les versions futures
+// négocieront via le hello plutôt que d'introduire silencieusement des
+// codes mystères.
+const (
+	msgHello     byte = 0x01
+	msgTx        byte = 0x02
+	msgBlock     byte = 0x03
+	msgVote      byte = 0x04
+	msgGetBlocks byte = 0x05
+)
+
+const (
+	maxFrameBytes = 16 * 1024 * 1024 // 16 MB : tient un bloc plein largement
+	syncBatch     = 200
+)
+
+var (
+	errFrameTooLarge = errors.New("p2p: frame too large")
+	errUnknownMsg    = errors.New("p2p: unknown message type")
+)
+
+// Hello et GetBlocks : encodage binaire trivial via codec.
 
 type Hello struct {
-	ChainID string `json:"chain_id"`
-	Height  uint64 `json:"height"`
+	ChainID string
+	Height  uint64
+}
+
+func (h *Hello) MarshalBinary() ([]byte, error) {
+	e := codec.NewEncoder(64)
+	e.WriteString(h.ChainID)
+	e.WriteUvarint(h.Height)
+	return e.Bytes(), nil
+}
+
+func (h *Hello) UnmarshalBinary(data []byte) error {
+	d := codec.NewDecoder(data)
+	var err error
+	if h.ChainID, err = d.ReadString(); err != nil {
+		return err
+	}
+	if h.Height, err = d.ReadUvarint(); err != nil {
+		return err
+	}
+	return d.MustFinish()
 }
 
 type GetBlocks struct {
-	From uint64 `json:"from"`
+	From uint64
 }
 
-const syncBatch = 200
+func (g *GetBlocks) MarshalBinary() ([]byte, error) {
+	e := codec.NewEncoder(16)
+	e.WriteUvarint(g.From)
+	return e.Bytes(), nil
+}
+
+func (g *GetBlocks) UnmarshalBinary(data []byte) error {
+	d := codec.NewDecoder(data)
+	var err error
+	if g.From, err = d.ReadUvarint(); err != nil {
+		return err
+	}
+	return d.MustFinish()
+}
 
 type Handlers struct {
 	// OnTx returns true if the tx was new (=> re-gossip).
@@ -40,14 +106,13 @@ type Handlers struct {
 
 type peer struct {
 	conn net.Conn
-	enc  *json.Encoder
 	mu   sync.Mutex
 }
 
-func (p *peer) send(m *Message) error {
+func (p *peer) send(typ byte, payload []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.enc.Encode(m)
+	return writeFrame(p.conn, typ, payload)
 }
 
 type Server struct {
@@ -72,7 +137,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.listener = ln
-	log.Printf("[p2p] listening on %s", s.addr)
+	log.Printf("[p2p] listening on %s (binary protocol v2)", s.addr)
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -112,8 +177,44 @@ func (s *Server) PeerCount() int {
 	return len(s.peers)
 }
 
+// writeFrame écrit [type][uvarint len][payload] sur w.
+// Pas de buffering : le Write TCP est déjà la frontière logique.
+func writeFrame(w io.Writer, typ byte, payload []byte) error {
+	if len(payload) > maxFrameBytes {
+		return errFrameTooLarge
+	}
+	var hdr [1 + binary.MaxVarintLen64]byte
+	hdr[0] = typ
+	n := binary.PutUvarint(hdr[1:], uint64(len(payload)))
+	if _, err := w.Write(hdr[:1+n]); err != nil {
+		return err
+	}
+	_, err := w.Write(payload)
+	return err
+}
+
+// readFrame lit une frame complète et valide la taille.
+func readFrame(r *bufio.Reader) (byte, []byte, error) {
+	typ, err := r.ReadByte()
+	if err != nil {
+		return 0, nil, err
+	}
+	n, err := binary.ReadUvarint(r)
+	if err != nil {
+		return 0, nil, err
+	}
+	if n > maxFrameBytes {
+		return 0, nil, errFrameTooLarge
+	}
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return 0, nil, err
+	}
+	return typ, buf, nil
+}
+
 func (s *Server) handle(conn net.Conn) {
-	p := &peer{conn: conn, enc: json.NewEncoder(conn)}
+	p := &peer{conn: conn}
 	key := conn.RemoteAddr().String()
 	s.mu.Lock()
 	s.peers[key] = p
@@ -126,55 +227,64 @@ func (s *Server) handle(conn net.Conn) {
 		log.Printf("[p2p] peer %s disconnected", key)
 	}()
 
-	hello, _ := json.Marshal(Hello{ChainID: s.chainID, Height: s.h.Height()})
-	p.send(&Message{Type: "hello", Data: hello})
+	// Envoi du hello dès la connexion.
+	hello := Hello{ChainID: s.chainID, Height: s.h.Height()}
+	helloBin, _ := hello.MarshalBinary()
+	if p.send(msgHello, helloBin) != nil {
+		return
+	}
 
-	dec := json.NewDecoder(conn)
+	// bufio.Reader : un seul Read syscall pour le header (1 + varint),
+	// puis ReadFull pour le payload. Cohérent avec writeFrame.
+	r := bufio.NewReaderSize(conn, 64*1024)
 	for {
-		var m Message
-		if err := dec.Decode(&m); err != nil {
+		typ, payload, err := readFrame(r)
+		if err != nil {
+			if !errors.Is(err, io.EOF) && err != io.ErrUnexpectedEOF {
+				log.Printf("[p2p] peer %s: frame error: %v", key, err)
+			}
 			return
 		}
-		switch m.Type {
-		case "hello":
+		switch typ {
+		case msgHello:
 			var h Hello
-			if json.Unmarshal(m.Data, &h) != nil || h.ChainID != s.chainID {
+			if h.UnmarshalBinary(payload) != nil || h.ChainID != s.chainID {
 				log.Printf("[p2p] peer %s on wrong chain, dropping", key)
 				return
 			}
 			if h.Height > s.h.Height() {
 				s.requestBlocks(p)
 			}
-		case "tx":
-			var tx types.Transaction
-			if json.Unmarshal(m.Data, &tx) != nil {
+		case msgTx:
+			tx := &types.Transaction{}
+			if tx.UnmarshalBinary(payload) != nil {
 				continue
 			}
-			if s.h.OnTx(&tx) {
-				s.Broadcast("tx", &tx, p)
+			if s.h.OnTx(tx) {
+				s.broadcastBin(typ, payload, p)
 			}
-		case "block":
-			var b types.Block
-			if json.Unmarshal(m.Data, &b) != nil {
+		case msgBlock:
+			b := &types.Block{}
+			if b.UnmarshalBinary(payload) != nil {
 				continue
 			}
-			accepted, needSync := s.h.OnBlock(&b)
+			accepted, needSync := s.h.OnBlock(b)
 			if accepted {
-				s.Broadcast("block", &b, p)
+				s.broadcastBin(typ, payload, p)
 			} else if needSync {
 				s.requestBlocks(p)
 			}
-		case "vote":
-			var v types.Vote
-			if json.Unmarshal(m.Data, &v) != nil {
+		case msgVote:
+			v := &types.Vote{}
+			if v.UnmarshalBinary(payload) != nil {
 				continue
 			}
-			if s.h.OnVote != nil && s.h.OnVote(&v) {
-				s.Broadcast("vote", &v, p)
+			if s.h.OnVote != nil && s.h.OnVote(v) {
+				s.broadcastBin(typ, payload, p)
 			}
-		case "get_blocks":
+		case msgGetBlocks:
 			var g GetBlocks
-			if json.Unmarshal(m.Data, &g) != nil {
+			if g.UnmarshalBinary(payload) != nil {
 				continue
 			}
 			top := s.h.Height()
@@ -183,27 +293,58 @@ func (s *Server) handle(conn net.Conn) {
 				if b == nil {
 					break
 				}
-				data, _ := json.Marshal(b)
-				if p.send(&Message{Type: "block", Data: data}) != nil {
+				data, err := b.MarshalBinary()
+				if err != nil {
+					break
+				}
+				if p.send(msgBlock, data) != nil {
 					return
 				}
 			}
+		default:
+			log.Printf("[p2p] peer %s: unknown msg type 0x%02x — dropping", key, typ)
+			return
 		}
 	}
 }
 
 func (s *Server) requestBlocks(p *peer) {
-	g, _ := json.Marshal(GetBlocks{From: s.h.Height() + 1})
-	p.send(&Message{Type: "get_blocks", Data: g})
+	g := GetBlocks{From: s.h.Height() + 1}
+	data, _ := g.MarshalBinary()
+	p.send(msgGetBlocks, data)
 }
 
-// Broadcast sends a payload to every connected peer except `except`.
+// Broadcast diffuse un payload (tx, block, vote) à tous les peers sauf
+// `except` — l'appelant fait le MarshalBinary une seule fois.
 func (s *Server) Broadcast(typ string, payload any, except *peer) {
-	data, err := json.Marshal(payload)
-	if err != nil {
+	var typByte byte
+	var data []byte
+	var err error
+	switch typ {
+	case "tx":
+		typByte = msgTx
+		data, err = payload.(*types.Transaction).MarshalBinary()
+	case "block":
+		typByte = msgBlock
+		data, err = payload.(*types.Block).MarshalBinary()
+	case "vote":
+		typByte = msgVote
+		data, err = payload.(*types.Vote).MarshalBinary()
+	default:
+		log.Printf("[p2p] Broadcast: type inconnu %q", typ)
 		return
 	}
-	m := &Message{Type: typ, Data: data}
+	if err != nil {
+		log.Printf("[p2p] Broadcast: MarshalBinary %s: %v", typ, err)
+		return
+	}
+	s.broadcastBin(typByte, data, except)
+}
+
+// broadcastBin : version interne quand le payload est déjà encodé.
+// Évite de re-marshaler le payload qu'on vient de décoder lors d'un
+// re-gossip (la frame brute reçue est rediffusée telle quelle).
+func (s *Server) broadcastBin(typ byte, payload []byte, except *peer) {
 	s.mu.Lock()
 	targets := make([]*peer, 0, len(s.peers))
 	for _, p := range s.peers {
@@ -213,6 +354,6 @@ func (s *Server) Broadcast(typ string, payload any, except *peer) {
 	}
 	s.mu.Unlock()
 	for _, p := range targets {
-		p.send(m)
+		p.send(typ, payload)
 	}
 }

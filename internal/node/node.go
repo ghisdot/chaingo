@@ -53,9 +53,10 @@ type Node struct {
 	p2p      *p2p.Server
 	gen      *genesis.Genesis
 	key      *crypto.KeyPair // validateur (peut être nil)
-	faucet   *crypto.KeyPair // devnet uniquement
-	faucetMu sync.Mutex
-	start    time.Time
+	faucet     *crypto.KeyPair // devnet uniquement
+	faucetMu   sync.Mutex
+	faucetLast map[string]time.Time // adresse cible → dernière demande (anti-drain)
+	start      time.Time
 }
 
 func New(cfg Config) (*Node, error) {
@@ -66,7 +67,7 @@ func New(cfg Config) (*Node, error) {
 		return nil, err
 	}
 
-	n := &Node{cfg: cfg, st: state.New(), pool: mempool.New(cfg.MempoolMax), start: time.Now()}
+	n := &Node{cfg: cfg, st: state.New(), pool: mempool.New(cfg.MempoolMax), faucetLast: map[string]time.Time{}, start: time.Now()}
 
 	db, err := store.Open(filepath.Join(cfg.DataDir, "chain.db"))
 	if err != nil {
@@ -426,6 +427,15 @@ func (n *Node) Height() uint64                        { return n.st.GetHeight() 
 func (n *Node) IsDev() bool                           { return n.cfg.Dev }
 func (n *Node) GenesisDoc() []byte                    { return n.gen.Bytes() }
 
+// Limites du faucet — empêchent un drain trivial du pot de 1 Md CGO de la
+// genèse testnet. Calibrées pour rester confortables en usage légitime :
+//   - Un opérateur de validateur demande 15 000 CGO une fois, puis stake.
+//   - Un dev qui teste demande 100 CGO, fait ses tx, redemande après le délai.
+const (
+	faucetMaxPerRequestCGO = 20_000               // plafond dur par appel
+	faucetCooldown         = 5 * time.Minute      // entre deux appels visant la même adresse
+)
+
 func (n *Node) FaucetSend(to string, amount uint64) (string, error) {
 	if n.faucet == nil {
 		return "", errors.New("no faucet on this node")
@@ -433,8 +443,18 @@ func (n *Node) FaucetSend(to string, amount uint64) (string, error) {
 	if !crypto.ValidAddress(to) {
 		return "", errors.New("invalid address")
 	}
+	if amount > faucetMaxPerRequestCGO*types.Unit {
+		return "", fmt.Errorf("faucet: max %d CGO per request", uint64(faucetMaxPerRequestCGO))
+	}
 	n.faucetMu.Lock()
 	defer n.faucetMu.Unlock()
+	if last, ok := n.faucetLast[to]; ok {
+		if since := time.Since(last); since < faucetCooldown {
+			wait := faucetCooldown - since
+			return "", fmt.Errorf("faucet: cooldown for this address, try again in %s", wait.Round(time.Second))
+		}
+	}
+	n.faucetLast[to] = time.Now()
 	tx := &types.Transaction{
 		ChainID:    n.gen.ChainID,
 		Type:       types.TxTransfer,
