@@ -2,3 +2,6 @@
 *.sh text eol=lf
 # Go : LF partout (cohérence, gofmt).
 *.go text eol=lf
+# Corpus de fuzzing : octets bruts — NE PAS convertir les fins de ligne,
+# sinon le corpus diverge entre plateformes de CI (Linux/Windows/macOS).
+testdata/fuzz/** -text
