@@ -78,6 +78,35 @@ func (s *simNet) step() {
 	s.deliver()
 }
 
+// stepWithOffline : seuls les nœuds dont l'index N'EST PAS dans `offline`
+// produisent. Le round de secours est forcé en mettant `lastProgress` loin
+// dans le passé pour TOUS les moteurs (ils accepteront donc un round > 0).
+func (s *simNet) stepWithOffline(offline map[int]bool) {
+	long := time.Now().Add(-24 * time.Hour)
+	for _, e := range s.engines {
+		e.mu.Lock()
+		e.lastProgress = long
+		e.mu.Unlock()
+	}
+	for i, e := range s.engines {
+		if offline[i] {
+			continue
+		}
+		e.ProduceOnce(true)
+	}
+	s.deliver()
+}
+
+// indexOf : index du nœud dont la clé correspond à l'adresse.
+func (s *simNet) indexOf(addr string) int {
+	for i, k := range s.keys {
+		if k.Address() == addr {
+			return i
+		}
+	}
+	return -1
+}
+
 // TestMultiValidatorConsensusAndFinality : 4 validateurs convergent (même
 // hauteur, même hash, même racine d'état) et finalisent en continu.
 func TestMultiValidatorConsensusAndFinality(t *testing.T) {
@@ -143,5 +172,115 @@ func TestLateNodeSyncsFinality(t *testing.T) {
 	}
 	if late.GetLastHash() != net.states[0].GetLastHash() {
 		t.Fatal("nœud tardif : hash final divergent")
+	}
+}
+
+// TestFallbackRoundOnOfflineProposer : le proposeur élu au round 0 est
+// offline → un autre validateur prend la main au round suivant, la chaîne
+// avance malgré tout. Bloc valide chez tous les nœuds en ligne.
+func TestFallbackRoundOnOfflineProposer(t *testing.T) {
+	net := newSimNet(t, 4)
+	// Avance la chaîne d'un bloc pour s'établir.
+	net.step()
+	if h := net.states[0].GetHeight(); h != 1 {
+		t.Fatalf("setup : hauteur 1 attendue, got %d", h)
+	}
+
+	// Qui serait le proposeur du round 0 pour la prochaine hauteur ?
+	prev := net.states[0].GetLastHash()
+	r0 := net.states[0].SelectProposer(2, prev, 0)
+	off := net.indexOf(r0)
+	if off < 0 {
+		t.Fatalf("proposeur round 0 introuvable parmi les nœuds : %s", r0)
+	}
+
+	// On le coupe et on déclenche un round de secours.
+	net.stepWithOffline(map[int]bool{off: true})
+
+	// Tous les nœuds en ligne sont à la hauteur 2 et d'accord.
+	h0 := net.states[0].GetHeight()
+	if h0 != 2 {
+		t.Fatalf("après round de secours : hauteur 2 attendue, got %d", h0)
+	}
+	hash0 := net.states[0].GetLastHash()
+	for i, st := range net.states {
+		if i == off {
+			continue
+		}
+		if st.GetHeight() != h0 || st.GetLastHash() != hash0 {
+			t.Fatalf("nœud %d divergent : h=%d hash=%s", i, st.GetHeight(), st.GetLastHash())
+		}
+	}
+	// Le bloc produit a un round > 0.
+	if net.chain[len(net.chain)-1].Header.Round == 0 {
+		t.Fatal("le bloc de secours devrait avoir un round > 0")
+	}
+}
+
+// TestEquivocationGetsSlashedThroughNetwork : un validateur émet deux votes
+// conflictuels (équivocation manuelle hors du castVote du moteur) reçus par
+// le réseau → un autre nœud les transforme en preuve, l'inclut dans son bloc,
+// et le slashing s'applique chez tous les nœuds qui appliquent ce bloc.
+func TestEquivocationGetsSlashedThroughNetwork(t *testing.T) {
+	net := newSimNet(t, 4)
+	const offender = 1
+
+	// Avance d'un bloc pour avoir un prev valide.
+	net.step()
+	prev := net.states[0].GetLastHash()
+	stakeBefore := net.states[0].PowerOf(net.keys[offender].Address())
+
+	// Deux précommits conflictuels signés par offender à la hauteur 2.
+	mkVote := func(hash string) *types.Vote {
+		v := &types.Vote{ChainID: "sim", Height: 2, Kind: types.PrecommitKind, BlockHash: hash}
+		v.SignWith(net.keys[offender])
+		return v
+	}
+	vA := mkVote("FAKE_HASH_A_for_h2_" + prev[:8])
+	vB := mkVote("FAKE_HASH_B_for_h2_" + prev[:8])
+
+	// Tous les autres nœuds reçoivent A puis B → ils détectent l'équivocation
+	// et préparent la preuve pour leur prochain bloc proposé.
+	for i, e := range net.engines {
+		if i == offender {
+			continue
+		}
+		e.AddVote(vA)
+		e.AddVote(vB)
+	}
+
+	// Produire des blocs jusqu'à ce que la preuve soit incluse (le proposeur
+	// élu doit ne PAS être l'offender pour qu'elle soit drainée dans son bloc).
+	included := false
+	for try := 0; try < 10 && !included; try++ {
+		net.step()
+		for _, b := range net.chain {
+			for _, ev := range b.Evidence {
+				if ev.Voter == net.keys[offender].Address() && ev.Height == 2 {
+					included = true
+					break
+				}
+			}
+			if included {
+				break
+			}
+		}
+	}
+	if !included {
+		t.Fatal("la preuve d'équivocation n'a jamais été incluse dans un bloc")
+	}
+
+	// Slash appliqué : stake de l'offender réduit (5 % par défaut) chez tous
+	// les nœuds qui ont appliqué le bloc avec la preuve.
+	stakeAfter := net.states[0].PowerOf(net.keys[offender].Address())
+	if stakeAfter >= stakeBefore {
+		t.Fatalf("le slash devrait avoir réduit le stake de l'offender : avant=%d après=%d",
+			stakeBefore, stakeAfter)
+	}
+	// IsSlashed = true partout.
+	for i, st := range net.states {
+		if !st.IsSlashed(net.keys[offender].Address(), 2) {
+			t.Fatalf("nœud %d : équivocation devrait être marquée slashée", i)
+		}
 	}
 }
