@@ -29,6 +29,7 @@ Usage :
                      [--datadir DIR] [--genesis FILE | --genesis-url URL]
                      [--validator-seed FILE]
   chaingo wallet new <name> [--pass MDP]
+  chaingo wallet import <name> --seed <fichier-seed> [--pass MDP]
   chaingo wallet list
   chaingo wallet show <name>
   chaingo balance <adresse|wallet> [--api URL]
@@ -155,9 +156,43 @@ func cmdNode(args []string) error {
 
 func cmdWallet(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage : chaingo wallet new|list|show")
+		return fmt.Errorf("usage : chaingo wallet new|import|list|show")
 	}
 	switch args[0] {
+	case "import":
+		fs := flag.NewFlagSet("wallet import", flag.ExitOnError)
+		pass := fs.String("pass", "", "mot de passe du keystore")
+		seedFile := fs.String("seed", "", "fichier contenant la seed hex (ex : /var/lib/chaingo/validator.seed)")
+		seedHex := fs.String("seed-hex", "", "seed hex passée directement (préférer --seed pour ne pas la laisser dans l'historique shell)")
+		fs.Parse(args[1:])
+		if fs.NArg() < 1 {
+			return fmt.Errorf("usage : chaingo wallet import <name> --seed FILE  (ou --seed-hex HEX)")
+		}
+		name := fs.Arg(0)
+		var seedRaw string
+		switch {
+		case *seedFile != "":
+			b, err := os.ReadFile(*seedFile)
+			if err != nil {
+				return err
+			}
+			seedRaw = strings.TrimSpace(string(b))
+		case *seedHex != "":
+			seedRaw = *seedHex
+		default:
+			return fmt.Errorf("--seed FILE ou --seed-hex HEX est requis")
+		}
+		kp, path, err := wallet.Import(name, *pass, seedRaw)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Wallet %q importé (signatures %s)\n", name, crypto.Scheme.Name())
+		fmt.Printf("  Adresse : %s\n", kp.Address())
+		fmt.Printf("  Fichier : %s\n", path)
+		if *pass == "" {
+			fmt.Println("  ⚠ keystore chiffré avec un mot de passe VIDE — ok en devnet seulement")
+		}
+		return nil
 	case "new":
 		fs := flag.NewFlagSet("wallet new", flag.ExitOnError)
 		pass := fs.String("pass", "", "mot de passe du keystore")

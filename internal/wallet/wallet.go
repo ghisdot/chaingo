@@ -6,6 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,15 +47,36 @@ func deriveKey(pass string, salt []byte, n, r, p int) ([]byte, error) {
 
 // Create generates a new ML-DSA-65 key pair and stores the encrypted seed.
 func Create(name, pass string) (*crypto.KeyPair, string, error) {
+	kp, err := crypto.GenerateKeyPair()
+	if err != nil {
+		return nil, "", err
+	}
+	return saveEncrypted(name, pass, kp)
+}
+
+// Import enregistre un wallet à partir d'une seed hex existante (ex : seed
+// d'un validateur générée via `chaingo keygen`, qu'on veut piloter depuis le
+// CLI pour staker / déléguer / signer des tx). Le wallet est chiffré avec
+// `pass` puis stocké comme un wallet créé.
+func Import(name, pass, seedHex string) (*crypto.KeyPair, string, error) {
+	seedHex = strings.TrimSpace(seedHex)
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		return nil, "", fmt.Errorf("seed hex invalide : %w", err)
+	}
+	if len(seed) != crypto.Scheme.SeedSize() {
+		return nil, "", fmt.Errorf("seed doit faire %d octets (got %d)", crypto.Scheme.SeedSize(), len(seed))
+	}
+	return saveEncrypted(name, pass, crypto.FromSeed(seed))
+}
+
+// saveEncrypted : chiffrement scrypt+AES-256-GCM commun à Create et Import.
+func saveEncrypted(name, pass string, kp *crypto.KeyPair) (*crypto.KeyPair, string, error) {
 	if !validName(name) {
 		return nil, "", errors.New("wallet name: letters, digits, - and _ only")
 	}
 	if _, err := os.Stat(pathFor(name)); err == nil {
 		return nil, "", fmt.Errorf("wallet %q already exists", name)
-	}
-	kp, err := crypto.GenerateKeyPair()
-	if err != nil {
-		return nil, "", err
 	}
 	sk := StoredKey{Name: name, Address: kp.Address()}
 	sk.Crypto.KDF = "scrypt"
