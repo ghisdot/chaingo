@@ -71,6 +71,20 @@ signatures de vote** → mise à niveau coordonnée de tous les nœuds (acceptab
 stade testnet, comme le passage P2P binaire). Le codec binaire du Vote (tranche 2)
 gagne aussi le champ.
 
+## État : LIVRÉ (chemin B, reorg du sommet)
+
+Tranches 1-5 livrées et testées. Le fork-choice bascule vers un bloc concurrent
+**au sommet** s'il porte une polka à un round supérieur ; validé par un **test de
+simulation de partition** (`TestForkChoiceConvergesViaHigherRoundPolka`) : un
+nœud minoritaire sur B0 (round 0) reorg vers B1 (round 1) dès qu'il voit la
+polka, et les 4 nœuds convergent sans double-finalité.
+
+**Scope assumé** : reorg du **sommet** (1 bloc). C'est le cas dominant car la
+finalité ne traîne que d'un bloc. Un fork **enterré** (plusieurs blocs non
+finalisés divergents) est hors périmètre — il est ignoré, et le système reste
+fail-safe (jamais de double-finalité). Le reorg multi-blocs est un durcissement
+ultérieur (rejouer une branche de N blocs depuis le point de fork).
+
 ## Tranches d'implémentation (chacune testée, commitée séparément)
 
 1. **`Vote.Round`** : champ + signing bytes + codec binaire + maj des appels. Tests :

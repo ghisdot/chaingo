@@ -41,8 +41,10 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       du round (un changement légitime cross-round n'est plus slashable). Quorums mesurés contre
       le **set de validateurs figé par hauteur**. Design : [phase2-locking-pol.md](docs/design/phase2-locking-pol.md).
       Reste l'activation par le fork-choice (ci-dessous).
-- [ ] **Fork-choice et réorganisations** : revert d'état depuis le dernier finalisé + bascule
-      vers la branche couverte par la polka de plus haut round. Active la machinerie de verrou.
+- [~] **Fork-choice et réorganisations** : checkpoint d'état par hauteur + bascule du SOMMET
+      vers le bloc couvert par la polka de plus haut round (reorg sûr avec restauration en cas
+      d'échec). Valide par un test de simulation de partition (convergence sans double-finalité).
+      Active la machinerie de verrou. Reste : reorg multi-blocs (fork enterré) — durcissement.
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
 - [x] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
       Terminé (tranches 1 à 5). Primitives `internal/codec/` (varint, length-prefixed,
