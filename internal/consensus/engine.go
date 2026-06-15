@@ -74,6 +74,13 @@ type Engine struct {
 	// Un reorg = restaurer le snapshot du point de fork (toujours ≥ finalized,
 	// immuable) puis rejouer la branche concurrente. Purgé sous `finalized`.
 	snapshots map[uint64][]byte
+	// forks : blocs CONCURRENTS reçus à une hauteur déjà committée (mais non
+	// finalisée), en attente d'une éventuelle bascule (#7). On bascule vers l'un
+	// d'eux s'il porte une polka à un round STRICTEMENT supérieur à notre bloc
+	// courant (preuve qu'une super-majorité a vu mieux). Scope de cette tranche :
+	// reorg du SOMMET (1 bloc) — un fork enterré plus profond est hors périmètre
+	// (le système reste fail-safe). Purgé sous `finalized`.
+	forks map[uint64][]*types.Block
 	// Slashing : preuves de double-signature en attente d'inclusion dans un
 	// bloc (clé voter@height), protégées par e.mu.
 	evidence map[string]*types.DoubleSignEvidence
@@ -105,6 +112,7 @@ func New(st *state.State, pool *mempool.Mempool, db *store.Store, key *crypto.Ke
 		setByHeight:  map[uint64]*state.ValidatorSet{},
 		locked:       map[uint64]lock{},
 		snapshots:    map[uint64][]byte{},
+		forks:        map[uint64][]*types.Block{},
 		evidence:     map[string]*types.DoubleSignEvidence{},
 		stopCh:       make(chan struct{}),
 	}
@@ -226,6 +234,7 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 		e.pruneVotedLocked(height - 1)
 		e.pruneSetsLocked(height - 1)
 		e.pruneSnapshotsBelow(height - 1) // garde ≥ finalité (point de fork minimal)
+		e.pruneForksBelow(height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -236,20 +245,15 @@ func (e *Engine) ProduceOnce(force bool) *types.Block {
 	return b
 }
 
-// ApplyExternalBlock validates and applies a block received from a peer.
-func (e *Engine) ApplyExternalBlock(b *types.Block) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	cur := e.st.GetHeight()
-	switch {
-	case b.Header.Height <= cur:
-		return nil // déjà connu
-	case b.Header.Height > cur+1:
-		return ErrGap
-	}
-	prev := e.st.GetLastHash()
+// validateBlockLocked : valide un bloc `b` censé étendre `prev` (hash du
+// parent), SANS muter l'état. Renvoie finalizesParent (le bloc porte-t-il un
+// commit ≥ 2/3 du parent ?) et une erreur si quoi que ce soit cloche. Le set
+// votant de la hauteur est figé au passage (#5). Suppose e.mu détenu et l'état
+// positionné à la hauteur b.Header.Height-1. Partagé par le chemin nominal et
+// le fork-choice (#7).
+func (e *Engine) validateBlockLocked(b *types.Block, prev string) (finalizesParent bool, err error) {
 	if b.Header.PrevHash != prev {
-		return fmt.Errorf("prev hash mismatch at height %d", b.Header.Height)
+		return false, fmt.Errorf("prev hash mismatch at height %d", b.Header.Height)
 	}
 	// Fige le set votant de cette hauteur : l'état est ici post-(Height-1) (#5).
 	e.freezeSetLocked(b.Header.Height)
@@ -257,45 +261,63 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 	// (round 0 nominal, sinon un round de secours). Le round explicite lève
 	// toute ambiguïté et rend le comptage d'inactivité déterministe.
 	if b.Header.Round >= MaxRounds {
-		return fmt.Errorf("round %d out of range", b.Header.Round)
+		return false, fmt.Errorf("round %d out of range", b.Header.Round)
 	}
 	if want := e.st.SelectProposer(b.Header.Height, prev, b.Header.Round); want != b.Header.Proposer {
-		return fmt.Errorf("wrong proposer at height %d round %d: got %s, want %s", b.Header.Height, b.Header.Round, b.Header.Proposer, want)
+		return false, fmt.Errorf("wrong proposer at height %d round %d: got %s, want %s", b.Header.Height, b.Header.Round, b.Header.Proposer, want)
 	}
 	if b.ComputeHash() != b.Hash {
-		return errors.New("invalid block hash")
+		return false, errors.New("invalid block hash")
 	}
 	if err := b.VerifyProposerSig(); err != nil {
-		return fmt.Errorf("proposer signature: %w", err)
+		return false, fmt.Errorf("proposer signature: %w", err)
 	}
 	if types.TxRoot(b.Txs) != b.Header.TxRoot {
-		return errors.New("tx root mismatch")
+		return false, errors.New("tx root mismatch")
 	}
 	if types.EvidenceRoot(b.Evidence) != b.Header.EvidenceRoot {
-		return errors.New("evidence root mismatch")
+		return false, errors.New("evidence root mismatch")
 	}
 	for _, ev := range b.Evidence {
 		if err := ev.Verify(e.chainID); err != nil {
-			return fmt.Errorf("invalid double-sign evidence: %w", err)
+			return false, fmt.Errorf("invalid double-sign evidence: %w", err)
 		}
 	}
 	// Commit du parent : si présent, il doit représenter ≥ 2/3 du stake actif
 	// sur le bloc parent (height-1, prevHash). C'est ce qui finalise.
 	if types.CommitRoot(b.LastCommit) != b.Header.LastCommitRoot {
-		return errors.New("last commit root mismatch")
+		return false, errors.New("last commit root mismatch")
 	}
-	finalizesParent := false
 	if len(b.LastCommit) > 0 {
 		power, cerr := e.verifyCommit(b.LastCommit, b.Header.Height-1, b.Header.PrevHash)
 		if cerr != nil {
-			return fmt.Errorf("invalid last commit: %w", cerr)
+			return false, fmt.Errorf("invalid last commit: %w", cerr)
 		}
 		if !hasQuorum(power, e.setForHeight(b.Header.Height-1).Total) {
-			return errors.New("last commit below 2/3 of the height's validator set")
+			return false, errors.New("last commit below 2/3 of the height's validator set")
 		}
 		finalizesParent = true
 	}
 	if err := types.VerifyAll(b.Txs); err != nil {
+		return false, err
+	}
+	return finalizesParent, nil
+}
+
+// ApplyExternalBlock validates and applies a block received from a peer.
+func (e *Engine) ApplyExternalBlock(b *types.Block) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	cur := e.st.GetHeight()
+	switch {
+	case b.Header.Height <= cur:
+		return e.considerFork(b, cur) // déjà committé : bloc connu OU concurrent (fork-choice)
+	case b.Header.Height > cur+1:
+		return ErrGap
+	}
+	prev := e.st.GetLastHash()
+	finalizesParent, err := e.validateBlockLocked(b, prev)
+	if err != nil {
 		return err
 	}
 	absent := e.absentProposers(b.Header.Height, prev, b.Header.Round, b.Header.Proposer)
@@ -316,6 +338,7 @@ func (e *Engine) ApplyExternalBlock(b *types.Block) error {
 		e.pruneVotedLocked(b.Header.Height - 1)
 		e.pruneSetsLocked(b.Header.Height - 1)
 		e.pruneSnapshotsBelow(b.Header.Height - 1)
+		e.pruneForksBelow(b.Header.Height - 1)
 	}
 	e.lastProgress = time.Now()
 	e.persist(b)
@@ -464,6 +487,13 @@ func (e *Engine) AddVote(v *types.Vote) (bool, error) {
 	if equiv != nil {
 		e.recordEquivocation(equiv, v)
 	}
+	// Un nouveau PREVOTE peut compléter une polka pour un bloc concurrent
+	// bufferisé → réévaluer le fork-choice (#7). No-op si rien ne qualifie.
+	if v.Kind == types.PrevoteKind {
+		if err := e.tryReorgLocked(v.Height); err != nil {
+			log.Printf("[consensus] reorg déclenché par vote : %v", err)
+		}
+	}
 	return true, nil
 }
 
@@ -607,8 +637,129 @@ func (e *Engine) RewindTo(height uint64) error {
 	}
 	// NB : les votes accumulés pour les hauteurs > height (branche abandonnée)
 	// sont laissés au votePool ; ils sont dédupliqués par hash, réévalués contre
-	// le set figé, et purgés à la finalisation. Le nettoyage fin relève du
-	// fork-choice (#7, étape suivante).
+	// le set figé, et purgés à la finalisation.
+	return nil
+}
+
+// pruneForksBelow oublie les blocs concurrents bufferisés sous `keep` (hauteurs
+// finalisées : plus aucun reorg possible). Suppose e.mu détenu.
+func (e *Engine) pruneForksBelow(keep uint64) {
+	for h := range e.forks {
+		if h < keep {
+			delete(e.forks, h)
+		}
+	}
+}
+
+// considerFork gère un bloc reçu à une hauteur DÉJÀ committée (≤ sommet). Soit
+// c'est le bloc qu'on a déjà (no-op), soit c'est un bloc concurrent → on
+// l'évalue pour un éventuel reorg (#7). Scope de cette tranche : reorg du SOMMET
+// uniquement (b à la hauteur courante). Un fork enterré plus profond est hors
+// périmètre — le système reste fail-safe (jamais de double-finalité). Suppose
+// e.mu détenu.
+func (e *Engine) considerFork(b *types.Block, cur uint64) error {
+	H := b.Header.Height
+	if H <= e.st.GetFinalized() {
+		return nil // finalisée : immuable
+	}
+	if H != cur {
+		return nil // fork enterré : hors scope
+	}
+	if b.Hash == e.st.GetLastHash() {
+		return nil // exactement notre bloc courant
+	}
+	e.bufferForkLocked(b)
+	return e.tryReorgLocked(H)
+}
+
+func (e *Engine) bufferForkLocked(b *types.Block) {
+	for _, f := range e.forks[b.Header.Height] {
+		if f.Hash == b.Hash {
+			return // déjà bufferisé
+		}
+	}
+	e.forks[b.Header.Height] = append(e.forks[b.Header.Height], b)
+}
+
+// tryReorgLocked bascule vers un bloc concurrent bufferisé à la hauteur `H` (=
+// sommet courant) s'il porte une POLKA à un round STRICTEMENT supérieur à notre
+// bloc courant (preuve qu'une super-majorité a vu mieux à un round plus récent —
+// règle POL). No-op si aucun candidat ne qualifie. Suppose e.mu détenu.
+func (e *Engine) tryReorgLocked(H uint64) error {
+	if H != e.st.GetHeight() {
+		return nil // plus le sommet
+	}
+	ourRound := uint32(0)
+	if lk, ok := e.locked[H]; ok {
+		ourRound = lk.round
+	}
+	for _, b := range e.forks[H] {
+		if b.Hash == e.st.GetLastHash() || b.Header.Round <= ourRound {
+			continue
+		}
+		if !e.hasPolka(H, b.Header.Round, b.Hash) {
+			continue // pas de quorum de prevotes plus récent → on reste fidèle
+		}
+		return e.reorgToTipLocked(b)
+	}
+	return nil
+}
+
+// reorgToTipLocked exécute la bascule vers `b` (à la hauteur courante) : restaure
+// l'état au point de fork (H-1), valide + exécute b, re-vote. En cas d'échec,
+// restaure NOTRE tip courant — jamais de perte. Suppose e.mu détenu et
+// b.Header.Height == e.st.GetHeight().
+func (e *Engine) reorgToTipLocked(b *types.Block) error {
+	H := b.Header.Height
+	if H-1 < e.st.GetFinalized() {
+		return nil // ne jamais rembobiner sous la finalité
+	}
+	forkSnap, ok := e.snapshots[H-1]
+	if !ok {
+		return fmt.Errorf("reorg : pas de snapshot au point de fork %d", H-1)
+	}
+	oldHash := e.st.GetLastHash()
+	backup := e.st.Bytes() // filet : notre tip courant
+	if err := e.st.Restore(forkSnap); err != nil {
+		return err
+	}
+	prev := e.st.GetLastHash()
+	finalizesParent, err := e.validateBlockLocked(b, prev)
+	if err != nil {
+		e.st.Restore(backup)
+		return err
+	}
+	absent := e.absentProposers(H, prev, b.Header.Round, b.Header.Proposer)
+	_, _, root, err := e.st.Execute(b.Txs, b.Evidence, absent, b.Header.Proposer, b.Header.Timestamp, true)
+	if err != nil || root != b.Header.StateRoot {
+		e.st.Restore(backup) // on garde notre bloc d'origine
+		if err == nil {
+			err = errors.New("state root mismatch on reorg")
+		}
+		return err
+	}
+	e.st.Commit(H, b.Hash)
+	e.snapshotStateLocked(H)
+	log.Printf("[consensus] REORG #%d : %s… → %s… (round %d, justifié par polka)", H, short(oldHash), short(b.Hash), b.Header.Round)
+	if finalizesParent {
+		e.st.SetFinalized(H - 1)
+		e.votes.prune(H - 1)
+		e.pruneVotedLocked(H - 1)
+		e.pruneSetsLocked(H - 1)
+		e.pruneSnapshotsBelow(H - 1)
+		e.pruneForksBelow(H - 1)
+	}
+	e.lastProgress = time.Now()
+	e.persist(b)
+	for _, tx := range b.Txs {
+		e.pool.Drop(tx.Hash())
+	}
+	// On abandonne notre vote/verrou de l'ancien bloc à H pour re-voter b. Le
+	// changement est à un round SUPÉRIEUR → légitime (pas d'auto-équivocation,
+	// cf castVoteKind + evidence round-aware).
+	delete(e.voted, H)
+	delete(e.locked, H)
+	e.castVote(H, b.Header.Round, b.Hash)
 	return nil
 }
 
