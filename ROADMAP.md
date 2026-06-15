@@ -39,12 +39,13 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 - [ ] Fork-choice et gestion des réorganisations
 - [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
 - [~] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
-      Tranche 1 livrée : primitives `internal/codec/` (varint, length-prefixed,
-      protections taille max et octets parasites) + `Transaction.MarshalBinary/UnmarshalBinary`.
-      Gain mesuré **27 %** sur une tx signée typique (7,4 Ko JSON → 5,4 Ko binaire).
+      Tranches 1 et 2 livrées : primitives `internal/codec/` (varint, length-prefixed,
+      protections taille max et octets parasites) + `Transaction.MarshalBinary/UnmarshalBinary`
+      (gain mesuré **27 %**, 7,4 Ko JSON → 5,4 Ko binaire) + `Block`/`Vote`/`DoubleSignEvidence`
+      (gain **26,2 %** sur bloc complet : header + 2 tx + 2 précommits → 36,6 Ko → 27 Ko).
       `SigningBytes` reste JSON canonique → toutes les signatures existantes
-      restent valides après round-trip binaire (vérifié par test).
-      Reste : `Block`, `Vote`, `DoubleSignEvidence`, intégration P2P, stockage DB.
+      restent valides après round-trip binaire (tests : sig proposeur, sig tx,
+      sig vote, sig evidence). Reste : intégration P2P (tranche 3), stockage DB (tranche 4).
 - [~] Tests unitaires et d'intégration systématiques ([#1](https://github.com/ghisdot/chaingo/issues/1)) :
       unitaires (consensus, state, genesis) + **intégration multi-validateurs en mémoire**
       (4 nœuds convergent + finalisent, synchro d'un nœud tardif). À étendre : fuzzing réseau,
