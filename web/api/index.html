@@ -5,31 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ChainGO API — référence</title>
   <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; font-family: "Inter", system-ui, sans-serif; background: #070b12; }
     .topbar {
-      background: #0b0f17; color: #e6edf6;
-      padding: 14px 24px; border-bottom: 1px solid #1f2a40;
-      display: flex; gap: 18px; align-items: center;
+      background: rgba(7,11,18,.92); color: #eef3fa;
+      padding: 0 24px; height: 64px; border-bottom: 1px solid rgba(255,255,255,.09);
+      display: flex; gap: 14px; align-items: center; backdrop-filter: blur(16px);
     }
-    .topbar a { color: #22d3ee; text-decoration: none; font-size: .92rem; }
-    .topbar a:hover { color: #fff; }
-    .topbar .logo { font-weight: 800; font-size: 1.1rem; margin-right: 14px; }
-    .topbar .logo span {
-      background: linear-gradient(90deg, #22d3ee, #8b5cf6);
+    .topbar a { color: #93a3bd; text-decoration: none; font-size: .9rem; font-weight: 500; }
+    .topbar a:hover { color: #eef3fa; }
+    .topbar .logo { font-weight: 800; font-size: 1.15rem; margin-right: 14px; letter-spacing: -.01em; }
+    .topbar .logo .mark { width: 22px; height: 22px; vertical-align: -5px; margin-right: 7px; }
+    .topbar .logo > span {
+      background: linear-gradient(105deg, #2dd4ee, #a78bfa);
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
     .spacer { flex: 1; }
     .download {
-      font-size: .82rem; padding: 5px 12px; border-radius: 8px;
-      border: 1px solid #1f2a40; background: #131b2c; color: #22d3ee;
+      font-size: .82rem; font-weight: 600; padding: 7px 13px; border-radius: 9px;
+      border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.03); color: #2dd4ee;
     }
+    .download:hover { color: #eef3fa; }
   </style>
 </head>
 <body>
 
 <div class="topbar">
-  <span class="logo">Chain<span>GO</span> API</span>
+  <span class="logo"><svg class="mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#2dd4ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs><path d="M16 2 28 9v14L16 30 4 23V9L16 2Z" stroke="url(#lg)" stroke-width="2" stroke-linejoin="round"/><path d="M16 9v14M10 12v8M22 12v8" stroke="url(#lg)" stroke-width="2" stroke-linecap="round"/></svg>Chain<span>GO</span> API</span>
   <a href="/">Accueil</a>
   <a href="/wallet/">Wallet</a>
   <a href="/explorer/">Explorateur</a>
@@ -40,7 +45,7 @@
 </div>
 
 <redoc spec-url="openapi.yaml"
-       theme='{"colors":{"primary":{"main":"#22d3ee"}},"typography":{"fontFamily":"Segoe UI, system-ui, sans-serif"}}'>
+       theme='{"colors":{"primary":{"main":"#2dd4ee"}},"typography":{"fontFamily":"Inter, system-ui, sans-serif"}}'>
 </redoc>
 
 <script src="https://cdn.redocly.com/redoc/v2.1.5/bundles/redoc.standalone.js"></script>

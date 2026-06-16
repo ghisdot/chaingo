@@ -1,0 +1,116 @@
+/* ChainGO — système de design partagé (sous-pages applicatives).
+   Lié APRÈS le <style> inline de chaque page : à spécificité égale, ces règles
+   gagnent par l'ordre du document et harmonisent l'apparence sans toucher aux
+   layouts spécifiques. Mêmes jetons que la page d'accueil (web/index.html). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root {
+  --bg: #070b12;
+  --bg2: #0b111d;
+  --card: rgba(255,255,255,.025);
+  --card-hover: rgba(255,255,255,.045);
+  --border: rgba(255,255,255,.09);
+  --border-strong: rgba(255,255,255,.16);
+  --text: #eef3fa;
+  --muted: #93a3bd;
+  --faint: #64748b;
+  --cyan: #2dd4ee;
+  --violet: #a78bfa;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --grad: linear-gradient(105deg, #2dd4ee, #818cf8 55%, #a78bfa);
+  --grad-soft: linear-gradient(105deg, rgba(45,212,238,.16), rgba(167,139,250,.16));
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* mesh de dégradés fixe, discret (pas de grille : les pages applicatives sont denses) */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(820px 460px at 10% -10%, rgba(45,212,238,.08), transparent 55%),
+    radial-gradient(820px 520px at 92% 2%, rgba(167,139,250,.10), transparent 55%);
+}
+a { color: var(--cyan); text-decoration: none; transition: color .15s; }
+a:hover { color: var(--text); }
+
+h1, h2, h3 { letter-spacing: -.015em; }
+h1 { font-weight: 800; }
+
+/* ---- nav ---- */
+nav {
+  background: rgba(7,11,18,.72); backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid var(--border);
+}
+nav .wrap { height: 64px; gap: 5px; }
+.logo { font-weight: 800; letter-spacing: -.01em; display: flex; align-items: center; gap: 9px; flex: none; }
+.logo .mark { width: 24px; height: 24px; flex: none; }
+.logo span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo span[style] { -webkit-text-fill-color: initial; } /* sous-titres inline (Wallet, Studio…) : pas de dégradé */
+nav a.link { color: var(--muted); font-weight: 500; padding: 7px 9px; border-radius: 8px; white-space: nowrap; transition: color .15s, background .15s; }
+nav a.link:hover { color: var(--text); background: var(--card); }
+/* écran étroit : la barre de nav devient une bande défilable (jamais de débordement de page) */
+@media (max-width: 820px) {
+  nav .wrap { overflow-x: auto; scrollbar-width: none; }
+  nav .wrap::-webkit-scrollbar { display: none; }
+}
+#langBtn {
+  cursor: pointer; font-weight: 700; padding: 7px 13px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text); transition: border-color .15s, background .15s;
+}
+#langBtn:hover { border-color: var(--border-strong); background: var(--card-hover); }
+
+/* ---- surfaces ---- */
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  transition: border-color .2s, background .2s;
+}
+.card:hover { border-color: var(--border-strong); background: var(--card-hover); }
+
+/* ---- contrôles ---- */
+button {
+  cursor: pointer; border-radius: 10px; font-weight: 600; font-family: inherit;
+  border: 1px solid var(--border); color: var(--text); background: var(--card);
+  transition: transform .15s, border-color .15s, background .15s, box-shadow .15s;
+}
+button:hover { transform: translateY(-1px); border-color: var(--border-strong); background: var(--card-hover); filter: none; }
+button.primary { background: var(--grad); color: #06121a; border: none; font-weight: 700; box-shadow: 0 10px 26px -12px rgba(45,212,238,.5); }
+button.primary:hover { box-shadow: 0 14px 32px -12px rgba(129,140,248,.6); }
+button.ghost { background: transparent; }
+button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+input, select, textarea {
+  border-radius: 10px; border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text); font-family: inherit; transition: border-color .15s, box-shadow .15s;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(45,212,238,.12);
+}
+label { color: var(--muted); }
+
+/* ---- pastilles & étiquettes ---- */
+.pill { border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--card); }
+.tag { font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px; }
+.tag.live { background: rgba(52,211,153,.14); color: var(--green); }
+.tag.soon { background: rgba(251,191,36,.14); color: var(--amber); }
+.tag.prog { background: rgba(45,212,238,.14); color: var(--cyan); }
+
+/* ---- tables ---- */
+table { border-collapse: collapse; }
+th { color: var(--faint); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+th, td { border-bottom: 1px solid var(--border); }
+tbody tr { transition: background .15s; }
+tbody tr:hover { background: var(--card-hover); }
+
+/* ---- monospace unifiée ---- */
+.addr, .seedbox, .mono, td.mono, code, pre { font-family: var(--mono); }
+
+/* ---- footer ---- */
+footer { color: var(--muted); border-top: 1px solid var(--border); }
