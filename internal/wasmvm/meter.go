@@ -595,6 +595,51 @@ func skipImmediate(code []byte, pos int, op byte) (int, error) {
 	// ref.null : 1 octet reftype
 	case op == 0xd0:
 		return needBytes(code, pos, 1)
+	// select typé (select t*) : vec de valtypes
+	case op == 0x1c:
+		cnt, n, err := readUvarint(code, pos)
+		if err != nil {
+			return 0, err
+		}
+		return needBytes(code, pos+n, int(cnt)) // cnt octets de valtype
+	// préfixe 0xfc : trunc saturante + bulk-memory/table (émis par Rust/LLVM)
+	case op == 0xfc:
+		sub, n, err := readUvarint(code, pos)
+		if err != nil {
+			return 0, err
+		}
+		pos += n
+		switch sub {
+		case 0, 1, 2, 3, 4, 5, 6, 7: // i32/i64.trunc_sat_f* : pas d'immédiat
+			return pos, nil
+		case 8: // memory.init : dataidx uleb + 1 octet réservé
+			_, n, err := readUvarint(code, pos)
+			if err != nil {
+				return 0, err
+			}
+			return needBytes(code, pos+n, 1)
+		case 9, 13, 15, 16, 17: // data.drop / elem.drop / table.grow|size|fill : 1 uleb
+			_, n, err := readUvarint(code, pos)
+			if err != nil {
+				return 0, err
+			}
+			return pos + n, nil
+		case 10: // memory.copy : 2 octets réservés
+			return needBytes(code, pos, 2)
+		case 11: // memory.fill : 1 octet réservé
+			return needBytes(code, pos, 1)
+		case 12, 14: // table.init / table.copy : 2 uleb
+			for i := 0; i < 2; i++ {
+				_, n, err := readUvarint(code, pos)
+				if err != nil {
+					return 0, err
+				}
+				pos += n
+			}
+			return pos, nil
+		default:
+			return 0, fmt.Errorf("%w: 0xfc %d", ErrUnsupportedOpcode, sub)
+		}
 	default:
 		return 0, fmt.Errorf("%w: 0x%02x", ErrUnsupportedOpcode, op)
 	}

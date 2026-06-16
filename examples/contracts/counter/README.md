@@ -41,8 +41,7 @@ Sortie attendue :
 
 ```
 ⚠ PREVIEW expérimentale — exécution en sandbox LOCALE, pas sur la chaîne
-Gas déterministe : 1000000 unités
-[log] counter incremented
+Gas déterministe : 1000000 unités · appelant : cg-demo
 gas consommé : <N> / 1000000
 retour : [1]
 ```

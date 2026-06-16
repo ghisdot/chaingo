@@ -10,16 +10,16 @@
 
 use core::panic::PanicInfo;
 
-// Fonctions hôtes fournies par ChainGO (module "env"). ABI mémoire : les
-// octets sont passés par (pointeur, longueur) dans la mémoire linéaire.
+// Fonctions hôtes fournies par ChainGO. `wasm_import_module = "env"` indique au
+// linker que ce sont des IMPORTS depuis le module hôte "env" (sinon : « undefined
+// symbol »). ABI mémoire : octets passés par (pointeur, longueur).
+#[link(wasm_import_module = "env")]
 extern "C" {
     /// Lit la valeur d'une clé dans `out` (taille max `max`). Renvoie la
     /// longueur écrite, ou -1 si la clé est absente / le tampon trop petit.
     fn storage_read(kptr: *const u8, klen: u32, out: *mut u8, max: u32) -> i32;
     /// Écrit `val` sous `key` dans le stockage du contrat.
     fn storage_write(kptr: *const u8, klen: u32, vptr: *const u8, vlen: u32);
-    /// Journalise une chaîne (visible dans la sortie de `chaingo wasm run`).
-    fn log(ptr: *const u8, len: u32);
 }
 
 const KEY: &[u8] = b"count";
@@ -32,8 +32,6 @@ pub extern "C" fn increment() -> i64 {
     count += 1;
     let bytes = count.to_le_bytes();
     unsafe { storage_write(KEY.as_ptr(), KEY.len() as u32, bytes.as_ptr(), bytes.len() as u32) };
-    let msg = b"counter incremented";
-    unsafe { log(msg.as_ptr(), msg.len() as u32) };
     count
 }
 
