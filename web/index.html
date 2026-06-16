@@ -5,245 +5,344 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ChainGO — La blockchain post-quantique</title>
 <meta name="description" content="ChainGO : blockchain résistante au quantique (ML-DSA-65), 31 000 TPS mesurés, burn automatique, tokens no-code. Décentralisée, simple, rapide.">
+<meta name="theme-color" content="#070b12">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0b0f17;
-    --bg2: #0f1522;
-    --card: #131b2c;
-    --border: #1f2a40;
-    --text: #e6edf6;
-    --muted: #8b9bb4;
-    --cyan: #22d3ee;
-    --violet: #8b5cf6;
+    --bg: #070b12;
+    --bg2: #0b111d;
+    --card: rgba(255,255,255,.025);
+    --card-hover: rgba(255,255,255,.045);
+    --border: rgba(255,255,255,.09);
+    --border-strong: rgba(255,255,255,.16);
+    --text: #eef3fa;
+    --muted: #93a3bd;
+    --faint: #64748b;
+    --cyan: #2dd4ee;
+    --violet: #a78bfa;
     --green: #34d399;
     --amber: #fbbf24;
-    --grad: linear-gradient(90deg, var(--cyan), var(--violet));
+    --red: #f87171;
+    --grad: linear-gradient(105deg, #2dd4ee, #818cf8 55%, #a78bfa);
+    --grad-soft: linear-gradient(105deg, rgba(45,212,238,.16), rgba(167,139,250,.16));
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --shadow: 0 24px 60px -28px rgba(0,0,0,.7);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    line-height: 1.6;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
   }
-  a { color: var(--cyan); text-decoration: none; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  /* arrière-plan : mesh de dégradés + grille fine, fixe */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(45,212,238,.10), transparent 55%),
+      radial-gradient(900px 600px at 88% 4%, rgba(167,139,250,.12), transparent 55%),
+      radial-gradient(700px 500px at 60% 100%, rgba(129,140,248,.07), transparent 60%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(circle at 50% 0%, #000, transparent 80%);
+  }
+  a { color: var(--cyan); text-decoration: none; transition: color .15s; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+  .grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
+  /* ---------- nav ---------- */
   nav {
-    position: sticky; top: 0; z-index: 10;
-    background: rgba(11,15,23,.85); backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(7,11,18,.72); backdrop-filter: blur(16px) saturate(140%);
     border-bottom: 1px solid var(--border);
   }
-  nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
-  .logo { font-size: 1.25rem; font-weight: 800; letter-spacing: .5px; }
-  .logo span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  nav a.link { color: var(--muted); font-size: .92rem; }
-  nav a.link:hover { color: var(--text); }
+  nav .wrap { display: flex; align-items: center; gap: 6px; height: 64px; }
+  .logo { font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; margin-right: 20px; display: flex; align-items: center; gap: 9px; }
+  .logo .mark { width: 26px; height: 26px; flex: none; }
+  nav a.link { color: var(--muted); font-size: .9rem; font-weight: 500; padding: 7px 11px; border-radius: 8px; transition: color .15s, background .15s; }
+  nav a.link:hover { color: var(--text); background: var(--card); }
   .spacer { flex: 1; }
   .pill {
-    font-size: .78rem; padding: 4px 12px; border-radius: 999px;
-    border: 1px solid var(--border); color: var(--amber);
+    font-size: .76rem; font-weight: 600; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid rgba(52,211,153,.3); color: var(--green);
+    background: rgba(52,211,153,.08); display: inline-flex; align-items: center; gap: 7px;
   }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)} 70%{box-shadow:0 0 0 7px rgba(52,211,153,0)} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0)} }
   #langBtn {
-    cursor: pointer; font-size: .82rem; font-weight: 700; padding: 5px 12px;
-    border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--cyan);
+    cursor: pointer; font-size: .8rem; font-weight: 700; padding: 7px 13px; margin-left: 8px;
+    border-radius: 9px; border: 1px solid var(--border); background: var(--card); color: var(--text); transition: border-color .15s, background .15s;
   }
-  #langBtn:hover { filter: brightness(1.2); }
+  #langBtn:hover { border-color: var(--border-strong); background: var(--card-hover); }
+  .navlinks { display: flex; align-items: center; gap: 2px; }
 
-  header { padding: 90px 0 70px; text-align: center; position: relative; overflow: hidden; }
-  header::before {
-    content: ""; position: absolute; inset: -50% -20%;
-    background:
-      radial-gradient(600px 300px at 30% 20%, rgba(34,211,238,.12), transparent 60%),
-      radial-gradient(600px 300px at 70% 30%, rgba(139,92,246,.12), transparent 60%);
-    pointer-events: none;
+  /* ---------- hero ---------- */
+  header { padding: 110px 0 90px; text-align: center; position: relative; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 9px; margin-bottom: 26px;
+    font-size: .8rem; font-weight: 600; letter-spacing: .02em; color: var(--muted);
+    padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border); background: var(--card);
   }
-  h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 850; line-height: 1.15; position: relative; }
-  h1 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .sub { max-width: 720px; margin: 22px auto 0; color: var(--muted); font-size: 1.12rem; position: relative; }
-  .badges { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 30px; position: relative; }
+  .eyebrow b { color: var(--cyan); }
+  h1 { font-size: clamp(2.05rem, 5.4vw, 4.1rem); font-weight: 800; line-height: 1.08; letter-spacing: -.025em; overflow-wrap: break-word; }
+  .sub { max-width: 680px; margin: 26px auto 0; color: var(--muted); font-size: clamp(1.02rem, 1.6vw, 1.18rem); }
+  .sub b { color: var(--text); font-weight: 600; }
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 34px; }
   .badge {
+    display: inline-flex; align-items: center; gap: 9px;
     border: 1px solid var(--border); background: var(--card);
-    padding: 8px 16px; border-radius: 10px; font-size: .9rem; color: var(--text);
+    padding: 9px 15px; border-radius: 11px; font-size: .88rem; color: var(--muted);
+    transition: border-color .15s, background .15s, transform .15s;
   }
-  .badge b { color: var(--cyan); }
-  .ctas { margin-top: 34px; display: flex; gap: 14px; justify-content: center; position: relative; }
+  .badge:hover { border-color: var(--border-strong); background: var(--card-hover); transform: translateY(-2px); }
+  .badge b { color: var(--text); font-weight: 600; }
+  .badge svg { width: 17px; height: 17px; flex: none; }
+  .icon-cyan { color: var(--cyan); } .icon-violet { color: var(--violet); }
+  .icon-green { color: var(--green); } .icon-amber { color: var(--amber); } .icon-red { color: var(--red); }
+  .ctas { margin-top: 40px; display: flex; gap: 13px; justify-content: center; flex-wrap: wrap; }
   .btn {
-    padding: 12px 26px; border-radius: 10px; font-weight: 700; font-size: .98rem;
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 13px 26px; border-radius: 11px; font-weight: 600; font-size: .98rem;
     border: 1px solid var(--border); color: var(--text); background: var(--card);
+    transition: transform .15s, border-color .15s, background .15s, box-shadow .15s; cursor: pointer;
   }
-  .btn.primary { background: var(--grad); color: #06121a; border: none; }
-  .btn:hover { filter: brightness(1.15); }
+  .btn svg { width: 18px; height: 18px; }
+  .btn:hover { transform: translateY(-2px); border-color: var(--border-strong); background: var(--card-hover); }
+  .btn.primary {
+    background: var(--grad); color: #06121a; border: none; font-weight: 700;
+    box-shadow: 0 12px 30px -10px rgba(45,212,238,.5);
+  }
+  .btn.primary:hover { box-shadow: 0 16px 38px -10px rgba(129,140,248,.6); }
 
-  section { padding: 64px 0; border-top: 1px solid var(--border); }
-  h2 { font-size: 1.9rem; font-weight: 800; margin-bottom: 8px; }
-  .lead { color: var(--muted); margin-bottom: 36px; max-width: 760px; }
+  /* ---------- sections ---------- */
+  section { padding: clamp(60px, 9vw, 100px) 0; position: relative; }
+  section + section { border-top: 1px solid var(--border); }
+  .head { max-width: 760px; margin-bottom: 48px; }
+  .kicker { font-size: .82rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cyan); margin-bottom: 14px; }
+  h2 { font-size: clamp(1.7rem, 3.2vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+  .lead { color: var(--muted); margin-top: 14px; font-size: 1.05rem; }
 
+  /* ---------- cartes piliers ---------- */
   .grid { display: grid; gap: 18px; }
-  .grid.c3 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .grid.c3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
   .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 14px; padding: 24px;
+    position: relative; background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 28px; transition: transform .2s, border-color .2s, background .2s;
+    overflow: hidden;
   }
-  .card h3 { font-size: 1.08rem; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .card p { color: var(--muted); font-size: .94rem; }
+  .card::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(150deg, rgba(45,212,238,.4), transparent 40%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity .25s;
+  }
+  .card:hover { transform: translateY(-4px); border-color: transparent; background: var(--card-hover); }
+  .card:hover::before { opacity: 1; }
   .ico {
-    width: 34px; height: 34px; border-radius: 9px; display: inline-flex;
-    align-items: center; justify-content: center; font-size: 1.05rem;
-    background: rgba(34,211,238,.12); border: 1px solid var(--border); flex: none;
+    width: 46px; height: 46px; border-radius: 13px; display: inline-flex;
+    align-items: center; justify-content: center; margin-bottom: 18px;
+    background: var(--grad-soft); border: 1px solid var(--border); color: var(--cyan);
   }
-  .tag { font-size: .72rem; padding: 2px 9px; border-radius: 999px; font-weight: 700; letter-spacing: .3px; }
-  .tag.live { background: rgba(52,211,153,.15); color: var(--green); }
-  .tag.soon { background: rgba(251,191,36,.13); color: var(--amber); }
+  .ico svg { width: 23px; height: 23px; }
+  .card h3 { font-size: 1.12rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; letter-spacing: -.01em; }
+  .card p { color: var(--muted); font-size: .94rem; }
+  .card a { font-weight: 600; }
 
-  .steps { counter-reset: step; }
-  .step {
-    display: flex; gap: 18px; padding: 18px 0; border-bottom: 1px dashed var(--border);
-  }
+  .tag { font-size: .68rem; padding: 3px 10px; border-radius: 999px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .tag.live { background: rgba(52,211,153,.14); color: var(--green); }
+  .tag.soon { background: rgba(251,191,36,.14); color: var(--amber); }
+  .tag.prog { background: rgba(45,212,238,.14); color: var(--cyan); }
+
+  /* ---------- étapes ---------- */
+  .steps { display: grid; gap: 0; }
+  .step { display: flex; gap: 22px; padding: 24px 0; border-bottom: 1px solid var(--border); }
   .step:last-child { border-bottom: none; }
   .stepnum {
-    counter-increment: step; flex: none; width: 42px; height: 42px; border-radius: 50%;
-    background: var(--bg2); border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--cyan);
+    flex: none; width: 46px; height: 46px; border-radius: 13px; font-family: var(--mono); font-weight: 700;
+    background: var(--grad-soft); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; color: var(--cyan); font-size: 1.05rem;
   }
-  .stepnum::before { content: counter(step); }
-  .step h3 { font-size: 1.03rem; margin-bottom: 4px; }
-  .step p { color: var(--muted); font-size: .93rem; }
-  .step code { background: var(--bg2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 6px; font-size: .85em; color: var(--cyan); }
+  .step h3 { font-size: 1.08rem; font-weight: 700; margin-bottom: 5px; letter-spacing: -.01em; }
+  .step p { color: var(--muted); font-size: .95rem; }
+  .step code, .lead code { font-family: var(--mono); background: var(--bg2); border: 1px solid var(--border); padding: 1px 7px; border-radius: 6px; font-size: .85em; color: var(--cyan); }
 
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
-  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; text-align: center; }
-  .stat .v { font-size: 1.5rem; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
-  .stat .v.burn { color: #f87171; }
-  .stat .l { font-size: .8rem; color: var(--muted); margin-top: 2px; }
-  #nodeState { margin-top: 14px; font-size: .85rem; color: var(--muted); }
-  #nodeState .ok { color: var(--green); }
-  #nodeState .ko { color: var(--amber); }
+  /* ---------- stats live ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 15px; padding: 22px; text-align: center; transition: border-color .2s, background .2s; }
+  .stat:hover { border-color: var(--border-strong); background: var(--card-hover); }
+  .stat .v { font-family: var(--mono); font-size: 1.7rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .stat .v.burn { color: var(--red); }
+  .stat .v.accent { color: var(--cyan); }
+  .stat .l { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+  #nodeState { margin-top: 20px; font-size: .9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); }
+  #nodeState .ok { color: var(--green); font-weight: 600; }
+  #nodeState .ko { color: var(--amber); font-weight: 600; }
 
-  table { width: 100%; border-collapse: collapse; font-size: .93rem; }
-  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: uppercase; letter-spacing: .5px; }
-  td:first-child { font-weight: 600; }
-  td { color: var(--text); }
-  td .muted { color: var(--muted); }
+  /* ---------- table tokenomics ---------- */
+  .table-wrap { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; font-size: .94rem; }
+  th, td { text-align: left; padding: 15px 20px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  thead th { color: var(--faint); font-weight: 700; font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; background: rgba(255,255,255,.02); }
+  tbody tr { transition: background .15s; }
+  tbody tr:hover { background: var(--card-hover); }
+  td:first-child { font-weight: 600; color: var(--text); white-space: nowrap; }
+  td .muted, td.muted { color: var(--muted); font-weight: 400; }
 
-  .timeline { position: relative; padding-left: 28px; }
-  .timeline::before { content: ""; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
-  .phase { position: relative; padding: 0 0 26px; }
+  /* ---------- roadmap ---------- */
+  .timeline { position: relative; padding-left: 36px; }
+  .timeline::before { content: ""; position: absolute; left: 11px; top: 10px; bottom: 10px; width: 2px; background: linear-gradient(var(--green), var(--cyan) 60%, var(--border)); }
+  .phase { position: relative; padding: 0 0 22px; }
+  .phase:last-child { padding-bottom: 0; }
   .phase::before {
-    content: ""; position: absolute; left: -26px; top: 7px; width: 12px; height: 12px;
-    border-radius: 50%; background: var(--border);
+    content: ""; position: absolute; left: -31px; top: 22px; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--bg); border: 2px solid var(--faint); z-index: 1;
   }
-  .phase.done::before { background: var(--green); box-shadow: 0 0 10px rgba(52,211,153,.6); }
-  .phase.next::before { background: var(--cyan); box-shadow: 0 0 10px rgba(34,211,238,.6); }
-  .phase h3 { font-size: 1.02rem; }
-  .phase p { color: var(--muted); font-size: .92rem; }
+  .phase.done::before { background: var(--green); border-color: var(--green); box-shadow: 0 0 12px rgba(52,211,153,.7); }
+  .phase.prog::before { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 12px rgba(45,212,238,.7); }
+  .phase .pcard { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; transition: border-color .2s, background .2s; }
+  .phase .pcard:hover { border-color: var(--border-strong); background: var(--card-hover); }
+  .phase h3 { font-size: 1.08rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 11px; flex-wrap: wrap; letter-spacing: -.01em; }
+  .phase p { color: var(--muted); font-size: .93rem; }
 
+  /* ---------- code ---------- */
   pre {
-    background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
-    padding: 18px 20px; overflow-x: auto; font-size: .88rem; line-height: 1.7;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px 26px; overflow-x: auto; font-family: var(--mono); font-size: .88rem; line-height: 1.8;
+    box-shadow: var(--shadow);
   }
-  pre .c { color: var(--muted); }
-  pre .k { color: var(--cyan); }
+  pre .c { color: var(--faint); } pre .k { color: var(--cyan); }
 
-  footer { border-top: 1px solid var(--border); padding: 36px 0 50px; color: var(--muted); font-size: .88rem; }
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--border); padding: 44px 0 60px; color: var(--muted); font-size: .9rem; }
   footer .warn {
-    border: 1px solid rgba(251,191,36,.35); background: rgba(251,191,36,.07);
-    border-radius: 12px; padding: 14px 18px; margin-bottom: 22px; color: var(--amber);
+    display: flex; gap: 13px; align-items: flex-start;
+    border: 1px solid rgba(251,191,36,.3); background: rgba(251,191,36,.06);
+    border-radius: 14px; padding: 16px 20px; margin-bottom: 26px; color: #f7d77a;
+  }
+  footer .warn svg { width: 20px; height: 20px; flex: none; margin-top: 2px; color: var(--amber); }
+  footer .info a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+  footer .info a:hover { color: var(--text); }
+
+  /* reveal on scroll */
+  html.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  html.js .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { html.js .reveal, html.js .reveal.in { opacity: 1; transform: none; transition: none; } .pill .dot { animation: none; } }
+
+  @media (max-width: 1040px) { .navlinks .opt { display: none; } }
+  @media (max-width: 760px) {
+    nav .wrap { gap: 2px; } .navlinks { display: none; }
+    header { padding: 70px 0 60px; }
+    .step { gap: 14px; }
   }
 </style>
 </head>
 <body>
+<script>document.documentElement.classList.add('js');</script>
 
 <nav>
   <div class="wrap">
-    <div class="logo">Chain<span>GO</span></div>
-    <a class="link" href="#piliers" data-i18n="nav1">Piliers</a>
-    <a class="link" href="#fonctionnement" data-i18n="nav2">Comment ça marche</a>
-    <a class="link" href="#stats" data-i18n="nav3">Chaîne en direct</a>
-    <a class="link" href="#tokenomics" data-i18n="nav4">Tokenomics</a>
-    <a class="link" href="#roadmap" data-i18n="nav5">Feuille de route</a>
-    <a class="link" href="/wallet/" data-i18n="navwallet">Wallet</a>
-    <a class="link" href="/explorer/" data-i18n="navexplorer">Explorateur</a>
-    <a class="link" href="/validator/" data-i18n="navvalidator">Validator</a>
-    <a class="link" href="/studio/" data-i18n="navstudio">Studio</a>
-    <a class="link" href="/loadtest/" data-i18n="navloadtest">Banc d'essai</a>
-    <a class="link" href="/api/">API</a>
+    <div class="logo">
+      <svg class="mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#2dd4ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+        <path d="M16 2 28 9v14L16 30 4 23V9L16 2Z" stroke="url(#lg)" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M16 9v14M10 12v8M22 12v8" stroke="url(#lg)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Chain<span class="grad-text">GO</span>
+    </div>
+    <div class="navlinks">
+      <a class="link" href="#piliers" data-i18n="nav1">Piliers</a>
+      <a class="link" href="#fonctionnement" data-i18n="nav2">Comment ça marche</a>
+      <a class="link" href="#stats" data-i18n="nav3">Chaîne en direct</a>
+      <a class="link opt" href="#tokenomics" data-i18n="nav4">Tokenomics</a>
+      <a class="link" href="#roadmap" data-i18n="nav5">Feuille de route</a>
+      <a class="link opt" href="/wallet/" data-i18n="navwallet">Wallet</a>
+      <a class="link opt" href="/explorer/" data-i18n="navexplorer">Explorateur</a>
+      <a class="link opt" href="/studio/" data-i18n="navstudio">Studio</a>
+      <a class="link opt" href="/api/">API</a>
+    </div>
     <div class="spacer"></div>
+    <span class="pill"><span class="dot"></span><span data-i18n="navpill">testnet · v0.1</span></span>
     <button id="langBtn" onclick="toggleLang()">EN</button>
-    <span class="pill" data-i18n="navpill">testnet · v0.1</span>
   </div>
 </nav>
 
 <header>
   <div class="wrap">
-    <h1 data-i18n="hero.h1">La blockchain <span class="grad">post-quantique</span>.<br>Simple. Rapide. Déflationniste.</h1>
+    <span class="eyebrow" data-i18n="hero.eyebrow"><b>● Testnet public en ligne</b> · Mainnet en préparation</span>
+    <h1 data-i18n="hero.h1">La blockchain <span class="grad-text">post-quantique</span>.<br>Simple. Rapide. Déflationniste.</h1>
     <p class="sub" data-i18n="hero.sub">
-      <b>Testnet public en ligne.</b> Mainnet en préparation. ChainGO protège chaque
-      transaction avec <b>ML-DSA-65</b>, le standard de signature résistant aux
-      ordinateurs quantiques (NIST FIPS 204). Frais brûlés automatiquement, tokens
-      créés sans une ligne de code, et un réseau pair-à-pair que n'importe qui peut rejoindre.
+      ChainGO protège chaque transaction avec <b>ML-DSA-65</b>, le standard de signature
+      résistant aux ordinateurs quantiques (NIST FIPS 204). Frais brûlés automatiquement,
+      tokens et contrats créés sans une ligne de code, et un réseau pair-à-pair que
+      n'importe qui peut rejoindre.
     </p>
     <div class="badges">
-      <span class="badge" data-i18n="b1">🛡️ Signatures <b>ML-DSA-65</b> partout</span>
-      <span class="badge" data-i18n="b2">⚡ <b>31 000 TPS</b> mesurés en local</span>
-      <span class="badge" data-i18n="b3">🔥 Burn <b>automatique</b> des frais</span>
-      <span class="badge" data-i18n="b4">🪙 Tokens <b>no-code</b></span>
+      <span class="badge"><svg class="icon-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/></svg><span data-i18n="b1">Signatures <b>ML-DSA-65</b> partout</span></span>
+      <span class="badge"><svg class="icon-amber" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg><span data-i18n="b2"><b>31 000 TPS</b> mesurés en local</span></span>
+      <span class="badge"><svg class="icon-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3 5 4.5 5 9a5 5 0 0 1-10 0c0-1.5.5-2.8 1.3-3.8C9 10 9.5 11 11 11c0-3 0-5 1-8Z"/></svg><span data-i18n="b3">Burn <b>automatique</b> des frais</span></span>
+      <span class="badge"><svg class="icon-violet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg><span data-i18n="b4">Tokens &amp; contrats <b>no-code</b></span></span>
     </div>
     <div class="ctas">
       <a class="btn primary" href="/wallet/" data-i18n="cta0">Créer mon wallet</a>
       <a class="btn" href="#fonctionnement" data-i18n="cta1">Comprendre en 2 minutes</a>
-      <a class="btn" href="/api/" data-i18n="cta2">Explorer l'API</a>
+      <a class="btn" href="/explorer/" data-i18n="cta2">Explorer la chaîne</a>
     </div>
   </div>
 </header>
 
 <section id="piliers">
   <div class="wrap">
-    <h2 data-i18n="p.h2">Le projet que nous portons</h2>
-    <p class="lead" data-i18n="p.lead">
-      Les blockchains actuelles signent avec une cryptographie (ECDSA, Ed25519) que les
-      ordinateurs quantiques sauront casser. ChainGO est conçue dès le premier bloc pour
-      ce monde-là — sans sacrifier la vitesse ni la simplicité.
-    </p>
+    <div class="head reveal">
+      <div class="kicker" data-i18n="p.kicker">Les piliers</div>
+      <h2 data-i18n="p.h2">Le projet que nous portons</h2>
+      <p class="lead" data-i18n="p.lead">
+        Les blockchains actuelles signent avec une cryptographie (ECDSA, Ed25519) que les
+        ordinateurs quantiques sauront casser. ChainGO est conçue dès le premier bloc pour
+        ce monde-là — sans sacrifier la vitesse ni la simplicité.
+      </p>
+    </div>
     <div class="grid c3">
-      <div class="card" data-i18n="p.c1">
-        <h3><span class="ico">🛡️</span> Sécurité post-quantique <span class="tag live">ACTIF</span></h3>
-        <p>Chaque wallet, transaction et bloc est signé en ML-DSA-65 (FIPS 204, niveau NIST 3).
-        Hachage SHA3-256. Aucune courbe elliptique vulnérable au quantique, nulle part.</p>
+      <div class="card reveal">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+        <h3 data-i18n="p.c1">Sécurité post-quantique <span class="tag live">Actif</span></h3>
+        <p data-i18n="p.c1d">Chaque wallet, transaction et bloc est signé en ML-DSA-65 (FIPS 204, niveau NIST 3). Hachage SHA3-256. Aucune courbe elliptique vulnérable au quantique, nulle part.</p>
       </div>
-      <div class="card" data-i18n="p.c2">
-        <h3><span class="ico">⚡</span> Vitesse <span class="tag live">ACTIF</span></h3>
-        <p>31 000 transactions/seconde mesurées (vérification + exécution) grâce à la
-        vérification parallèle sur tous les cœurs. Blocs toutes les 500 ms, confirmation
-        en ~1 seconde. Option <b>tip</b> pour passer en priorité.</p>
+      <div class="card reveal">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg></span>
+        <h3 data-i18n="p.c2">Vitesse <span class="tag live">Actif</span></h3>
+        <p data-i18n="p.c2d">31 000 transactions/seconde mesurées (vérification + exécution) grâce à la vérification parallèle sur tous les cœurs. Blocs toutes les 500 ms, confirmation en ~1 seconde. Option <b>tip</b> pour passer en priorité.</p>
       </div>
-      <div class="card" data-i18n="p.c3">
-        <h3><span class="ico">🔥</span> Économie déflationniste <span class="tag live">ACTIF</span></h3>
-        <p>Les frais de base sont <b>détruits</b> (burn) à chaque transaction, ajustés
-        automatiquement à la congestion (modèle EIP-1559). Plus le réseau est utilisé,
-        plus le CGO se raréfie.</p>
+      <div class="card reveal">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3 5 4.5 5 9a5 5 0 0 1-10 0c0-1.5.5-2.8 1.3-3.8C9 10 9.5 11 11 11c0-3 0-5 1-8Z"/></svg></span>
+        <h3 data-i18n="p.c3">Économie déflationniste <span class="tag live">Actif</span></h3>
+        <p data-i18n="p.c3d">Les frais de base sont <b>détruits</b> (burn) à chaque transaction, ajustés automatiquement à la congestion (modèle EIP-1559). Plus le réseau est utilisé, plus le CGO se raréfie.</p>
       </div>
-      <div class="card" data-i18n="p.c4">
-        <h3><span class="ico">🪙</span> Tokens &amp; contrats no-code <span class="tag live">ACTIF</span></h3>
-        <p>Créez votre token et déployez des <b>smart contracts sans code</b> depuis le
-        <a href="/studio/">studio</a> : vesting (déblocage progressif), escrow (séquestre),
-        <b>multisig M-of-N</b> et <b>DAO</b> (gouvernance : trésorerie votée par les membres) —
-        des templates natifs audités une fois pour tous.</p>
+      <div class="card reveal">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></span>
+        <h3 data-i18n="p.c4">Tokens &amp; contrats no-code <span class="tag live">Actif</span></h3>
+        <p data-i18n="p.c4d">Créez votre token et déployez des <b>smart contracts sans code</b> depuis le <a href="/studio/">studio</a> : vesting, escrow, <b>multisig M-of-N</b> et <b>DAO</b>. Pour les devs, une <b>VM WASM</b> exécute des contrats arbitraires (Rust, AssemblyScript…) — câblée sur le testnet.</p>
       </div>
-      <div class="card" data-i18n="p.c5">
-        <h3><span class="ico">🕶️</span> Anonymat renforcé <span class="tag soon">PHASE 3</span></h3>
-        <p>Aujourd'hui : pseudonymat (adresses non nominatives, historique public).
-        Demain : transferts confidentiels par preuves <b>zk-STARK</b> — la seule famille
-        de preuves à divulgation nulle résistante au quantique — et adresses furtives.</p>
+      <div class="card reveal">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7c-1.6 0-3-.4-4.3-1"/><path d="M4 4l16 16"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <h3 data-i18n="p.c5">Anonymat renforcé <span class="tag soon">Phase 3</span></h3>
+        <p data-i18n="p.c5d">Aujourd'hui : pseudonymat (adresses non nominatives, historique public). Demain : transferts confidentiels par preuves <b>zk-STARK</b> — la seule famille de preuves à divulgation nulle résistante au quantique — et adresses furtives.</p>
       </div>
-      <div class="card" data-i18n="p.c6">
-        <h3><span class="ico">🌐</span> Décentralisation <span class="tag live">ACTIF</span></h3>
-        <p>Réseau pair-à-pair : chaque nœud se synchronise et relaie. Validez avec
-        10 000 CGO ou <b>déléguez dès 1 CGO</b> — le tirage des blocs est pondéré par le
-        stake, et des rounds de secours garantissent que la chaîne avance même si des
-        validateurs tombent.</p>
+      <div class="card reveal">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3Z"/></svg></span>
+        <h3 data-i18n="p.c6">Décentralisation <span class="tag live">Actif</span></h3>
+        <p data-i18n="p.c6d">Réseau pair-à-pair : chaque nœud se synchronise et relaie. Validez avec 10 000 CGO ou <b>déléguez dès 1 CGO</b> — le tirage des blocs est pondéré par le stake, et des rounds de secours garantissent que la chaîne avance même si des validateurs tombent.</p>
       </div>
     </div>
   </div>
@@ -251,11 +350,14 @@
 
 <section id="fonctionnement">
   <div class="wrap">
-    <h2 data-i18n="f.h2">Comment ça marche</h2>
-    <p class="lead" data-i18n="f.lead">Le cycle de vie d'une transaction, sans jargon.</p>
-    <div class="steps">
+    <div class="head reveal">
+      <div class="kicker" data-i18n="f.kicker">Le fonctionnement</div>
+      <h2 data-i18n="f.h2">Comment ça marche</h2>
+      <p class="lead" data-i18n="f.lead">Le cycle de vie d'une transaction, sans jargon.</p>
+    </div>
+    <div class="steps reveal">
       <div class="step">
-        <div class="stepnum"></div>
+        <div class="stepnum">1</div>
         <div data-i18n="f.s1">
           <h3>Un wallet = une paire de clés post-quantiques</h3>
           <p>Votre wallet génère une clé ML-DSA-65. Votre adresse (<code>cg…</code>) est
@@ -264,7 +366,7 @@
         </div>
       </div>
       <div class="step">
-        <div class="stepnum"></div>
+        <div class="stepnum">2</div>
         <div data-i18n="f.s2">
           <h3>Vous signez votre transaction</h3>
           <p>Transfert, création de token, stake, délégation… Vous fixez votre <b>tip</b>
@@ -274,7 +376,7 @@
         </div>
       </div>
       <div class="step">
-        <div class="stepnum"></div>
+        <div class="stepnum">3</div>
         <div data-i18n="f.s3">
           <h3>Le réseau la propage et la vérifie</h3>
           <p>Votre transaction entre dans la file d'attente (mempool) et se diffuse de
@@ -283,7 +385,7 @@
         </div>
       </div>
       <div class="step">
-        <div class="stepnum"></div>
+        <div class="stepnum">4</div>
         <div data-i18n="f.s4">
           <h3>Un validateur la grave dans un bloc</h3>
           <p>Toutes les 500 ms, le consensus <b>Aurora</b> tire au sort un validateur
@@ -293,7 +395,7 @@
         </div>
       </div>
       <div class="step">
-        <div class="stepnum"></div>
+        <div class="stepnum">5</div>
         <div data-i18n="f.s5">
           <h3>Les frais brûlent, validateur et délégateurs sont récompensés</h3>
           <p>Le frais de base de chaque transaction est <b>détruit pour toujours</b>
@@ -308,14 +410,17 @@
 
 <section id="stats">
   <div class="wrap">
-    <h2 data-i18n="s.h2">La chaîne, en direct</h2>
-    <p class="lead" data-i18n="s.lead">Données lues en temps réel sur ce nœud via l'API publique.</p>
-    <div class="stats">
-      <div class="stat"><div class="v" id="sHeight">—</div><div class="l" data-i18n="s.l1">Hauteur de bloc</div></div>
+    <div class="head reveal">
+      <div class="kicker" data-i18n="s.kicker">En temps réel</div>
+      <h2 data-i18n="s.h2">La chaîne, en direct</h2>
+      <p class="lead" data-i18n="s.lead">Données lues en temps réel sur ce nœud via l'API publique.</p>
+    </div>
+    <div class="stats reveal">
+      <div class="stat"><div class="v accent" id="sHeight">—</div><div class="l" data-i18n="s.l1">Hauteur de bloc</div></div>
       <div class="stat"><div class="v" id="sSupply">—</div><div class="l" data-i18n="s.l2">Supply totale (CGO)</div></div>
       <div class="stat"><div class="v burn" id="sBurned">—</div><div class="l" data-i18n="s.l3">Brûlé à jamais (CGO)</div></div>
       <div class="stat"><div class="v" id="sBaseFee">—</div><div class="l" data-i18n="s.l4">Base fee (CGO)</div></div>
-      <div class="stat"><div class="v" id="sValidators">—</div><div class="l" data-i18n="s.l5">Validateurs</div></div>
+      <div class="stat"><div class="v accent" id="sValidators">—</div><div class="l" data-i18n="s.l5">Validateurs</div></div>
       <div class="stat"><div class="v" id="sMempool">—</div><div class="l" data-i18n="s.l6">Tx en attente</div></div>
     </div>
     <div id="nodeState">…</div>
@@ -324,10 +429,15 @@
 
 <section id="tokenomics">
   <div class="wrap">
-    <h2 data-i18n="t.h2">Tokenomics du CGO</h2>
-    <p class="lead" data-i18n="t.lead">Des règles publiques, inscrites dans le bloc de genèse — pas dans du code caché.</p>
+    <div class="head reveal">
+      <div class="kicker" data-i18n="t.kicker">Tokenomics</div>
+      <h2 data-i18n="t.h2">Tokenomics du CGO</h2>
+      <p class="lead" data-i18n="t.lead">Des règles publiques, inscrites dans le bloc de genèse — pas dans du code caché.</p>
+    </div>
+    <div class="table-wrap reveal">
     <table>
-      <tr data-i18n="t.r0"><th>Règle</th><th>Valeur</th><th>Pourquoi</th></tr>
+      <thead><tr data-i18n="t.r0"><th>Règle</th><th>Valeur</th><th>Pourquoi</th></tr></thead>
+      <tbody>
       <tr data-i18n="t.r1"><td>Supply de genèse</td><td>1 000 000 000 CGO</td><td class="muted">9 décimales — granularité fine pour les micro-paiements</td></tr>
       <tr data-i18n="t.r2"><td>Max supply</td><td>aucun plafond — supply élastique</td><td class="muted">l'émission rémunère la sécurité, le burn la contrebalance : usage fort = supply qui baisse</td></tr>
       <tr data-i18n="t.r3"><td>Distribution (mainnet)</td><td>50 % communauté · 20 % trésorerie · 15 % équipe (vesting 4 ans) · 10 % écosystème · 5 % genèse/liquidité</td><td class="muted">communauté d'abord — pas de chaîne « one-man »</td></tr>
@@ -336,46 +446,59 @@
       <tr data-i18n="t.r6"><td>Frais</td><td>dynamiques (EIP-1559), plancher 0.0001 CGO</td><td class="muted">anti-spam auto-régulé, prévisibles via <a href="/v1/fees">/v1/fees</a></td></tr>
       <tr data-i18n="t.r7"><td>Staking</td><td>minimum 10 000 CGO pour valider</td><td class="muted">rendement ~3 %/an — l'incitation au holding long terme</td></tr>
       <tr data-i18n="t.r8"><td>Délégation</td><td>dès 1 CGO, commission 10 %</td><td class="muted">les petits holders délèguent à un validateur et partagent ses récompenses</td></tr>
-      <tr data-i18n="t.r9"><td>Unbonding</td><td>21 jours sur le mainnet, 24 h sur le testnet</td><td class="muted">les fonds qui quittent le stake restent saisissables (futur slashing)</td></tr>
+      <tr data-i18n="t.r9"><td>Unbonding</td><td>21 jours sur le mainnet, 24 h sur le testnet</td><td class="muted">les fonds qui quittent le stake restent saisissables (slashing)</td></tr>
+      </tbody>
     </table>
+    </div>
   </div>
 </section>
 
 <section id="roadmap">
   <div class="wrap">
-    <h2 data-i18n="r.h2">Feuille de route</h2>
-    <p class="lead" data-i18n="r.lead">Transparente, y compris sur ce qui n'existe pas encore.</p>
-    <div class="timeline">
-      <div class="phase done" data-i18n="r.p1">
-        <h3>Phase 1 — Fondations <span class="tag live">LIVRÉ</span></h3>
-        <p>Chaîne post-quantique complète : consensus PoS Aurora avec rounds de secours,
-        frais EIP-1559 brûlés, staking + délégation + unbonding, tokens no-code,
-        <b>premiers smart contracts no-code (vesting, escrow)</b>, wallets, P2P, API REST,
-        31 000 TPS au bench.</p>
+    <div class="head reveal">
+      <div class="kicker" data-i18n="r.kicker">Feuille de route</div>
+      <h2 data-i18n="r.h2">Où en est ChainGO</h2>
+      <p class="lead" data-i18n="r.lead">Transparente — y compris sur ce qui n'existe pas encore. Le testnet est en ligne ; le mainnet ouvre après l'audit externe et des validateurs indépendants.</p>
+    </div>
+    <div class="timeline reveal">
+      <div class="phase done">
+        <div class="pcard" data-i18n="r.p1">
+          <h3>Phase 1 — Fondations <span class="tag live">Livré</span></h3>
+          <p>Chaîne post-quantique complète : consensus PoS Aurora avec rounds de secours,
+          frais EIP-1559 brûlés, staking + délégation + unbonding, tokens no-code,
+          premiers smart contracts, wallets, P2P, API REST, 31 000 TPS au bench.</p>
+        </div>
       </div>
-      <div class="phase done" data-i18n="r.p2">
-        <h3>Phase 2 — Consensus BFT &amp; slashing <span class="tag live">QUASI LIVRÉ</span></h3>
-        <p>Finalité multi-validateurs (2f+1), set de validateurs figé par hauteur, verrouillage POL,
-        slashing complet (double-signature + inactivité), fork-choice + reorg testé en partition,
-        codec binaire. Reste : audit externe et des validateurs indépendants.</p>
+      <div class="phase prog">
+        <div class="pcard" data-i18n="r.p2">
+          <h3>Phase 2 — Consensus BFT &amp; slashing <span class="tag prog">En cours · ~94 %</span></h3>
+          <p>Finalité multi-validateurs (2f+1), set de validateurs figé par hauteur, verrouillage POL,
+          slashing complet (double-signature + inactivité), fork-choice + reorg testé en partition,
+          codec binaire, fuzzing. Reste : audit externe et des validateurs indépendants.</p>
+        </div>
       </div>
-      <div class="phase" data-i18n="r.p3">
-        <h3>Phase 3 — Anonymat fort</h3>
-        <p>Transferts confidentiels zk-STARK (résistants au quantique) + adresses furtives.
-        Le mode <i>private</i> actuel deviendra un vrai bouclier de confidentialité. (Post-mainnet.)</p>
+      <div class="phase done">
+        <div class="pcard" data-i18n="r.p4">
+          <h3>Phase 4 — Smart contracts <span class="tag live">Livré · testnet</span></h3>
+          <p>Vesting, escrow, multisig et <b>DAO</b> déployables depuis le studio. Moteur
+          <b>WASM</b> (contrats arbitraires) <b>câblé en consensus sur le testnet</b> : on déploie du
+          bytecode et on l'appelle depuis le studio, la CLI ou l'API. Déterminisme garanti
+          (gas instrumenté, opcodes restreints, interpréteur). <b>Activé sur mainnet après audit.</b></p>
+        </div>
       </div>
-      <div class="phase done" data-i18n="r.p4">
-        <h3>Phase 4 — Smart contracts no-code <span class="tag live">ACTIF</span></h3>
-        <p>Vesting, escrow, multisig et <b>DAO</b> sont en ligne, déployables depuis le studio.
-        Moteur <b>WASM</b> (contrats arbitraires) : <b>câblé en consensus sur le testnet</b> —
-        on déploie du bytecode et on l'appelle depuis le studio, la CLI ou l'API. Déterminisme
-        garanti (gas instrumenté, opcodes restreints, interpréteur). <b>Activé sur mainnet après
-        audit.</b></p>
+      <div class="phase prog">
+        <div class="pcard" data-i18n="r.p5">
+          <h3>Phase 5 — Écosystème &amp; outils <span class="tag prog">En cours</span></h3>
+          <p>En ligne : explorateur, studio no-code, dashboard validateur, banc d'essai, wallet web.
+          La suite : <b>SDK JavaScript</b> &amp; Python, documentation complète et présence communautaire.</p>
+        </div>
       </div>
-      <div class="phase done" data-i18n="r.p5">
-        <h3>Phase 5 — Écosystème <span class="tag live">ACTIF</span></h3>
-        <p>Explorateur, studio no-code, dashboard validateur et banc d'essai en ligne.
-        La suite : SDK JavaScript &amp; Python et documentation complète.</p>
+      <div class="phase">
+        <div class="pcard" data-i18n="r.p3">
+          <h3>Phase 3 — Anonymat fort <span class="tag soon">Planifié · post-mainnet</span></h3>
+          <p>Transferts confidentiels <b>zk-STARK</b> (résistants au quantique) + adresses furtives.
+          Le mode <i>private</i> actuel deviendra un vrai bouclier de confidentialité.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -383,10 +506,12 @@
 
 <section id="demarrer">
   <div class="wrap">
-    <h2 data-i18n="d.h2">Démarrer en 60 secondes</h2>
-    <p class="lead" data-i18n="d.lead">Un binaire, zéro dépendance — Windows, Linux, macOS (et Docker pour les serveurs).</p>
-<pre data-i18n="d.pre">
-<span class="c"># Lancer un nœud devnet (validateur + faucet inclus)</span>
+    <div class="head reveal">
+      <div class="kicker" data-i18n="d.kicker">Démarrer</div>
+      <h2 data-i18n="d.h2">Démarrer en 60 secondes</h2>
+      <p class="lead" data-i18n="d.lead">Un binaire, zéro dépendance — Windows, Linux, macOS (et Docker pour les serveurs).</p>
+    </div>
+<pre class="reveal" data-i18n="d.pre"><span class="c"># Lancer un nœud devnet (validateur + faucet inclus)</span>
 <span class="k">chaingo</span> node start --dev
 
 <span class="c"># Créer un wallet post-quantique</span>
@@ -398,8 +523,7 @@
 
 <span class="c"># Créer SON token, sans code — ou déléguer dès 1 CGO</span>
 <span class="k">chaingo</span> token create --from alice --symbol MONTOK --name "Mon Token" --supply 1000000
-<span class="k">chaingo</span> delegate --from alice --to cg… --amount 50
-</pre>
+<span class="k">chaingo</span> delegate --from alice --to cg… --amount 50</pre>
     <p class="lead" style="margin-top:22px" data-i18n="d.links">
       Pas envie de ligne de commande ? <a href="/wallet/">Créez un wallet dans le navigateur</a> ou
       <a href="/explorer/">parcourez la chaîne en direct</a>. Pour faire tourner un nœud
@@ -410,10 +534,13 @@
 
 <footer>
   <div class="wrap">
-    <div class="warn" data-i18n="ft.warn">ℹ️ Le testnet public est en ligne — explorez-le librement, obtenez des CGO de test
-    via le faucet, rejoignez le réseau. Le <b>mainnet</b> ouvrira après l'audit de sécurité externe et la finalisation
-    de la Phase 2 (consensus BFT durci). L'anonymat fort (zk-STARK) arrive en Phase 3.</div>
-    <div data-i18n="ft.info">ChainGO — blockchain post-quantique open source (MIT) écrite en Go.
+    <div class="warn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+      <span data-i18n="ft.warn">Le testnet public est en ligne — explorez-le librement, obtenez des CGO de test
+      via le faucet, rejoignez le réseau. Le <b>mainnet</b> ouvrira après l'audit de sécurité externe et la finalisation
+      de la Phase 2 (consensus BFT durci). L'anonymat fort (zk-STARK) arrive en Phase 3.</span>
+    </div>
+    <div class="info" data-i18n="ft.info">ChainGO — blockchain post-quantique open source (MIT) écrite en Go.
     Signatures ML-DSA-65 (NIST FIPS 204) · SHA3-256 · <a href="/api/">Référence API</a> ·
     <a href="/explorer/">Explorateur</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">Code source</a></div>
   </div>
@@ -428,21 +555,30 @@ document.querySelectorAll('[data-i18n]').forEach(el => { FR[el.dataset.i18n] = e
 
 const EN = {
   nav1: `Pillars`, nav2: `How it works`, nav3: `Live chain`, nav4: `Tokenomics`, nav5: `Roadmap`,
-  navwallet: `Wallet`, navexplorer: `Explorer`, navloadtest: `Load test`, navpill: `testnet · v0.1`,
+  navwallet: `Wallet`, navexplorer: `Explorer`, navstudio: `Studio`, navpill: `testnet · v0.1`,
   cta0: `Create my wallet`,
-  'hero.h1': `The <span class="grad">post-quantum</span> blockchain.<br>Simple. Fast. Deflationary.`,
-  'hero.sub': `<b>Public testnet live.</b> Mainnet in preparation. ChainGO protects every transaction with <b>ML-DSA-65</b>, the quantum-resistant signature standard (NIST FIPS 204). Burned fees, tokens created without a single line of code, and a peer-to-peer network anyone can join.`,
-  b1: `🛡️ <b>ML-DSA-65</b> signatures everywhere`, b2: `⚡ <b>31,000 TPS</b> measured locally`,
-  b3: `🔥 <b>Automatic</b> fee burning`, b4: `🪙 <b>No-code</b> tokens`,
-  cta1: `Understand it in 2 minutes`, cta2: `Explore the API`,
+  'hero.eyebrow': `<b>● Public testnet live</b> · Mainnet in preparation`,
+  'hero.h1': `The <span class="grad-text">post-quantum</span> blockchain.<br>Simple. Fast. Deflationary.`,
+  'hero.sub': `ChainGO protects every transaction with <b>ML-DSA-65</b>, the quantum-resistant signature standard (NIST FIPS 204). Burned fees, tokens and contracts created without a single line of code, and a peer-to-peer network anyone can join.`,
+  b1: `<b>ML-DSA-65</b> signatures everywhere`, b2: `<b>31,000 TPS</b> measured locally`,
+  b3: `<b>Automatic</b> fee burning`, b4: `<b>No-code</b> tokens &amp; contracts`,
+  cta1: `Understand it in 2 minutes`, cta2: `Explore the chain`,
+  'p.kicker': `The pillars`,
   'p.h2': `The project we are building`,
   'p.lead': `Today's blockchains sign with cryptography (ECDSA, Ed25519) that quantum computers will eventually break. ChainGO is designed for that world from block one — without sacrificing speed or simplicity.`,
-  'p.c1': `<h3><span class="ico">🛡️</span> Post-quantum security <span class="tag live">LIVE</span></h3><p>Every wallet, transaction and block is signed with ML-DSA-65 (FIPS 204, NIST level 3). SHA3-256 hashing. No quantum-vulnerable elliptic curves, anywhere.</p>`,
-  'p.c2': `<h3><span class="ico">⚡</span> Speed <span class="tag live">LIVE</span></h3><p>31,000 transactions/second measured (verification + execution) thanks to parallel verification across all cores. Blocks every 500 ms, confirmation in ~1 second. Optional <b>tip</b> to jump the queue.</p>`,
-  'p.c3': `<h3><span class="ico">🔥</span> Deflationary economics <span class="tag live">LIVE</span></h3><p>Base fees are <b>destroyed</b> (burned) on every transaction, automatically adjusted to congestion (EIP-1559 model). The more the network is used, the scarcer CGO becomes.</p>`,
-  'p.c4': `<h3><span class="ico">🪙</span> No-code tokens &amp; contracts <span class="tag live">LIVE</span></h3><p>Create your token and deploy <b>smart contracts without code</b> from the <a href="/studio/">studio</a>: vesting (gradual release), escrow, <b>M-of-N multisig</b> and <b>DAO</b> (member-governed treasury) — native templates audited once for everyone.</p>`,
-  'p.c5': `<h3><span class="ico">🕶️</span> Enhanced anonymity <span class="tag soon">PHASE 3</span></h3><p>Today: pseudonymity (non-nominative addresses, public history). Tomorrow: confidential transfers via <b>zk-STARK</b> proofs — the only quantum-resistant zero-knowledge family — and stealth addresses.</p>`,
-  'p.c6': `<h3><span class="ico">🌐</span> Decentralization <span class="tag live">LIVE</span></h3><p>Peer-to-peer network: every node syncs and relays. Validate with 10,000 CGO or <b>delegate from 1 CGO</b> — block proposers are drawn weighted by stake, and fallback rounds keep the chain moving even when validators go offline.</p>`,
+  'p.c1': `Post-quantum security <span class="tag live">Live</span>`,
+  'p.c1d': `Every wallet, transaction and block is signed with ML-DSA-65 (FIPS 204, NIST level 3). SHA3-256 hashing. No quantum-vulnerable elliptic curves, anywhere.`,
+  'p.c2': `Speed <span class="tag live">Live</span>`,
+  'p.c2d': `31,000 transactions/second measured (verification + execution) thanks to parallel verification across all cores. Blocks every 500 ms, confirmation in ~1 second. Optional <b>tip</b> to jump the queue.`,
+  'p.c3': `Deflationary economics <span class="tag live">Live</span>`,
+  'p.c3d': `Base fees are <b>destroyed</b> (burned) on every transaction, automatically adjusted to congestion (EIP-1559 model). The more the network is used, the scarcer CGO becomes.`,
+  'p.c4': `No-code tokens &amp; contracts <span class="tag live">Live</span>`,
+  'p.c4d': `Create your token and deploy <b>smart contracts without code</b> from the <a href="/studio/">studio</a>: vesting, escrow, <b>M-of-N multisig</b> and <b>DAO</b>. For developers, a <b>WASM VM</b> runs arbitrary contracts (Rust, AssemblyScript…) — wired into the testnet.`,
+  'p.c5': `Enhanced anonymity <span class="tag soon">Phase 3</span>`,
+  'p.c5d': `Today: pseudonymity (non-nominative addresses, public history). Tomorrow: confidential transfers via <b>zk-STARK</b> proofs — the only quantum-resistant zero-knowledge family — and stealth addresses.`,
+  'p.c6': `Decentralization <span class="tag live">Live</span>`,
+  'p.c6d': `Peer-to-peer network: every node syncs and relays. Validate with 10,000 CGO or <b>delegate from 1 CGO</b> — block proposers are drawn weighted by stake, and fallback rounds keep the chain moving even when validators go offline.`,
+  'f.kicker': `How it works`,
   'f.h2': `How it works`,
   'f.lead': `The life of a transaction, without the jargon.`,
   'f.s1': `<h3>A wallet = a post-quantum key pair</h3><p>Your wallet generates an ML-DSA-65 key. Your address (<code>cg…</code>) is the SHA3 fingerprint of the public key. The private key stays with you, encrypted (scrypt + AES-256-GCM).</p>`,
@@ -450,10 +586,12 @@ const EN = {
   'f.s3': `<h3>The network spreads and verifies it</h3><p>Your transaction enters the queue (mempool) and gossips from node to node. Each node re-verifies the signature in parallel across all its cores — that's what enables tens of thousands of TPS.</p>`,
   'f.s4': `<h3>A validator seals it into a block</h3><p>Every 500 ms, the <b>Aurora</b> consensus draws a validator (proportionally to its stake + delegations) who assembles the block — best tips first. If it's offline, a backup validator takes over automatically.</p>`,
   'f.s5': `<h3>Fees burn, validator and delegators get rewarded</h3><p>The base fee of every transaction is <b>destroyed forever</b> (deflation). The validator earns the tips + an emission of about 3%/year, shared pro-rata with its delegators. Your transaction is final: balances updated on every node in the world.</p>`,
+  's.kicker': `Real time`,
   's.h2': `The chain, live`,
   's.lead': `Data read in real time from this node through the public API.`,
   's.l1': `Block height`, 's.l2': `Total supply (CGO)`, 's.l3': `Burned forever (CGO)`,
   's.l4': `Base fee (CGO)`, 's.l5': `Validators`, 's.l6': `Pending txs`,
+  't.kicker': `Tokenomics`,
   't.h2': `CGO tokenomics`,
   't.lead': `Public rules, written into the genesis block — not hidden in code.`,
   't.r0': `<th>Rule</th><th>Value</th><th>Why</th>`,
@@ -465,14 +603,16 @@ const EN = {
   't.r6': `<td>Fees</td><td>dynamic (EIP-1559), 0.0001 CGO floor</td><td class="muted">self-regulating anti-spam, predictable via <a href="/v1/fees">/v1/fees</a></td>`,
   't.r7': `<td>Staking</td><td>minimum 10,000 CGO to validate</td><td class="muted">~3%/year yield — the long-term holding incentive</td>`,
   't.r8': `<td>Delegation</td><td>from 1 CGO, 10% commission</td><td class="muted">small holders delegate to a validator and share its rewards</td>`,
-  't.r9': `<td>Unbonding</td><td>21 days on mainnet, 24 h on testnet</td><td class="muted">funds leaving the stake remain seizable (future slashing)</td>`,
-  'r.h2': `Roadmap`,
-  'r.lead': `Transparent — including about what doesn't exist yet.`,
-  'r.p1': `<h3>Phase 1 — Foundations <span class="tag live">SHIPPED</span></h3><p>Complete post-quantum chain: Aurora PoS consensus with fallback rounds, burned EIP-1559 fees, staking + delegation + unbonding, no-code tokens, <b>first no-code smart contracts (vesting, escrow)</b>, wallets, P2P, REST API, 31,000 TPS benchmarked.</p>`,
-  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag live">NEARLY SHIPPED</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec. Remaining: external audit and independent validators.</p>`,
-  'r.p3': `<h3>Phase 3 — Strong anonymity</h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield. (Post-mainnet.)</p>`,
-  'r.p4': `<h3>Phase 4 — No-code smart contracts <span class="tag live">LIVE</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> are live, deployable from the studio. A <b>WASM</b> engine (arbitrary contracts): <b>wired into consensus on the testnet</b> — deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after audit.</b></p>`,
-  'r.p5': `<h3>Phase 5 — Ecosystem <span class="tag live">LIVE</span></h3><p>Explorer, no-code studio, validator dashboard and load tester are online. Next: JavaScript &amp; Python SDKs and full documentation.</p>`,
+  't.r9': `<td>Unbonding</td><td>21 days on mainnet, 24 h on testnet</td><td class="muted">funds leaving the stake remain seizable (slashing)</td>`,
+  'r.kicker': `Roadmap`,
+  'r.h2': `Where ChainGO stands`,
+  'r.lead': `Transparent — including about what doesn't exist yet. The testnet is live; mainnet opens after the external audit and independent validators.`,
+  'r.p1': `<h3>Phase 1 — Foundations <span class="tag live">Shipped</span></h3><p>Complete post-quantum chain: Aurora PoS consensus with fallback rounds, burned EIP-1559 fees, staking + delegation + unbonding, no-code tokens, first smart contracts, wallets, P2P, REST API, 31,000 TPS benchmarked.</p>`,
+  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag prog">In progress · ~94%</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec, fuzzing. Remaining: external audit and independent validators.</p>`,
+  'r.p4': `<h3>Phase 4 — Smart contracts <span class="tag live">Shipped · testnet</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> deployable from the studio. A <b>WASM</b> engine (arbitrary contracts) <b>wired into consensus on the testnet</b>: deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after audit.</b></p>`,
+  'r.p5': `<h3>Phase 5 — Ecosystem &amp; tooling <span class="tag prog">In progress</span></h3><p>Online: explorer, no-code studio, validator dashboard, load tester, web wallet. Next: <b>JavaScript SDK</b> &amp; Python, full documentation and community presence.</p>`,
+  'r.p3': `<h3>Phase 3 — Strong anonymity <span class="tag soon">Planned · post-mainnet</span></h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield.</p>`,
+  'd.kicker': `Get started`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
   'd.links': `Don't want the command line? <a href="/wallet/">Create your wallet in the browser</a> or <a href="/explorer/">browse the chain live</a>. Want to run your own node or integrate ChainGO? <a href="/api/">API reference</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">source code</a>.`,
@@ -489,7 +629,7 @@ const EN = {
 <span class="c"># Create YOUR token, no code — or delegate from 1 CGO</span>
 <span class="k">chaingo</span> token create --from alice --symbol MYTOK --name "My Token" --supply 1000000
 <span class="k">chaingo</span> delegate --from alice --to cg… --amount 50`,
-  'ft.warn': `ℹ️ Public testnet is live — explore it, request test CGO from the faucet, run your own node. <b>Mainnet</b> opens once the external security audit lands and Phase 2 (hardened BFT consensus) ships. Strong anonymity (zk-STARK) follows in Phase 3.`,
+  'ft.warn': `Public testnet is live — explore it, request test CGO from the faucet, run your own node. <b>Mainnet</b> opens once the external security audit lands and Phase 2 (hardened BFT consensus) ships. Strong anonymity (zk-STARK) follows in Phase 3.`,
   'ft.info': `ChainGO — open source (MIT) post-quantum blockchain written in Go. ML-DSA-65 signatures (NIST FIPS 204) · SHA3-256 · <a href="/api/">API reference</a> · <a href="/explorer/">Explorer</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">Source code</a>`,
 };
 
@@ -560,6 +700,23 @@ async function refresh() {
 applyLang();
 refresh();
 setInterval(refresh, 2000);
+</script>
+
+<script>
+// reveal au scroll — script ISOLÉ : une erreur dans le script principal ne doit
+// jamais laisser des sections masquées (opacity:0).
+(function () {
+  var els = document.querySelectorAll('.reveal');
+  function showAll() { els.forEach(function (e) { e.classList.add('in'); }); }
+  if (!('IntersectionObserver' in window)) { showAll(); return; }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+  els.forEach(function (e) { io.observe(e); });
+  // FILET DE SÉCURITÉ : si l'IO ne se déclenche jamais (navigateur ancien, rendu
+  // headless, page non défilable), tout devient visible — jamais de page blanche.
+  setTimeout(showAll, 2500);
+})();
 </script>
 
 </body>
