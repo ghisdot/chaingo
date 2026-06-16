@@ -60,6 +60,9 @@ go test ./internal/crypto/ -run View      # chiffrement de notes ML-KEM
 go test ./internal/shielded/               # modèle de pool
 ```
 
+> Résultat de référence : **`internal/stark` = 210 sous-tests PASS, 0 FAIL** (~9 min,
+> car chaque preuve est régénérée). La lenteur est le *prouveur* non optimisé, pas un défaut.
+
 **Circuit de dépense (`TestSpend*`, 24 tests, tous PASS) :**
 - `TestSpend_PreuveHonnete` — une dépense valide produit une preuve qui vérifie.
 - `TestSpend_TemoinNonPublie` — le témoin (montant, `nk`, chemin) n'apparaît dans
