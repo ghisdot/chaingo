@@ -64,9 +64,19 @@ l'instant).
 |---|---|---|
 | 1 | Instrumentation de gas (injection bytecode) + fuzzing | ✅ **livré** |
 | 2 | Tarification fine (coût par bloc de base) + audit déterminisme | ⬜ |
-| 3 | API hôte d'état (storage KV par contrat) gas-métrée | ⬜ |
-| 4 | Tx `wasm_deploy` / `wasm_call` + stockage contrat dans la racine d'état | ⬜ |
-| 5 | API économique (balance/transfer/events) + limites anti-DoS + audit | ⬜ |
+| 3 | **API hôte d'état en SANDBOX** (`host.go` : storage_read/write, caller, value, transfer, log) | ✅ **livré** (hors-consensus, en mémoire) |
+| 3b | Câblage de l'API hôte sur la VRAIE machine d'état (storage par contrat dans la racine) | ⬜ |
+| 4 | Tx `wasm_deploy` / `wasm_call` + frais de déploiement/appel | ⬜ |
+| 5 | Limites anti-DoS (taille bytecode, pile) + **audit externe** | ⬜ |
+
+## API hôte (tranche 3, sandbox) — `Sandbox`
+
+Un contrat peut appeler (module `env`) : `storage_read/write` (KV par contrat),
+`caller`, `value`, `transfer`, `log`. ABI mémoire par (pointeur, longueur).
+L'état est **en mémoire** (`Sandbox`) — prototype de ce que la tranche 3b
+branchera sur la racine d'état. Exemple de contrat Rust :
+[examples/contracts/counter](../../examples/contracts/counter). Wiring testé
+(un contrat appelle `value()` et atteint le sandbox), logique d'état testée.
 
 ## Décision
 

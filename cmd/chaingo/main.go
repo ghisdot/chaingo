@@ -1057,23 +1057,22 @@ func cmdWasm(args []string) error {
 		}
 		callArgs = append(callArgs, v)
 	}
-	fmt.Println("⚠ PREVIEW expérimentale — exécution en sandbox LOCALE, pas sur la chaîne (voir docs/design/wasm-vm.md)")
-	var res *wasmvm.Result
-	if *gas > 0 {
-		fmt.Printf("Gas déterministe : %d unités\n", *gas)
-		res, err = wasmvm.RunMetered(context.Background(), code, fn, *gas, callArgs...)
-	} else {
-		res, err = wasmvm.Run(context.Background(), code, fn, 2*time.Second, callArgs...)
+	limit := *gas
+	if limit <= 0 {
+		limit = 10_000_000 // gas par défaut (toujours déterministe)
 	}
+	fmt.Println("⚠ PREVIEW expérimentale — exécution en sandbox LOCALE, pas sur la chaîne (voir docs/design/wasm-vm.md)")
+	fmt.Printf("Gas déterministe : %d unités · appelant : %s\n", limit, "cg-demo")
+	// Sandbox : API hôte complète (storage, caller, value, transfer, log).
+	sb := wasmvm.NewSandbox("cg-demo", 0)
+	res, err := sb.Run(context.Background(), code, fn, limit, callArgs...)
 	if err != nil {
 		return err
 	}
 	for _, l := range res.Logs {
 		fmt.Printf("[log] %s\n", l)
 	}
-	if *gas > 0 {
-		fmt.Printf("gas consommé : %d / %d\n", res.GasUsed, *gas)
-	}
+	fmt.Printf("gas consommé : %d / %d\n", res.GasUsed, limit)
 	fmt.Printf("retour : %v\n", res.Returns)
 	return nil
 }

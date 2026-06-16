@@ -1,0 +1,13 @@
+[package]
+name = "counter"
+version = "0.1.0"
+edition = "2021"
+description = "Exemple de smart contract WASM pour ChainGO (compteur en stockage)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+opt-level = "s"     # optimise pour la taille du .wasm
+panic = "abort"
