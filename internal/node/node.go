@@ -338,6 +338,11 @@ func (n *Node) Fees() map[string]any {
 		"min_delegation":            p.MinDelegation,
 		"delegation_commission_bps": p.DelegationCommissionBps,
 		"contract_create_fee":       p.ContractCreateFee,
+		"wasm_enabled":              p.WasmEnabled,
+		"wasm_deploy_fee":           p.WasmDeployFee,
+		"wasm_call_fee":             p.WasmCallFee,
+		"wasm_max_code_len":         p.WasmMaxCodeLen,
+		"wasm_gas_limit":            p.WasmGasLimit,
 	}
 }
 

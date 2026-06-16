@@ -108,6 +108,7 @@
       <div class="tab" data-t="escrow" onclick="switchTab('escrow')">Séquestre</div>
       <div class="tab" data-t="multisig" onclick="switchTab('multisig')">Multisig</div>
       <div class="tab" data-t="dao" onclick="switchTab('dao')">DAO</div>
+      <div class="tab" data-t="wasm" onclick="switchTab('wasm')">Contrats WASM</div>
       <div class="tab" data-t="mine" onclick="switchTab('mine')">Mes créations</div>
     </div>
 
@@ -195,6 +196,32 @@
       <button class="primary" onclick="createDAO()">Déployer la DAO</button>
     </div>
 
+    <!-- WASM -->
+    <div id="tab-wasm" class="card hidden">
+      <h2>Contrats WASM arbitraires</h2>
+      <p class="hint">Pour les <b>développeurs</b> : déployez du <b>bytecode WebAssembly</b> compilé (Rust, AssemblyScript, TinyGo, C…) — pas besoin d'écrire du code ici, on téléverse le <code>.wasm</code> déjà compilé. Le nœud valide le bytecode (arrêt garanti par gas) avant de le stocker. <b>Activé sur testnet/devnet ; désactivé sur mainnet jusqu'à audit.</b> Voir <a href="https://github.com/ghisdot/chaingo/tree/main/examples/contracts/counter">l'exemple counter</a>.</p>
+
+      <h3 style="margin-top:4px">Déployer un contrat</h3>
+      <label>Fichier .wasm compilé</label>
+      <input id="wasmFile" type="file" accept=".wasm,application/wasm">
+      <div class="fee" id="feeWasm">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="deployWasm()">Déployer le contrat WASM</button>
+
+      <h3 style="margin-top:20px">Appeler un contrat</h3>
+      <div class="row">
+        <div><label>Adresse du contrat</label><input id="wcAddr" placeholder="hash du déploiement"></div>
+        <div><label>Fonction</label><input id="wcFn" placeholder="increment"></div>
+      </div>
+      <div class="row">
+        <div><label>Arguments (entiers u64, séparés par des virgules)</label><input id="wcArgs" placeholder="ex : 1, 2"></div>
+        <div><label>CGO envoyés (value)</label><input id="wcValue" type="number" min="0" step="any" value="0"></div>
+      </div>
+      <button class="primary" onclick="callWasm()">Appeler la fonction</button>
+
+      <h3 style="margin-top:20px">Contrats déployés <button class="ghost" style="font-size:13px" onclick="loadWasmList()">rafraîchir</button></h3>
+      <div id="wasmList"><span class="hint">—</span></div>
+    </div>
+
     <!-- MINE -->
     <div id="tab-mine" class="card hidden">
       <h2>Mes créations</h2>
@@ -261,8 +288,9 @@ function txToJSON(tx){
 
 function switchTab(t){
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
-  ["token","vesting","escrow","multisig","dao","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
+  ["token","vesting","escrow","multisig","dao","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
   if (t === "mine") loadMine();
+  if (t === "wasm") loadWasmList();
 }
 
 function loadSeed(){
@@ -318,6 +346,14 @@ function renderFees(){
   const ct = `${fmt(fees.contract_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(ctrTotal)} CGO</b>`;
   $("feeToken").innerHTML = "Coût de déploiement : " + tk;
   ["feeVesting","feeEscrow","feeMultisig","feeDAO"].forEach(id => $(id).innerHTML = "Coût de déploiement : " + ct);
+  if ($("feeWasm")){
+    if (fees.wasm_enabled){
+      const wt = (fees.wasm_deploy_fee || 0) + base + tip;
+      $("feeWasm").innerHTML = `Coût de déploiement : ${fmt(fees.wasm_deploy_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(wt)} CGO</b> · taille max ${Math.round((fees.wasm_max_code_len||0)/1024)} Kio`;
+    } else {
+      $("feeWasm").innerHTML = "<span class='ko'>Les contrats WASM sont désactivés sur ce réseau (mainnet : activation après audit).</span>";
+    }
+  }
 }
 
 // Construit la base commune d'une tx (chain_id, nonce, frais).
@@ -426,6 +462,60 @@ async function createDAO(){
     tx.contract = { template: "dao", token_id: token, amount: amount, signers: members, threshold };
     await signAndSend(tx, "DAO");
   }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+// ---------------- contrats WASM ----------------
+// base64 d'un Uint8Array (le champ Go []byte attend du base64 dans le JSON).
+function bytesToB64(bytes){
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+async function deployWasm(){
+  try{
+    const f = $("wasmFile").files[0];
+    if (!f) throw new Error("choisissez un fichier .wasm compilé");
+    const buf = new Uint8Array(await f.arrayBuffer());
+    if (buf.length === 0) throw new Error("fichier vide");
+    const tx = await buildBase("wasm_deploy");
+    tx.code = bytesToB64(buf); // []byte côté Go = base64 dans le JSON signé
+    const hash = await signAndSend(tx, "Déploiement WASM");
+    if (hash){
+      $("status").innerHTML += `<br>Adresse du contrat : <code>${hash}</code> (= hash du déploiement)`;
+      $("wcAddr").value = hash;
+      loadWasmList();
+    }
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function callWasm(){
+  try{
+    const addr = $("wcAddr").value.trim();
+    const fn = $("wcFn").value.trim();
+    if (!addr || !fn) throw new Error("adresse du contrat et fonction requises");
+    const args = $("wcArgs").value.split(",").map(s=>s.trim()).filter(Boolean).map(s=>{
+      if (!/^\d+$/.test(s)) throw new Error("argument invalide : "+s+" (entier u64 attendu)");
+      return BigInt(s);
+    });
+    const value = toBase($("wcValue").value || "0", 9);
+    const tx = await buildBase("wasm_call");
+    tx.contract_id = addr;
+    tx.action = fn;
+    if (args.length) tx.args = args;
+    if (value > 0n) tx.amount = value;
+    await signAndSend(tx, "Appel WASM");
+    loadWasmList();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function loadWasmList(){
+  try{
+    const list = await api("/v1/wasm/contracts");
+    if (!list || !list.length){ $("wasmList").innerHTML = "<span class='hint'>Aucun contrat WASM déployé sur ce réseau.</span>"; return; }
+    $("wasmList").innerHTML = "<table><tr><th>Adresse</th><th>Créateur</th><th>Appels</th><th>Taille</th><th>Storage</th></tr>" +
+      list.map(c=>`<tr><td class="mono">${c.address.slice(0,16)}…</td><td class="mono">${(c.creator||"").slice(0,10)}…</td><td>${c.calls}</td><td>${c.code_size} o</td><td>${c.storage_keys} clés</td></tr>`).join("") + "</table>";
+  }catch(e){ $("wasmList").innerHTML = '<span class="ko">'+e.message+'</span>'; }
 }
 
 async function loadMine(){
