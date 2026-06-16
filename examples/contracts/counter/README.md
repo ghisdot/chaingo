@@ -5,10 +5,11 @@ compteur dans le **stockage du contrat**, l'incrémente, le réécrit et renvoie
 nouvelle valeur — il démontre l'**API hôte d'état** (`storage_read`,
 `storage_write`).
 
-> ⚠️ **PREVIEW expérimentale, hors-consensus.** Le moteur WASM n'est pas encore
-> câblé dans les blocs (voir [docs/design/wasm-vm.md](../../../docs/design/wasm-vm.md)).
-> `chaingo wasm run` l'exécute en **sandbox locale** : le stockage est en mémoire
-> et réinitialisé à chaque appel.
+> Le moteur WASM est **câblé en consensus sur testnet/devnet** : ce contrat se
+> déploie et s'appelle on-chain (`wasm_deploy`/`wasm_call`). Il reste **désactivé
+> sur mainnet** (`WasmEnabled=false`) jusqu'à un audit externe — voir
+> [docs/design/wasm-vm.md](../../../docs/design/wasm-vm.md). `chaingo wasm run`
+> reste disponible pour un test **en sandbox locale** (stockage en mémoire).
 
 ## Compiler
 
@@ -46,9 +47,23 @@ gas consommé : <N> / 1000000
 retour : [1]
 ```
 
-(Chaque exécution part d'un stockage vide → le compteur renvoie `1`. La
-persistance entre appels existe au sein d'un même sandbox — testée côté Go — et
-viendra on-chain avec les tx `wasm_deploy`/`wasm_call`.)
+(En sandbox locale, chaque exécution part d'un stockage vide → le compteur
+renvoie `1`.)
+
+## Déployer et appeler ON-CHAIN (testnet/devnet)
+
+```bash
+# déploie le bytecode ; l'adresse du contrat = hash de la tx
+chaingo wasm deploy --from <wallet> \
+  target/wasm32-unknown-unknown/release/counter.wasm
+# appelle increment() — le storage PERSISTE entre les appels (on-chain)
+chaingo wasm call --from <wallet> <adresse> increment   # → 1
+chaingo wasm call --from <wallet> <adresse> increment   # → 2
+chaingo wasm list                                        # contrats déployés
+```
+
+Ou via le **Studio** (`/studio/`, onglet « Contrats WASM ») : téléverser le
+`.wasm`, puis appeler — la signature post-quantique se fait dans le navigateur.
 
 ## API hôte disponible (sandbox)
 

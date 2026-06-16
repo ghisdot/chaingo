@@ -124,9 +124,12 @@ Full documentation:
   before mainnet).
 - **Phase 4 — No-code smart contracts**: 🟢 vesting / escrow / multisig / **DAO** templates
   shipped and deployable from the studio. A **WASM** engine (arbitrary contracts, in WebAssembly):
-  **deterministic gas** — the mechanism guaranteeing a contract halts identically on every node —
-  is shipped and fuzzed (5.3M executions). Still **out-of-consensus**: host state API, deploy/call
-  txs and an external audit remain.
+  **wired into consensus on testnet/devnet** — deploy bytecode (`wasm_deploy`) and call it
+  (`wasm_call`) from the studio, CLI or API. Determinism is enforced by deterministic gas
+  (instrumentation, fuzzed 5.3M execs), a restricted opcode set validated at deploy time, and the
+  wazero interpreter; verified by a multi-validator test (4 nodes, identical state root).
+  **Disabled on mainnet (`WasmEnabled=false`) until an external audit** — see
+  [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 - **Phase 5 — Ecosystem**: 🟢 web wallet, explorer, studio, validator dashboard, load tester.
   **Remaining**: JS/Python SDKs, full EN docs.
 - **Phase 3 — Strong anonymity (zk-STARK)**: ⬜ post-mainnet.

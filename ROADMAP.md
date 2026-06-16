@@ -86,11 +86,15 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 - [x] **Template DAO** (gouvernance on-chain) : trésorerie partagée, membres, propositions
       de paiement votées POUR/CONTRE, exécution au quorum, rejet automatique si le quorum
       devient inatteignable. CLI + studio + tests.
-- [~] **Moteur WASM** (contrats arbitraires façon ETH/BNB, en WebAssembly) — **preview
-      expérimentale livrée** (`internal/wasmvm`, runtime wazero Go pur) : charge et exécute
-      réellement du WASM, mais **HORS-CONSENSUS** (gas wall-clock non déterministe). Le moteur
-      consensus-grade (gas déterministe par instrumentation, API hôte d'état, tx deploy/call,
-      audit) est le plus gros chantier restant — voir [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
+- [x] **Moteur WASM** (contrats arbitraires façon ETH/BNB, en WebAssembly) — **câblé en
+      consensus sur testnet/devnet** (`internal/wasmvm`, runtime wazero Go pur). Tx
+      `wasm_deploy`/`wasm_call`, stockage par contrat dans la racine d'état, déploiement via
+      studio / CLI / API. Déterminisme : gas par instrumentation (fuzzé 5,3 M), opcodes restreints
+      validés au déploiement, interpréteur wazero ; test multi-validateurs (4 nœuds, même racine).
+      **Désactivé sur mainnet (`WasmEnabled=false`) jusqu'à audit externe** — voir
+      [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
+- [ ] **Audit externe du moteur WASM** — bloquant pour l'activation mainnet (exécution de
+      bytecode hostile).
 
 ## Phase 5 — Écosystème
 

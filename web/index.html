@@ -367,9 +367,10 @@
       <div class="phase done" data-i18n="r.p4">
         <h3>Phase 4 — Smart contracts no-code <span class="tag live">ACTIF</span></h3>
         <p>Vesting, escrow, multisig et <b>DAO</b> sont en ligne, déployables depuis le studio.
-        Moteur <b>WASM</b> (contrats arbitraires) : le <b>gas déterministe</b> (arrêt garanti,
-        identique sur tous les nœuds) est livré et fuzzé. Encore hors-consensus — restent l'API
-        hôte d'état, les tx, et un audit.</p>
+        Moteur <b>WASM</b> (contrats arbitraires) : <b>câblé en consensus sur le testnet</b> —
+        on déploie du bytecode et on l'appelle depuis le studio, la CLI ou l'API. Déterminisme
+        garanti (gas instrumenté, opcodes restreints, interpréteur). <b>Activé sur mainnet après
+        audit.</b></p>
       </div>
       <div class="phase done" data-i18n="r.p5">
         <h3>Phase 5 — Écosystème <span class="tag live">ACTIF</span></h3>
@@ -470,7 +471,7 @@ const EN = {
   'r.p1': `<h3>Phase 1 — Foundations <span class="tag live">SHIPPED</span></h3><p>Complete post-quantum chain: Aurora PoS consensus with fallback rounds, burned EIP-1559 fees, staking + delegation + unbonding, no-code tokens, <b>first no-code smart contracts (vesting, escrow)</b>, wallets, P2P, REST API, 31,000 TPS benchmarked.</p>`,
   'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag live">NEARLY SHIPPED</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec. Remaining: external audit and independent validators.</p>`,
   'r.p3': `<h3>Phase 3 — Strong anonymity</h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield. (Post-mainnet.)</p>`,
-  'r.p4': `<h3>Phase 4 — No-code smart contracts <span class="tag live">LIVE</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> are live, deployable from the studio. A <b>WASM</b> engine (arbitrary contracts): <b>deterministic gas</b> (guaranteed halt, identical on every node) is shipped and fuzzed. Still out-of-consensus — host state API, txs and an audit remain.</p>`,
+  'r.p4': `<h3>Phase 4 — No-code smart contracts <span class="tag live">LIVE</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> are live, deployable from the studio. A <b>WASM</b> engine (arbitrary contracts): <b>wired into consensus on the testnet</b> — deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after audit.</b></p>`,
   'r.p5': `<h3>Phase 5 — Ecosystem <span class="tag live">LIVE</span></h3><p>Explorer, no-code studio, validator dashboard and load tester are online. Next: JavaScript &amp; Python SDKs and full documentation.</p>`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,

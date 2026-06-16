@@ -1,9 +1,11 @@
 # Design — Machine virtuelle WASM (smart contracts arbitraires)
 
-> Statut : **preview expérimentale livrée** (`internal/wasmvm`, hors-consensus).
-> Le moteur consensus-grade (contrats déployables on-chain) est un chantier XXL
-> détaillé ci-dessous. À NE PAS câbler dans les blocs avant que tous les points
-> « consensus-grade » soient faits + audités.
+> Statut : **livré et câblé en consensus sur testnet/devnet** (`internal/wasmvm` +
+> tx `wasm_deploy`/`wasm_call`, stockage par contrat dans la racine d'état).
+> Activé par le Param de genèse **`WasmEnabled`** : **ON** en devnet/testnet,
+> **OFF en mainnet** jusqu'à un **audit externe** — invariant de sûreté : pas de
+> code arbitraire exécuté en consensus mainnet avant audit. Le testnet sert
+> précisément à éprouver ce moteur avant le mainnet.
 
 ## Objectif
 
@@ -45,44 +47,77 @@ CLI : `chaingo wasm run --gas N <fichier.wasm> <fn> [args]`.
 au travail, par bloc de base) est un raffinement (charge fixe par point pour
 l'instant).
 
-## Ce qu'il MANQUE encore pour le consensus
+## Comment le déterminisme est tenu (en consensus)
 
-2. **Audit de déterminisme.** Canonicaliser les NaN flottants (ou interdire les
-   flottants), interdire tout import non déterministe (horloge, aléa, threads),
-   fixer le comportement de la croissance mémoire.
-3. **API hôte d'accès à l'état**, chacune **gas-métrée** : `storage_get/set`
-   (KV par contrat), `caller`, `self`, `balance`, `transfer`, `emit_event`,
-   `block_height/time` (valeurs du bloc, déterministes).
-4. **Types de transaction** : `wasm_deploy` + `wasm_call` + stockage **par
-   contrat** dans la racine d'état.
-5. **Limites anti-DoS** : taille max du bytecode, profondeur de pile, mémoire,
-   nombre d'exports. **Audit externe** (exécute du bytecode hostile).
+Exécuter du code arbitraire sur tous les nœuds exige un résultat **bit-à-bit
+identique**, sinon les racines d'état divergent et la chaîne se scinde. Les
+garanties en place :
+- **Arrêt déterministe** par instrumentation de gas (cf tranche 1) — pas de
+  timeout wall-clock dans le chemin de consensus.
+- **Jeu d'opcodes restreint**, *validé au déploiement* (`wasmvm.Validate`) : tout
+  opcode non maîtrisé (SIMD, atomics…) fait rejeter le bytecode → seul du code
+  instrumentable atterrit on-chain.
+- **Interpréteur wazero forcé** (`RunDeterministic`) : même chemin d'exécution
+  sur toutes les architectures CPU.
+- **Imports déterministes uniquement** : module `env` (storage, caller, value,
+  transfer, log) — ni horloge, ni aléa, ni threads.
+- **Revert atomique** : trap/out-of-gas → effets du contrat ignorés, frais brûlés
+  (anti-DoS) ; succès → storage/balance/transferts commités atomiquement.
+
+Vérifié par un **test d'intégration multi-validateurs** : déploiement puis appel
+via le vrai chemin de consensus, 4 nœuds d'accord sur la racine d'état à chaque
+étape.
+
+## Ce qu'il MANQUE encore (avant activation mainnet)
+
+1. **Audit externe** (exécution de bytecode hostile) — le **bloquant** mainnet.
+2. **Revue des flottants** : canonicalisation des NaN ou interdiction au
+   déploiement (aujourd'hui : autorisés, l'interpréteur wazero est déterministe ;
+   à confirmer par l'audit).
+3. **Tarification fine du gas** : coût proportionnel au travail par bloc de base
+   (aujourd'hui : charge fixe par point — garantit l'arrêt, pas un marché du gas).
+4. **Limites anti-DoS plus fines** : profondeur de pile, nombre d'exports
+   (déjà en place : taille max du bytecode, mémoire 16 Mio, gas plafonné).
 
 ## Plan d'implémentation (tranches)
 
 | Tranche | Contenu | État |
 |---|---|---|
 | 1 | Instrumentation de gas (injection bytecode) + fuzzing | ✅ **livré** |
-| 2 | Tarification fine (coût par bloc de base) + audit déterminisme | ⬜ |
-| 3 | **API hôte d'état en SANDBOX** (`host.go` : storage_read/write, caller, value, transfer, log) | ✅ **livré** (hors-consensus, en mémoire) |
-| 3b | Câblage de l'API hôte sur la VRAIE machine d'état (storage par contrat dans la racine) | ⬜ |
-| 4 | Tx `wasm_deploy` / `wasm_call` + frais de déploiement/appel | ⬜ |
-| 5 | Limites anti-DoS (taille bytecode, pile) + **audit externe** | ⬜ |
+| 2 | Tarification fine (coût par bloc de base) + audit déterminisme | ⬜ (gas = arrêt seul ; audit pending) |
+| 3 | **API hôte d'état en SANDBOX** (`host.go` : storage_read/write, caller, value, transfer, log) | ✅ **livré** |
+| 3b | Câblage de l'API hôte sur la VRAIE machine d'état (storage par contrat dans la racine) | ✅ **livré** |
+| 4 | Tx `wasm_deploy` / `wasm_call` + frais + déterminisme (interpréteur) | ✅ **livré** (testnet/devnet) |
+| 5 | Limites anti-DoS (taille bytecode ✅, mémoire ✅, gas ✅ ; pile ⬜) + **audit externe** ⬜ | 🟡 partiel |
 
-## API hôte (tranche 3, sandbox) — `Sandbox`
+## API hôte (module `env`)
 
-Un contrat peut appeler (module `env`) : `storage_read/write` (KV par contrat),
-`caller`, `value`, `transfer`, `log`. ABI mémoire par (pointeur, longueur).
-L'état est **en mémoire** (`Sandbox`) — prototype de ce que la tranche 3b
-branchera sur la racine d'état. Exemple de contrat Rust :
-[examples/contracts/counter](../../examples/contracts/counter). Wiring testé
-(un contrat appelle `value()` et atteint le sandbox), logique d'état testée.
+Un contrat peut appeler : `storage_read/write` (KV par contrat), `caller`,
+`value`, `transfer`, `log`. ABI mémoire par (pointeur, longueur). En consensus,
+ces hôtes sont adossés à la VRAIE machine d'état : le storage du contrat est
+chargé depuis la racine, recommité atomiquement en cas de succès. Exemple de
+contrat Rust : [examples/contracts/counter](../../examples/contracts/counter).
+
+## Déployer / appeler
+
+- **Studio** (no-code, web) : onglet « Contrats WASM » → téléverser un `.wasm`
+  compilé → tx signée par le wallet post-quantique. Formulaire d'appel + liste.
+- **CLI** : `chaingo wasm deploy --from <wallet> <fichier.wasm>` puis
+  `chaingo wasm call --from <wallet> [--gas N] [--value CGO] <adresse> <fn> [args]`.
+  `chaingo wasm list` liste les contrats. `chaingo wasm run` reste la sandbox locale.
+- **API** : `GET /v1/wasm/contracts`, `GET /v1/wasm/contracts/{addr}` (+ storage).
+  Le bytecode est soumis dans le champ `code` (base64) d'une tx `wasm_deploy`.
+
+L'adresse d'un contrat = hash de sa tx de déploiement. Frais : `WasmDeployFee` /
+`WasmCallFee` brûlés (Params de genèse).
 
 ## Décision
 
-Le moteur EVM-like est un **différenciateur fort** (contrats arbitraires +
-post-quantique), mais c'est **le plus gros chantier restant** et il exécute du
-code hostile → **il ne sera câblé en consensus qu'après audit**. Pour le
-**testnet de lancement**, les **templates no-code** (vesting, escrow, multisig,
-DAO) couvrent largement les usages ; la VM arrive comme une **Phase 4 avancée**,
-après le lancement et avec une revue de sécurité.
+Le moteur WASM est un **différenciateur fort** (contrats arbitraires +
+post-quantique). Il est **livré et câblé** sur testnet/devnet — c'est là qu'on
+l'éprouve avec de vrais contrats et du trafic. Il reste **désactivé sur mainnet
+(`WasmEnabled=false`)** jusqu'à un **audit externe** : il exécute du code
+potentiellement hostile, et l'invariant du projet est de ne jamais faire tourner
+ça en consensus mainnet sans revue de sécurité. Les **templates no-code**
+(vesting, escrow, multisig, DAO) restent l'option recommandée pour la majorité
+des usages, sans surface d'attaque de VM.

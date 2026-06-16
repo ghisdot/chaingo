@@ -139,9 +139,12 @@ Documentation complète :
   jalon de décentralisation avant mainnet).
 - **Phase 4 — Smart contracts no-code** : 🟢 templates vesting / escrow / multisig / **DAO**
   livrés + déployables depuis le studio. Moteur **WASM** (contrats arbitraires, en WebAssembly) :
-  le **gas déterministe** — le mécanisme qui garantit qu'un contrat s'arrête de façon identique
-  sur tous les nœuds — est livré et fuzzé (5,3 M exécutions). Encore **hors-consensus** : restent
-  l'API hôte d'état, les tx deploy/call et un audit externe.
+  **câblé en consensus sur testnet/devnet** — on déploie du bytecode (`wasm_deploy`) et on
+  l'appelle (`wasm_call`) via le studio, la CLI ou l'API. Déterminisme tenu par le gas
+  (instrumentation, fuzzé 5,3 M exéc.), un jeu d'opcodes restreint validé au déploiement et
+  l'interpréteur wazero ; vérifié par un test multi-validateurs (4 nœuds, même racine d'état).
+  **Désactivé sur mainnet (`WasmEnabled=false`) jusqu'à audit externe** — voir
+  [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 - **Phase 5 — Écosystème** : 🟢 wallet web, explorateur, studio, dashboard validateur, banc d'essai.
   **Reste** : SDK JS/Python, doc EN complète.
 - **Phase 3 — Anonymat fort (zk-STARK)** : ⬜ post-mainnet.
