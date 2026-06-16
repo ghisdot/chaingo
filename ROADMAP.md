@@ -71,9 +71,20 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 
 ## Phase 3 — Anonymat fort
 
-- [ ] Transferts confidentiels par preuves zk-STARK (résistantes au quantique)
-- [ ] Adresses furtives
-- [ ] Le mode `private` actuel devient un vrai bouclier de confidentialité
+> **R&D démarrée** : prototype de pool blindé **hors-consensus, non audité**
+> (`internal/shielded`). Voir [docs/design/phase3-privacy.md](docs/design/phase3-privacy.md).
+
+- [~] **Pool de notes blindées (tranche 1)** — livré en R&D, hors-consensus :
+      clés de vue **ML-KEM-768** (FIPS 203, standardisé) dérivées du seed,
+      notes + commitments (hash) + nullifiers, **livraison chiffrée + scan**
+      (cache le destinataire, sûr), pool avec anti-double-spend et conservation
+      de valeur (testé bout-en-bout).
+- [ ] Arbre de Merkle des commitments + tx `shield`/`shielded_transfer`/`unshield`
+      (gate `PrivacyEnabled`, OFF par défaut) — tranche 2
+- [ ] **Circuit zk-STARK** de validité de dépense (montants cachés sans révélation)
+      — tranche 3, **recherche**. Aujourd'hui : placeholder TRANSPARENT (non-ZK).
+- [ ] Adresses furtives PQ (revue de la key-privacy ML-KEM)
+- [ ] **Audit externe** du pool blindé — **bloquant** avant toute activation mainnet
 
 ## Phase 4 — Smart contracts no-code
 
