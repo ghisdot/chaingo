@@ -60,11 +60,24 @@ Plutôt que des comptes, le pool blindé manipule des **notes** non-dépensées 
 | Chiffrement/ouverture de note + **scan** (`SealTo`/`OpenWith`) | ✅ livré + testé | **confidentialité réelle** |
 | Note, **commitment** (hash), **nullifier**, sérialisation (`internal/shielded`) | ✅ livré + testé | hash PQ (ROM) |
 | Pool + double-spend + conservation de valeur (flux bout-en-bout) | ✅ livré + testé | logique correcte |
-| **Preuve de dépense** | 🟡 **placeholder TRANSPARENT** | **PAS zero-knowledge** |
-| Arbre de Merkle des commitments | ⬜ tranche 2 (réutilisera `internal/smt`) |
-| Tx on-chain `shield`/`shielded_transfer`/`unshield` + gate `PrivacyEnabled` | ⬜ tranche 2 |
-| **Circuit zk-STARK** (prouveur/vérifieur) | ⬜ tranche 3 — **recherche** |
-| **Audit externe** | ⬜ tranche 4 — **bloquant mainnet** |
+| **Moteur STARK maison** (`internal/stark` : corps Goldilocks, NTT, Merkle, transcript Fiat-Shamir, **FRI**, STARK jouet Fibonacci) | ✅ livré R&D — 90 tests dont preuves de soundness, **revue adverse** (7 classes de forgerie rejetées) | hash-only PQ ; **réserves documentées** ci-dessous |
+| **Preuve de dépense** (circuit blindé sur le moteur STARK) | 🟡 **placeholder TRANSPARENT** | **PAS encore zero-knowledge** |
+| Hash algébrique (Poseidon/Rescue sur Goldilocks) pour Merkle « STARK-friendly » | ⬜ tranche 3a |
+| Arbre de Merkle des commitments | ⬜ tranche 4 (réutilisera `internal/smt` ou le Merkle algébrique) |
+| Tx on-chain `shield`/`shielded_transfer`/`unshield` + gate `PrivacyEnabled` | ⬜ tranche 4 |
+| **Audit communautaire** (hackers) | ⬜ — **bloquant mainnet** |
+
+### Réserves du moteur STARK (à durcir / auditer)
+
+Le moteur (`internal/stark`) est un **prototype maison non audité**. La revue adverse
+intégrée a confirmé que les forgeries testées sont rejetées, mais a relevé :
+- **Soundness concrète non paramétrée** : pas d'objectif de bits de sécurité explicite,
+  et **pas de facteur de grinding** (proof-of-work) dans le Fiat-Shamir. Avec `Blowup=8`
+  et `NumQueries=32`, c'est un prototype, pas une garantie 128 bits prouvée.
+- **Échantillonnage avec remise** : les positions de requête FRI sont tirées avec remise
+  (~26 distinctes sur 32) → le nombre *effectif* de requêtes, donc la soundness réelle,
+  est inférieur à `NumQueries`. À corriger (tirage sans remise / plus de requêtes) lors du durcissement.
+- Pas de coset, inversions non batchées, borne de degré implicite : sans impact soundness, à optimiser.
 
 ### Avertissements (à ne pas survendre)
 
