@@ -138,8 +138,10 @@ Documentation complète :
   des **validateurs indépendants** (aujourd'hui sur les machines du mainteneur — c'est le vrai
   jalon de décentralisation avant mainnet).
 - **Phase 4 — Smart contracts no-code** : 🟢 templates vesting / escrow / multisig / **DAO**
-  livrés + déployables depuis le studio. **Preview** d'un moteur WASM (contrats arbitraires)
-  livrée mais **hors-consensus** ; le moteur consensus-grade reste à construire et auditer.
+  livrés + déployables depuis le studio. Moteur **WASM** (contrats arbitraires, en WebAssembly) :
+  le **gas déterministe** — le mécanisme qui garantit qu'un contrat s'arrête de façon identique
+  sur tous les nœuds — est livré et fuzzé (5,3 M exécutions). Encore **hors-consensus** : restent
+  l'API hôte d'état, les tx deploy/call et un audit externe.
 - **Phase 5 — Écosystème** : 🟢 wallet web, explorateur, studio, dashboard validateur, banc d'essai.
   **Reste** : SDK JS/Python, doc EN complète.
 - **Phase 3 — Anonymat fort (zk-STARK)** : ⬜ post-mainnet.

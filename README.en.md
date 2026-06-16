@@ -123,8 +123,10 @@ Full documentation:
   validators** (today on the maintainer's machines; this is the real decentralization milestone
   before mainnet).
 - **Phase 4 — No-code smart contracts**: 🟢 vesting / escrow / multisig / **DAO** templates
-  shipped and deployable from the studio. A WASM engine (arbitrary contracts) **preview** is
-  shipped but **out-of-consensus**; the consensus-grade engine still has to be built and audited.
+  shipped and deployable from the studio. A **WASM** engine (arbitrary contracts, in WebAssembly):
+  **deterministic gas** — the mechanism guaranteeing a contract halts identically on every node —
+  is shipped and fuzzed (5.3M executions). Still **out-of-consensus**: host state API, deploy/call
+  txs and an external audit remain.
 - **Phase 5 — Ecosystem**: 🟢 web wallet, explorer, studio, validator dashboard, load tester.
   **Remaining**: JS/Python SDKs, full EN docs.
 - **Phase 3 — Strong anonymity (zk-STARK)**: ⬜ post-mainnet.
