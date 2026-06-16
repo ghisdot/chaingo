@@ -20,7 +20,8 @@ type simNet struct {
 	keys    []*crypto.KeyPair
 	engines []*Engine
 	states  []*state.State
-	blocks  []*types.Block // file de blocs à distribuer
+	pools   []*mempool.Mempool // mempools par nœud (pour injecter des tx)
+	blocks  []*types.Block     // file de blocs à distribuer
 	votes   []*types.Vote  // file de votes à distribuer
 	chain   []*types.Block // journal des blocs produits (pour la synchro tardive)
 }
@@ -37,12 +38,14 @@ func newSimNet(t *testing.T, n int) *simNet {
 		for _, k := range s.keys {
 			st.BootstrapStake(k.Address(), 1_000_000*types.Unit)
 		}
-		eng := New(st, mempool.New(100), nil, s.keys[i], time.Hour, 100)
+		pool := mempool.New(100)
+		eng := New(st, pool, nil, s.keys[i], time.Hour, 100)
 		eng.SetChainID("sim")
 		eng.OnBlock = func(b *types.Block) { s.blocks = append(s.blocks, b); s.chain = append(s.chain, b) }
 		eng.OnVote = func(v *types.Vote) { s.votes = append(s.votes, v) }
 		s.engines = append(s.engines, eng)
 		s.states = append(s.states, st)
+		s.pools = append(s.pools, pool)
 	}
 	return s
 }

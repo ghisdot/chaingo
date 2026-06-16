@@ -3,6 +3,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,19 @@ import (
 	"chaingo/internal/state"
 	"chaingo/internal/types"
 )
+
+// wasmContractSummary : vue JSON compacte d'un contrat WASM (sans le bytecode brut).
+func wasmContractSummary(c *state.WasmContract) map[string]any {
+	return map[string]any{
+		"address":           c.Address,
+		"creator":           c.Creator,
+		"balance":           c.Balance,
+		"calls":             c.Calls,
+		"created_at_height": c.CreatedAt,
+		"code_size":         len(c.Code),
+		"storage_keys":      len(c.Storage),
+	}
+}
 
 // Backend is what the node exposes to the API layer.
 type Backend interface {
@@ -31,6 +45,8 @@ type Backend interface {
 	GetToken(sym string) *state.Token
 	Contracts() []*state.Contract
 	GetContract(id string) *state.Contract
+	WasmContracts() []*state.WasmContract
+	GetWasmContract(addr string) *state.WasmContract
 	MempoolSize() int
 	MempoolPending(limit int) []mempool.PendingInfo
 	SupplyInfo() state.Supply
@@ -203,6 +219,30 @@ func (s *Server) Start() error {
 		}
 		writeJSON(w, 200, c)
 	})
+	// Contrats WASM arbitraires. La liste renvoie une vue compacte (sans le
+	// bytecode, potentiellement volumineux) ; le détail expose le storage.
+	mux.HandleFunc("GET /v1/wasm/contracts", func(w http.ResponseWriter, r *http.Request) {
+		cs := s.b.WasmContracts()
+		out := make([]map[string]any, 0, len(cs))
+		for _, c := range cs {
+			out = append(out, wasmContractSummary(c))
+		}
+		writeJSON(w, 200, out)
+	})
+	mux.HandleFunc("GET /v1/wasm/contracts/{addr}", func(w http.ResponseWriter, r *http.Request) {
+		c := s.b.GetWasmContract(r.PathValue("addr"))
+		if c == nil {
+			writeErr(w, 404, "wasm contract not found")
+			return
+		}
+		v := wasmContractSummary(c)
+		storage := make(map[string]string, len(c.Storage))
+		for k, val := range c.Storage {
+			storage[hex.EncodeToString([]byte(k))] = hex.EncodeToString(val)
+		}
+		v["storage_hex"] = storage // clés et valeurs en hexadécimal
+		writeJSON(w, 200, v)
+	})
 	mux.HandleFunc("GET /v1/genesis", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(s.b.GenesisDoc())
@@ -285,6 +325,8 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			"GET  /v1/fees                     (base fee EIP-1559 + tips suggérés)",
 			"GET  /v1/contracts                (smart contracts no-code)",
 			"GET  /v1/contracts/{id}",
+			"GET  /v1/wasm/contracts           (contrats WASM arbitraires)",
+			"GET  /v1/wasm/contracts/{addr}",
 			"GET  /v1/mempool",
 			"GET  /v1/genesis",
 			"POST /v1/dev/faucet               (devnet)",

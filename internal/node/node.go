@@ -178,6 +178,7 @@ func (n *Node) initChain() error {
 		// raccourci à 5 minutes pour pouvoir tester le cycle complet.
 		devParams := types.DefaultParams()
 		devParams.UnbondingSeconds = 300
+		devParams.WasmEnabled = true // contrats WASM arbitraires : OK en devnet
 		g = &genesis.Genesis{
 			ChainID:   "chaingo-dev-1",
 			Timestamp: time.Now().UnixMilli(),
@@ -197,6 +198,7 @@ func (n *Node) initChain() error {
 		// raccourci à 24 h pour le confort des testeurs. Faucet ouvert.
 		tParams := types.DefaultParams()
 		tParams.UnbondingSeconds = 24 * 3600
+		tParams.WasmEnabled = true // contrats WASM arbitraires : OK en testnet (épreuve avant mainnet)
 		g = &genesis.Genesis{
 			ChainID:   "chaingo-testnet-1",
 			Timestamp: time.Now().UnixMilli(),
@@ -425,6 +427,10 @@ func (n *Node) Tokens() []*state.Token                { return n.st.ListTokens()
 func (n *Node) GetToken(sym string) *state.Token      { return n.st.GetToken(sym) }
 func (n *Node) Contracts() []*state.Contract          { return n.st.ListContracts() }
 func (n *Node) GetContract(id string) *state.Contract { return n.st.GetContract(id) }
+func (n *Node) WasmContracts() []*state.WasmContract { return n.st.ListWasmContracts() }
+func (n *Node) GetWasmContract(addr string) *state.WasmContract {
+	return n.st.GetWasmContract(addr)
+}
 func (n *Node) MempoolSize() int                                  { return n.pool.Size() }
 func (n *Node) MempoolPending(limit int) []mempool.PendingInfo    { return n.pool.Snapshot(limit) }
 func (n *Node) SupplyInfo() state.Supply              { return n.st.GetSupply() }

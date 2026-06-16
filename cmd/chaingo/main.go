@@ -56,7 +56,10 @@ Usage :
   chaingo contract approve|reject --from <wallet> --id <coffre|dao> [--proposal 0] [--api URL]
   chaingo contract claim|release|refund --from <wallet> --id <contrat> [--pass MDP] [--api URL]
   chaingo contract list [--api URL]
-  chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]   (PREVIEW WASM ; --gas = compteur déterministe)
+  chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]   (sandbox locale ; --gas = compteur déterministe)
+  chaingo wasm deploy --from <wallet> <fichier.wasm>                  (déploie un contrat WASM ON-CHAIN)
+  chaingo wasm call --from <wallet> [--gas N] [--value CGO] <adresse> <fonction> [arg_u64 ...]
+  chaingo wasm list [--api URL]                                        (contrats WASM déployés)
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo keygen [--out validator.seed]      (génère une seed de validateur ML-DSA-65)
   chaingo genesis template [--chain-id ID] [--out genesis.json] [--seed-out FILE]
@@ -1029,15 +1032,33 @@ func formatAmount(v uint64, d uint8) string {
 	return strconv.FormatUint(whole, 10) + "." + frac
 }
 
-// cmdWasm : PREVIEW expérimentale du moteur WASM (hors-consensus). Exécute une
-// fonction d'un fichier .wasm en SANDBOX locale — PAS sur la chaîne.
-//   chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]
-// Avec --gas, l'exécution est bornée par un compteur de gas DÉTERMINISTE
-// (instrumentation du bytecode) ; sinon par un simple timeout wall-clock.
+// cmdWasm : moteur WASM. Quatre sous-commandes :
+//   run    : exécute en SANDBOX locale (preview, hors-chaîne)
+//   deploy : déploie un .wasm ON-CHAIN (tx wasm_deploy)
+//   call   : appelle une fonction d'un contrat déployé (tx wasm_call)
+//   list   : liste les contrats WASM déployés
 func cmdWasm(args []string) error {
-	if len(args) < 1 || args[0] != "run" {
-		return fmt.Errorf("usage : chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]")
+	if len(args) < 1 {
+		return fmt.Errorf("usage : chaingo wasm run|deploy|call|list ...")
 	}
+	switch args[0] {
+	case "run":
+		return cmdWasmRun(args)
+	case "deploy":
+		return cmdWasmDeploy(args[1:])
+	case "call":
+		return cmdWasmCall(args[1:])
+	case "list":
+		return cmdWasmList(args[1:])
+	default:
+		return fmt.Errorf("sous-commande wasm inconnue %q (run|deploy|call|list)", args[0])
+	}
+}
+
+// cmdWasmRun : PREVIEW expérimentale (hors-consensus). Exécute une fonction d'un
+// fichier .wasm en SANDBOX locale — PAS sur la chaîne.
+//   chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]
+func cmdWasmRun(args []string) error {
 	fs := flag.NewFlagSet("wasm run", flag.ExitOnError)
 	gas := fs.Int64("gas", 0, "limite de gas DÉTERMINISTE (0 = sandbox wall-clock simple)")
 	fs.Parse(args[1:])
@@ -1074,5 +1095,98 @@ func cmdWasm(args []string) error {
 	}
 	fmt.Printf("gas consommé : %d / %d\n", res.GasUsed, limit)
 	fmt.Printf("retour : %v\n", res.Returns)
+	return nil
+}
+
+// cmdWasmDeploy déploie un contrat WASM ON-CHAIN (tx wasm_deploy). Le bytecode
+// est validé par le nœud (instrumentable) avant d'être stocké à l'adresse
+// déterministe = hash de la tx.
+//   chaingo wasm deploy --from <wallet> [--pass p] [--api url] <fichier.wasm>
+func cmdWasmDeploy(args []string) error {
+	fs := flag.NewFlagSet("wasm deploy", flag.ExitOnError)
+	from := fs.String("from", "", "wallet déployeur")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args)
+	if *from == "" || fs.NArg() < 1 {
+		return fmt.Errorf("usage : chaingo wasm deploy --from <wallet> <fichier.wasm>")
+	}
+	code, err := os.ReadFile(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	kp, err := wallet.Load(*from, *pass)
+	if err != nil {
+		return err
+	}
+	tx := &types.Transaction{Type: types.TxWasmDeploy, Code: code}
+	if err := signAndSubmit(*api, kp, tx); err != nil {
+		return err
+	}
+	// L'adresse du contrat = hash de la tx (signée in-place par signAndSubmit).
+	fmt.Printf("Contrat WASM déployé à l'adresse : %s\n", tx.Hash())
+	fmt.Printf("Appel : chaingo wasm call --from %s %s <fonction> [args]\n", *from, tx.Hash())
+	return nil
+}
+
+// cmdWasmCall appelle une fonction d'un contrat WASM déployé (tx wasm_call).
+//   chaingo wasm call --from <wallet> [--gas N] [--value CGO] <adresse> <fonction> [arg_u64 ...]
+func cmdWasmCall(args []string) error {
+	fs := flag.NewFlagSet("wasm call", flag.ExitOnError)
+	from := fs.String("from", "", "wallet appelant")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	gas := fs.Uint64("gas", 0, "plafond de gas (0 = plafond réseau)")
+	value := fs.String("value", "0", "CGO envoyés au contrat (value)")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args)
+	if *from == "" || fs.NArg() < 2 {
+		return fmt.Errorf("usage : chaingo wasm call --from <wallet> <adresse> <fonction> [arg_u64 ...]")
+	}
+	addr := fs.Arg(0)
+	fn := fs.Arg(1)
+	var callArgs []uint64
+	for _, a := range fs.Args()[2:] {
+		v, err := strconv.ParseUint(a, 10, 64)
+		if err != nil {
+			return fmt.Errorf("argument %q invalide (entier u64 attendu)", a)
+		}
+		callArgs = append(callArgs, v)
+	}
+	val, err := parseAmount(*value, types.NativeDecimals)
+	if err != nil {
+		return err
+	}
+	kp, err := wallet.Load(*from, *pass)
+	if err != nil {
+		return err
+	}
+	tx := &types.Transaction{
+		Type:       types.TxWasmCall,
+		ContractID: addr,
+		Action:     fn,
+		Args:       callArgs,
+		Gas:        *gas,
+		Amount:     val,
+	}
+	return signAndSubmit(*api, kp, tx)
+}
+
+// cmdWasmList liste les contrats WASM déployés sur la chaîne.
+func cmdWasmList(args []string) error {
+	fs := flag.NewFlagSet("wasm list", flag.ExitOnError)
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args)
+	var list []map[string]any
+	if err := getJSON(*api+"/v1/wasm/contracts", &list); err != nil {
+		return err
+	}
+	if len(list) == 0 {
+		fmt.Println("aucun contrat WASM déployé")
+		return nil
+	}
+	for _, c := range list {
+		fmt.Printf("%s  créateur=%s  appels=%v  taille=%v o  storage=%v clés\n",
+			c["address"], c["creator"], c["calls"], c["code_size"], c["storage_keys"])
+	}
 	return nil
 }
