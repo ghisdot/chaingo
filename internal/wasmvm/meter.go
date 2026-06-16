@@ -79,6 +79,12 @@ func instrument(wasm []byte, gasLimit, costPerBlock int64) ([]byte, error) {
 				return nil, err
 			}
 			out = appendSection(out, 6, newContent)
+		case 7: // export section : exporter notre global de gas (pour lire le gas restant)
+			newContent, err := appendGasExport(content, gasGlobal)
+			if err != nil {
+				return nil, err
+			}
+			out = appendSection(out, 7, newContent)
 		case 10: // code section : instrumenter chaque corps de fonction
 			newContent, err := instrumentCode(content, gasGlobal, costPerBlock)
 			if err != nil {
@@ -90,10 +96,15 @@ func instrument(wasm []byte, gasLimit, costPerBlock int64) ([]byte, error) {
 		}
 	}
 
-	// Si le module n'avait AUCUNE section global, il faut en créer une AVANT la
-	// section export (ordre des sections WASM imposé : global=6 avant export=7).
+	// Sections à créer si absentes, dans l'ordre canonique (global=6, export=7).
 	if gDefined == 0 && !hasSection(wasm, 6) {
 		out, err = insertGlobalSection(out, gImported, gasLimit)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !hasSection(wasm, 7) {
+		out, err = insertExportSection(out, gasGlobal)
 		if err != nil {
 			return nil, err
 		}
@@ -335,6 +346,62 @@ func insertGlobalSection(out []byte, imported int, limit int64) ([]byte, error) 
 	res = append(res, globalSection...)
 	res = append(res, out[insertAt:]...)
 	_ = imported
+	return res, nil
+}
+
+// gasExportName : nom sous lequel on exporte le global de gas, pour relire le
+// gas restant après exécution (calcul du gas consommé).
+const gasExportName = "chaingo_gas"
+
+// gasExportEntry : une entrée d'export [namelen][name][kind=global 0x03][index].
+func gasExportEntry(gasGlobal uint32) []byte {
+	e := appendUvarint(nil, uint64(len(gasExportName)))
+	e = append(e, gasExportName...)
+	e = append(e, 0x03) // kind = global
+	e = appendUvarint(e, uint64(gasGlobal))
+	return e
+}
+
+// appendGasExport : ajoute notre export à une section export existante.
+func appendGasExport(content []byte, gasGlobal uint32) ([]byte, error) {
+	cnt, n, err := readUvarint(content, 0)
+	if err != nil {
+		return nil, err
+	}
+	rest := content[n:]
+	out := appendUvarint(nil, cnt+1)
+	out = append(out, rest...)
+	out = append(out, gasExportEntry(gasGlobal)...)
+	return out, nil
+}
+
+// insertExportSection : crée une section export (id 7) avec notre seul export,
+// insérée avant la 1re section d'id > 7 (ordre canonique WASM).
+func insertExportSection(out []byte, gasGlobal uint32) ([]byte, error) {
+	sec := appendUvarint(nil, 1)
+	sec = append(sec, gasExportEntry(gasGlobal)...)
+	exportSection := appendSection(nil, 7, sec)
+
+	pos := 8
+	insertAt := len(out)
+	for pos < len(out) {
+		id := out[pos]
+		start := pos
+		pos++
+		size, n, err := readUvarint(out, pos)
+		if err != nil {
+			return nil, err
+		}
+		pos += n + int(size)
+		if id > 7 {
+			insertAt = start
+			break
+		}
+	}
+	res := make([]byte, 0, len(out)+len(exportSection))
+	res = append(res, out[:insertAt]...)
+	res = append(res, exportSection...)
+	res = append(res, out[insertAt:]...)
 	return res, nil
 }
 

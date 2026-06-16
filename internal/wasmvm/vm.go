@@ -37,6 +37,8 @@ import (
 type Result struct {
 	Returns []uint64 // valeurs de retour de la fonction
 	Logs    []string // messages émis par env.log(ptr, len)
+	GasLeft int64    // gas restant (si le module est instrumenté ; sinon 0)
+	GasUsed int64    // gas consommé (rempli par RunMetered)
 }
 
 // ErrTimeout : l'exécution a dépassé la limite de temps (protection sandbox
@@ -71,6 +73,7 @@ func RunMetered(parent context.Context, wasm []byte, fn string, gasLimit int64, 
 		// distingue pas un trap-gas d'un trap-logique du contrat).
 		return nil, fmt.Errorf("%w (ou trap du contrat) : %v", ErrOutOfGas, err)
 	}
+	res.GasUsed = gasLimit - res.GasLeft // gas consommé par l'exécution
 	return res, nil
 }
 
@@ -124,5 +127,10 @@ func Run(parent context.Context, wasm []byte, fn string, timeout time.Duration, 
 		return nil, fmt.Errorf("wasm: call %q: %w", fn, err)
 	}
 	res.Returns = out
+	// Si le module a été instrumenté, il exporte son compteur de gas : on lit le
+	// gas restant pour calculer le consommé.
+	if g := mod.ExportedGlobal(gasExportName); g != nil {
+		res.GasLeft = int64(g.Get())
+	}
 	return res, nil
 }

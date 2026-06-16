@@ -1071,6 +1071,9 @@ func cmdWasm(args []string) error {
 	for _, l := range res.Logs {
 		fmt.Printf("[log] %s\n", l)
 	}
+	if *gas > 0 {
+		fmt.Printf("gas consommé : %d / %d\n", res.GasUsed, *gas)
+	}
 	fmt.Printf("retour : %v\n", res.Returns)
 	return nil
 }

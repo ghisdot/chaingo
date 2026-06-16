@@ -44,6 +44,26 @@ func TestMeteredSpinRunsOutOfGas(t *testing.T) {
 	}
 }
 
+// TestMeteredReportsGasUsed : le moteur rapporte le gas CONSOMMÉ (comme ETH
+// affiche le « gas used »). add ne fait qu'une charge d'entrée de fonction →
+// consommation faible et non nulle, bien en deçà de la limite.
+func TestMeteredReportsGasUsed(t *testing.T) {
+	const limit = 1_000_000
+	res, err := RunMetered(context.Background(), addWasm, "add", limit, 20, 22)
+	if err != nil {
+		t.Fatalf("RunMetered: %v", err)
+	}
+	if res.GasUsed <= 0 {
+		t.Fatalf("gas consommé doit être > 0, got %d", res.GasUsed)
+	}
+	if res.GasUsed >= limit {
+		t.Fatalf("gas consommé (%d) doit être bien en deçà de la limite (%d)", res.GasUsed, limit)
+	}
+	if res.GasLeft != int64(limit)-res.GasUsed {
+		t.Fatalf("incohérence : left=%d used=%d limit=%d", res.GasLeft, res.GasUsed, limit)
+	}
+}
+
 // TestMeteredEnoughGasCompletes : avec assez de gas, le module add s'exécute
 // normalement (le gas ne bloque pas un travail légitime).
 func TestMeteredEnoughGasCompletes(t *testing.T) {
