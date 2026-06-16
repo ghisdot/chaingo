@@ -3,7 +3,7 @@
 Un smart contract WebAssembly minimal pour ChainGO. `increment()` lit un
 compteur dans le **stockage du contrat**, l'incrémente, le réécrit et renvoie la
 nouvelle valeur — il démontre l'**API hôte d'état** (`storage_read`,
-`storage_write`, `log`).
+`storage_write`).
 
 > ⚠️ **PREVIEW expérimentale, hors-consensus.** Le moteur WASM n'est pas encore
 > câblé dans les blocs (voir [docs/design/wasm-vm.md](../../../docs/design/wasm-vm.md)).
