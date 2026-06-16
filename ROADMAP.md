@@ -71,20 +71,25 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 
 ## Phase 3 — Anonymat fort
 
-> **R&D démarrée** : prototype de pool blindé **hors-consensus, non audité**
-> (`internal/shielded`). Voir [docs/design/phase3-privacy.md](docs/design/phase3-privacy.md).
+> **R&D avancée — circuit blindé zk-STARK MAISON fonctionnel, hors-consensus, non
+> audité.** Dossier de preuve : [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md) ·
+> conception : [docs/design/phase3-privacy.md](docs/design/phase3-privacy.md).
 
-- [~] **Pool de notes blindées (tranche 1)** — livré en R&D, hors-consensus :
-      clés de vue **ML-KEM-768** (FIPS 203, standardisé) dérivées du seed,
-      notes + commitments (hash) + nullifiers, **livraison chiffrée + scan**
-      (cache le destinataire, sûr), pool avec anti-double-spend et conservation
-      de valeur (testé bout-en-bout).
-- [ ] Arbre de Merkle des commitments + tx `shield`/`shielded_transfer`/`unshield`
-      (gate `PrivacyEnabled`, OFF par défaut) — tranche 2
-- [ ] **Circuit zk-STARK** de validité de dépense (montants cachés sans révélation)
-      — tranche 3, **recherche**. Aujourd'hui : placeholder TRANSPARENT (non-ZK).
-- [ ] Adresses furtives PQ (revue de la key-privacy ML-KEM)
-- [ ] **Audit externe** du pool blindé — **bloquant** avant toute activation mainnet
+- [x] **Pile zk-STARK maison post-quantique** (`internal/stark`, R&D testée) :
+      corps Goldilocks + NTT + Merkle + transcript Fiat-Shamir + **FRI** + moteur
+      AIR multi-colonnes ; sécurité **hash-only** (zéro courbe, zéro trusted setup).
+- [x] **Hachage Poseidon** (algébrique) + **AIR Poseidon complet** cohérent avec le
+      hash natif ; **circuit d'appartenance** Merkle en ZK (profondeur 8).
+- [x] **Circuit de DÉPENSE blindée** (`poseidon_spend*.go`) : prouve en ZK
+      appartenance + nullifier + conservation de valeur, **montants cachés**
+      (masquage ZK testé), **destinataire caché** (notes chiffrées ML-KEM + scan).
+      24 tests dont batterie adverse (vol sans clé, création de valeur, double-spend…).
+- [ ] **Câblage on-chain** : tx `shield`/`shielded_transfer`/`unshield`, arbre de
+      commitments + nullifiers dans la racine, vérif STARK en consensus
+      (**gate `PrivacyEnabled`, OFF par défaut**) — étage 5, final.
+- [ ] **Audit communautaire** (hackers) du circuit blindé — **bloquant** mainnet.
+- [ ] Durcissement : grinding Fiat-Shamir, échantillonnage sans remise, profondeur
+      variable, multi-in/out, optimisation du prouveur (~95 s → secondes).
 
 ## Phase 4 — Smart contracts no-code
 

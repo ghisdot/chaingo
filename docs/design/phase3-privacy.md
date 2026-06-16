@@ -60,12 +60,16 @@ Plutôt que des comptes, le pool blindé manipule des **notes** non-dépensées 
 | Chiffrement/ouverture de note + **scan** (`SealTo`/`OpenWith`) | ✅ livré + testé | **confidentialité réelle** |
 | Note, **commitment** (hash), **nullifier**, sérialisation (`internal/shielded`) | ✅ livré + testé | hash PQ (ROM) |
 | Pool + double-spend + conservation de valeur (flux bout-en-bout) | ✅ livré + testé | logique correcte |
-| **Moteur STARK maison** (`internal/stark` : corps Goldilocks, NTT, Merkle, transcript Fiat-Shamir, **FRI**, STARK jouet Fibonacci) | ✅ livré R&D — 90 tests dont preuves de soundness, **revue adverse** (7 classes de forgerie rejetées) | hash-only PQ ; **réserves documentées** ci-dessous |
-| **Preuve de dépense** (circuit blindé sur le moteur STARK) | 🟡 **placeholder TRANSPARENT** | **PAS encore zero-knowledge** |
-| Hash algébrique (Poseidon/Rescue sur Goldilocks) pour Merkle « STARK-friendly » | ⬜ tranche 3a |
-| Arbre de Merkle des commitments | ⬜ tranche 4 (réutilisera `internal/smt` ou le Merkle algébrique) |
-| Tx on-chain `shield`/`shielded_transfer`/`unshield` + gate `PrivacyEnabled` | ⬜ tranche 4 |
+| **Moteur STARK maison** (corps Goldilocks, NTT, Merkle, transcript, **FRI**, STARK jouet) | ✅ livré R&D — revue adverse (7 classes de forgerie rejetées) | hash-only PQ |
+| **Hash algébrique Poseidon** + Merkle STARK-friendly | ✅ livré + testé | params maison à auditer |
+| **Moteur AIR multi-colonnes** + **AIR Poseidon complet** (cohérent avec le hash natif) | ✅ livré + testé | — |
+| **Circuit d'appartenance Merkle** (ZK, profondeur 8) | ✅ livré + testé | témoin privé |
+| **Circuit de DÉPENSE blindée** (appartenance + nullifier + conservation) + **masquage ZK** | ✅ **livré + testé** (24 tests, montant non extractible) | **vraie preuve ZK** (≠ placeholder) |
+| Tx on-chain `shield`/`shielded_transfer`/`unshield` + gate `PrivacyEnabled` | ⬜ étage 5 (final) |
 | **Audit communautaire** (hackers) | ⬜ — **bloquant mainnet** |
+
+> Dossier de preuve complet (composants, tests, reproductibilité, réserves, appel
+> à audit) : [docs/PREUVE-PHASE3.md](../PREUVE-PHASE3.md).
 
 ### Réserves du moteur STARK (à durcir / auditer)
 
@@ -81,10 +85,11 @@ intégrée a confirmé que les forgeries testées sont rejetées, mais a relevé
 
 ### Avertissements (à ne pas survendre)
 
-- **Le `SpendWitness` actuel RÉVÈLE les montants** : `VerifyTransparent` vérifie
-  l'accounting en clair. Il existe pour faire **tourner et tester l'architecture**,
-  PAS pour fournir de la confidentialité. Tant que le circuit zk-STARK (tranche 3)
-  ne l'a pas remplacé, **les montants ne sont pas cachés**.
+- **Deux chemins coexistent.** Le `SpendWitness`/`VerifyTransparent` de
+  `internal/shielded` est le **prototype TRANSPARENT** (révèle les montants) — il
+  a servi à poser le modèle de pool. Le **vrai circuit zk-STARK** (`internal/stark`,
+  `poseidon_spend*.go`) le **remplace** : il cache les montants (masquage ZK testé).
+  Le câblage on-chain (étage 5) utilisera le circuit ZK, pas le placeholder.
 - **Anonymat ≠ confidentialité.** Le chiffrement ML-KEM garantit que personne ne
   **lit** une note. Que la note soit **non-liable** à une clé de vue *connue*
   dépend de la *key-privacy* (anonymat) de ML-KEM — propriété distincte **à

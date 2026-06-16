@@ -132,7 +132,15 @@ Full documentation:
   [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 - **Phase 5 — Ecosystem**: 🟢 web wallet, explorer, studio, validator dashboard, load tester.
   **Remaining**: JS/Python SDKs, full EN docs.
-- **Phase 3 — Strong anonymity (zk-STARK)**: ⬜ post-mainnet.
+- **Phase 3 — Strong anonymity (zk-STARK)**: 🟡 **advanced R&D**. A **homemade
+  post-quantum zk-STARK stack** (Goldilocks field, FRI, multi-column AIR, Poseidon
+  hash) + a **working shielded-transaction circuit**: proves a valid spend in
+  zero-knowledge (Merkle membership + nullifier + value conservation), with
+  **hidden amounts** (ZK masking, tested) and **hidden recipient** (ML-KEM-encrypted
+  notes). Hash-only security (no elliptic curve, no trusted setup). ⚠️ **Homemade,
+  UNAUDITED, out-of-consensus, gated OFF** — open to community (hacker) audit.
+  Evidence dossier: [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Remaining:
+  on-chain wiring (gated shielded txs) + audit.
 
 See [ROADMAP.md](ROADMAP.md) for the full, honest breakdown.
 

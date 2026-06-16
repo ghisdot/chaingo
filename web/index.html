@@ -336,8 +336,8 @@
       </div>
       <div class="card reveal">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7c-1.6 0-3-.4-4.3-1"/><path d="M4 4l16 16"/><circle cx="12" cy="12" r="3"/></svg></span>
-        <h3 data-i18n="p.c5">Anonymat renforcé <span class="tag soon">Phase 3</span></h3>
-        <p data-i18n="p.c5d">Aujourd'hui : pseudonymat (adresses non nominatives, historique public). Demain : transferts confidentiels par preuves <b>zk-STARK</b> — la seule famille de preuves à divulgation nulle résistante au quantique — et adresses furtives.</p>
+        <h3 data-i18n="p.c5">Anonymat fort <span class="tag prog">R&amp;D</span></h3>
+        <p data-i18n="p.c5d">Pseudonyme aujourd'hui ; un <b>circuit de transaction blindée zk-STARK post-quantique</b> est déjà fonctionnel en R&amp;D (montants et destinataire cachés, sécurité hash-only). <b>Prototype maison, non audité, hors-consensus</b> — audit communautaire ouvert.</p>
       </div>
       <div class="card reveal">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3Z"/></svg></span>
@@ -493,11 +493,13 @@
           La suite : <b>SDK JavaScript</b> &amp; Python, documentation complète et présence communautaire.</p>
         </div>
       </div>
-      <div class="phase">
+      <div class="phase prog">
         <div class="pcard" data-i18n="r.p3">
-          <h3>Phase 3 — Anonymat fort <span class="tag soon">Planifié · post-mainnet</span></h3>
-          <p>Transferts confidentiels <b>zk-STARK</b> (résistants au quantique) + adresses furtives.
-          Le mode <i>private</i> actuel deviendra un vrai bouclier de confidentialité.</p>
+          <h3>Phase 3 — Anonymat fort <span class="tag prog">R&amp;D · prototype</span></h3>
+          <p>Pile <b>zk-STARK maison post-quantique</b> + un <b>circuit de transaction
+          blindée fonctionnel</b> : prouve en zero-knowledge une dépense valide,
+          <b>montants et destinataire cachés</b>, sécurité hash-only (zéro courbe).
+          <b>Fait-maison, non audité, hors-consensus</b> — audit communautaire ouvert.</p>
         </div>
       </div>
     </div>
@@ -574,8 +576,8 @@ const EN = {
   'p.c3d': `Base fees are <b>destroyed</b> (burned) on every transaction, automatically adjusted to congestion (EIP-1559 model). The more the network is used, the scarcer CGO becomes.`,
   'p.c4': `No-code tokens &amp; contracts <span class="tag live">Live</span>`,
   'p.c4d': `Create your token and deploy <b>smart contracts without code</b> from the <a href="/studio/">studio</a>: vesting, escrow, <b>M-of-N multisig</b> and <b>DAO</b>. For developers, a <b>WASM VM</b> runs arbitrary contracts (Rust, AssemblyScript…) — wired into the testnet.`,
-  'p.c5': `Enhanced anonymity <span class="tag soon">Phase 3</span>`,
-  'p.c5d': `Today: pseudonymity (non-nominative addresses, public history). Tomorrow: confidential transfers via <b>zk-STARK</b> proofs — the only quantum-resistant zero-knowledge family — and stealth addresses.`,
+  'p.c5': `Strong anonymity <span class="tag prog">R&amp;D</span>`,
+  'p.c5d': `Pseudonymous today; a <b>post-quantum zk-STARK shielded-transaction circuit</b> already works in R&amp;D (amounts and recipient hidden, hash-only security). <b>Homemade, unaudited, out-of-consensus</b> — open to community audit.`,
   'p.c6': `Decentralization <span class="tag live">Live</span>`,
   'p.c6d': `Peer-to-peer network: every node syncs and relays. Validate with 10,000 CGO or <b>delegate from 1 CGO</b> — block proposers are drawn weighted by stake, and fallback rounds keep the chain moving even when validators go offline.`,
   'f.kicker': `How it works`,
@@ -611,7 +613,7 @@ const EN = {
   'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag prog">In progress · ~94%</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec, fuzzing. Remaining: external audit and independent validators.</p>`,
   'r.p4': `<h3>Phase 4 — Smart contracts <span class="tag live">Shipped · testnet</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> deployable from the studio. A <b>WASM</b> engine (arbitrary contracts) <b>wired into consensus on the testnet</b>: deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after audit.</b></p>`,
   'r.p5': `<h3>Phase 5 — Ecosystem &amp; tooling <span class="tag prog">In progress</span></h3><p>Online: explorer, no-code studio, validator dashboard, load tester, web wallet. Next: <b>JavaScript SDK</b> &amp; Python, full documentation and community presence.</p>`,
-  'r.p3': `<h3>Phase 3 — Strong anonymity <span class="tag soon">Planned · post-mainnet</span></h3><p>zk-STARK confidential transfers (quantum-resistant) + stealth addresses. Today's <i>private</i> mode becomes a real privacy shield.</p>`,
+  'r.p3': `<h3>Phase 3 — Strong anonymity <span class="tag prog">R&amp;D · prototype</span></h3><p>A <b>homemade post-quantum zk-STARK stack</b> + a <b>working shielded-transaction circuit</b>: proves a valid spend in zero-knowledge, <b>amounts and recipient hidden</b>, hash-only security (no curve). <b>Homemade, unaudited, out-of-consensus</b> — open to community audit.</p>`,
   'd.kicker': `Get started`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
