@@ -3,6 +3,7 @@
 package state
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 
 	"chaingo/internal/crypto"
 	"chaingo/internal/types"
+	"chaingo/internal/wasmvm"
 )
 
 type Account struct {
@@ -120,12 +122,28 @@ func (c *Contract) isSigner(addr string) bool {
 	return false
 }
 
+// WasmContract : un contrat WASM ARBITRAIRE déployé on-chain (≠ template no-code).
+// Le bytecode est validé au déploiement (instrumentable → arrêt garanti par gas).
+// Storage = KV propre au contrat ; Balance = CGO détenus par le contrat (reçus
+// via la `value` des appels, dépensés via transfer). Tout est dans la racine
+// d'état : json trie les clés de map et encode []byte en base64 → déterministe.
+type WasmContract struct {
+	Address   string            `json:"address"` // = hash de la tx de déploiement
+	Code      []byte            `json:"code"`    // bytecode validé
+	Storage   map[string][]byte `json:"storage"` // stockage clé→valeur du contrat
+	Balance   uint64            `json:"balance"` // solde CGO du contrat
+	Creator   string            `json:"creator"`
+	Calls     uint64            `json:"calls"` // nombre d'appels réussis (info/explorateur)
+	CreatedAt uint64            `json:"created_at_height"`
+}
+
 type State struct {
 	mu         sync.RWMutex
-	Accounts   map[string]*Account   `json:"accounts"`
-	Tokens     map[string]*Token     `json:"tokens"`
-	Validators map[string]*Validator `json:"validators"`
-	Contracts  map[string]*Contract  `json:"contracts"`
+	Accounts      map[string]*Account      `json:"accounts"`
+	Tokens        map[string]*Token        `json:"tokens"`
+	Validators    map[string]*Validator    `json:"validators"`
+	Contracts     map[string]*Contract     `json:"contracts"`
+	WasmContracts map[string]*WasmContract `json:"wasm_contracts,omitempty"`
 	// Slashed : équivocations déjà punies (clé "voter@height") — garantit
 	// qu'une même faute n'est slashée qu'une fois, même si plusieurs nœuds
 	// l'incluent dans des blocs.
@@ -144,11 +162,12 @@ type State struct {
 
 func New() *State {
 	return &State{
-		Accounts:   map[string]*Account{},
-		Tokens:     map[string]*Token{},
-		Validators: map[string]*Validator{},
-		Contracts:  map[string]*Contract{},
-		Slashed:    map[string]bool{},
+		Accounts:      map[string]*Account{},
+		Tokens:        map[string]*Token{},
+		Validators:    map[string]*Validator{},
+		Contracts:     map[string]*Contract{},
+		WasmContracts: map[string]*WasmContract{},
+		Slashed:       map[string]bool{},
 	}
 }
 
@@ -278,6 +297,32 @@ func (s *State) GetContract(id string) *Contract {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	c, ok := s.Contracts[id]
+	if !ok {
+		return nil
+	}
+	cp := *c
+	return &cp
+}
+
+// ListWasmContracts renvoie les contrats WASM déployés (copie superficielle —
+// le bytecode n'est PAS recopié, ne pas muter). Triés du plus récent au plus ancien.
+func (s *State) ListWasmContracts() []*WasmContract {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*WasmContract, 0, len(s.WasmContracts))
+	for _, c := range s.WasmContracts {
+		cp := *c
+		out = append(out, &cp)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
+	return out
+}
+
+// GetWasmContract renvoie un contrat WASM par adresse (copie superficielle), ou nil.
+func (s *State) GetWasmContract(addr string) *WasmContract {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.WasmContracts[addr]
 	if !ok {
 		return nil
 	}
@@ -631,6 +676,12 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	if tx.Type == types.TxContractCreate {
 		burn += s.Params.ContractCreateFee
 	}
+	if tx.Type == types.TxWasmDeploy {
+		burn += s.Params.WasmDeployFee
+	}
+	if tx.Type == types.TxWasmCall {
+		burn += s.Params.WasmCallFee
+	}
 	fee := burn + tx.Tip
 	needNative := fee
 	if tx.Type == types.TxTransfer && tx.TokenID == types.NativeToken {
@@ -641,6 +692,9 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	}
 	if tx.Type == types.TxContractCreate && tx.Contract.TokenID == types.NativeToken {
 		needNative += tx.Contract.Amount
+	}
+	if tx.Type == types.TxWasmCall {
+		needNative += tx.Amount // value (CGO) envoyée au contrat
 	}
 	if from.Balances[types.NativeToken] < needNative {
 		return errors.New("insufficient CGO balance for amount + fees")
@@ -921,6 +975,74 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		default:
 			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
 		}
+	case types.TxWasmDeploy:
+		if !s.Params.WasmEnabled {
+			return errors.New("wasm contracts disabled on this network (params.wasm_enabled=false)")
+		}
+		if uint64(len(tx.Code)) > s.Params.WasmMaxCodeLen {
+			return fmt.Errorf("wasm code too large: %d > %d bytes", len(tx.Code), s.Params.WasmMaxCodeLen)
+		}
+		// Garde de déploiement : le bytecode doit être instrumentable (arrêt
+		// garanti par gas) et restreint au sous-ensemble d'opcodes déterministe.
+		if err := wasmvm.Validate(tx.Code); err != nil {
+			return err
+		}
+		if s.WasmContracts == nil {
+			s.WasmContracts = map[string]*WasmContract{}
+		}
+		addr := tx.Hash()
+		if _, exists := s.WasmContracts[addr]; exists {
+			return errors.New("wasm contract already exists")
+		}
+		s.WasmContracts[addr] = &WasmContract{
+			Address:   addr,
+			Code:      append([]byte(nil), tx.Code...),
+			Storage:   map[string][]byte{},
+			Creator:   tx.From,
+			CreatedAt: s.Height + 1,
+		}
+	case types.TxWasmCall:
+		if !s.Params.WasmEnabled {
+			return errors.New("wasm contracts disabled on this network (params.wasm_enabled=false)")
+		}
+		wc, ok := s.WasmContracts[tx.ContractID]
+		if !ok {
+			return fmt.Errorf("unknown wasm contract %q", tx.ContractID)
+		}
+		value := tx.Amount
+		// Sandbox seedé depuis l'ÉTAT RÉEL (copie du storage du contrat, solde +
+		// value reçue). RunDeterministic force l'interpréteur wazero (même chemin
+		// d'exécution sur toute architecture) — couplé au gas déterministe, c'est
+		// reproductible bit-à-bit sur tous les nœuds.
+		sb := wasmvm.NewSandbox(tx.From, int64(value))
+		sb.Balance = int64(wc.Balance + value)
+		for k, v := range wc.Storage {
+			sb.Storage[k] = append([]byte(nil), v...)
+		}
+		gas := s.Params.WasmGasLimit
+		if tx.Gas > 0 && tx.Gas < gas {
+			gas = tx.Gas
+		}
+		_, rerr := sb.RunDeterministic(context.Background(), wc.Code, tx.Action, int64(gas), tx.Args...)
+		if rerr == nil {
+			// Succès : on COMMIT les effets sur l'état réel, atomiquement.
+			from.Balances[types.NativeToken] -= value
+			wc.Storage = make(map[string][]byte, len(sb.Storage))
+			for k, v := range sb.Storage {
+				wc.Storage[k] = append([]byte(nil), v...)
+			}
+			for _, t := range sb.Transfers {
+				if t.Amount > 0 {
+					s.acct(t.To).Balances[types.NativeToken] += uint64(t.Amount)
+				}
+			}
+			wc.Balance = uint64(sb.Balance)
+			wc.Calls++
+		}
+		// Trap / out-of-gas (rerr != nil) : effets du contrat IGNORÉS, value non
+		// débitée — mais les frais d'appel restent brûlés (l'émetteur paie sa
+		// tentative : anti-DoS). Commit-ou-non est DÉTERMINISTE (même décision
+		// sur tous les nœuds).
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)
 	}
@@ -1064,16 +1186,17 @@ func (s *State) Commit(height uint64, hash string) {
 // block — replaced by a sparse Merkle tree in Phase 2.)
 func (s *State) rootLocked() string {
 	b, _ := json.Marshal(struct {
-		Accounts   map[string]*Account   `json:"accounts"`
-		Tokens     map[string]*Token     `json:"tokens"`
-		Validators map[string]*Validator `json:"validators"`
-		Contracts  map[string]*Contract  `json:"contracts"`
-		Slashed    map[string]bool       `json:"slashed"`
-		Unbonding  []*Unbonding          `json:"unbonding"`
-		Supply     Supply                `json:"supply"`
-		Params     types.Params          `json:"params"`
-		BaseFee    uint64                `json:"base_fee"`
-	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.Slashed, s.Unbonding, s.Supply, s.Params, s.BaseFee})
+		Accounts      map[string]*Account      `json:"accounts"`
+		Tokens        map[string]*Token        `json:"tokens"`
+		Validators    map[string]*Validator    `json:"validators"`
+		Contracts     map[string]*Contract     `json:"contracts"`
+		WasmContracts map[string]*WasmContract `json:"wasm_contracts,omitempty"`
+		Slashed       map[string]bool          `json:"slashed"`
+		Unbonding     []*Unbonding             `json:"unbonding"`
+		Supply        Supply                   `json:"supply"`
+		Params        types.Params             `json:"params"`
+		BaseFee       uint64                   `json:"base_fee"`
+	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.WasmContracts, s.Slashed, s.Unbonding, s.Supply, s.Params, s.BaseFee})
 	return crypto.HashHex(b)
 }
 
@@ -1101,6 +1224,10 @@ func (s *State) Restore(data []byte) error {
 	s.Tokens = tmp.Tokens
 	s.Validators = tmp.Validators
 	s.Contracts = tmp.Contracts
+	if tmp.WasmContracts == nil {
+		tmp.WasmContracts = map[string]*WasmContract{}
+	}
+	s.WasmContracts = tmp.WasmContracts
 	if tmp.Slashed == nil {
 		tmp.Slashed = map[string]bool{}
 	}

@@ -29,6 +29,16 @@ type Params struct {
 	DowntimeJailThreshold uint64 `json:"downtime_jail_threshold"` // slots manqués consécutifs avant jail
 	SlashDowntimeBps      uint64 `json:"slash_downtime_bps"`      // 10 = 0,1 % slashé au jail
 	JailSeconds           int64  `json:"jail_seconds"`            // durée minimale du jail
+	// Contrats WASM arbitraires (déploiement de bytecode). WasmEnabled est le
+	// VERROU de sûreté : exécuter du code hostile en consensus exige un audit, donc
+	// le mainnet le laisse à false jusqu'à activation par la gouvernance. Les
+	// réseaux devnet/testnet l'activent (un testnet sert précisément à éprouver
+	// ça). Les tx wasm_deploy/wasm_call sont refusées si WasmEnabled est false.
+	WasmEnabled    bool   `json:"wasm_enabled"`
+	WasmDeployFee  uint64 `json:"wasm_deploy_fee"`   // brûlé au déploiement d'un contrat WASM
+	WasmCallFee    uint64 `json:"wasm_call_fee"`     // brûlé à chaque appel de contrat WASM
+	WasmMaxCodeLen uint64 `json:"wasm_max_code_len"` // taille max du bytecode déployable (anti-DoS)
+	WasmGasLimit   uint64 `json:"wasm_gas_limit"`    // borne d'arrêt déterministe par appel
 }
 
 func DefaultParams() Params {
@@ -50,6 +60,14 @@ func DefaultParams() Params {
 		DowntimeJailThreshold:   50,  // 50 slots manqués consécutifs
 		SlashDowntimeBps:        10,  // 0,1 %
 		JailSeconds:             600, // 10 min (réglable par réseau)
+		// WASM : DÉSACTIVÉ par défaut (= posture mainnet : pas d'exécution de
+		// code arbitraire en consensus avant audit). Activé explicitement en
+		// devnet/testnet (voir genèse --dev / testnet).
+		WasmEnabled:    false,
+		WasmDeployFee:  5 * Unit,
+		WasmCallFee:    1 * Unit,
+		WasmMaxCodeLen: 256 * 1024,  // 256 Kio
+		WasmGasLimit:   100_000_000, // borne d'arrêt par appel
 	}
 }
 

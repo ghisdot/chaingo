@@ -64,13 +64,35 @@ func (s *Sandbox) transfer(to string, amount int64) bool {
 // ---- exécution d'un contrat avec l'API hôte complète ----
 
 // Run instrumente le module (gas déterministe), câble l'API hôte `env` adossée
-// à ce sandbox, et appelle `fn`. Borné par `gasLimit`. HORS-CONSENSUS.
+// à ce sandbox, et appelle `fn`. Borné par `gasLimit`. Utilise le compilateur
+// wazero (rapide). Destiné à la sandbox locale (`chaingo wasm run`).
 func (s *Sandbox) Run(parent context.Context, wasm []byte, fn string, gasLimit int64, args ...uint64) (*Result, error) {
+	return s.run(parent, wasm, fn, gasLimit, false, args...)
+}
+
+// RunDeterministic : comme Run, mais force l'INTERPRÉTEUR wazero. L'interpréteur
+// suit le même chemin d'exécution sur toutes les architectures (pas de
+// génération de code machine spécifique CPU) — c'est le mode utilisé dans le
+// CHEMIN DE CONSENSUS, où deux nœuds DOIVENT calculer un résultat bit-à-bit
+// identique. Couplé au gas déterministe (meter.go), au jeu d'opcodes restreint
+// (validé au déploiement) et aux seuls imports déterministes (module `env`),
+// cela rend l'exécution reproductible. (Point d'audit restant : NaN flottants.)
+func (s *Sandbox) RunDeterministic(parent context.Context, wasm []byte, fn string, gasLimit int64, args ...uint64) (*Result, error) {
+	return s.run(parent, wasm, fn, gasLimit, true, args...)
+}
+
+func (s *Sandbox) run(parent context.Context, wasm []byte, fn string, gasLimit int64, interp bool, args ...uint64) (*Result, error) {
 	instrumented, err := instrument(wasm, gasLimit, 1)
 	if err != nil {
 		return nil, err
 	}
-	cfg := wazero.NewRuntimeConfig().WithCloseOnContextDone(true).WithMemoryLimitPages(maxMemoryPages)
+	var cfg wazero.RuntimeConfig
+	if interp {
+		cfg = wazero.NewRuntimeConfigInterpreter()
+	} else {
+		cfg = wazero.NewRuntimeConfig()
+	}
+	cfg = cfg.WithCloseOnContextDone(true).WithMemoryLimitPages(maxMemoryPages)
 	r := wazero.NewRuntimeWithConfig(parent, cfg)
 	defer r.Close(parent)
 

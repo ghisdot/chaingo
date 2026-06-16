@@ -28,6 +28,12 @@ const (
 	// création — aucun code à écrire ni à auditer.
 	TxContractCreate TxType = "contract_create"
 	TxContractExec   TxType = "contract_exec"
+
+	// Contrats WASM arbitraires (déploiement de bytecode, façon EVM mais en
+	// WebAssembly). wasm_deploy stocke du bytecode validé ; wasm_call l'exécute.
+	// N'est accepté que si Params.WasmEnabled (off sur mainnet jusqu'à audit).
+	TxWasmDeploy TxType = "wasm_deploy"
+	TxWasmCall   TxType = "wasm_call"
 )
 
 // Templates de contrats disponibles.
@@ -97,11 +103,15 @@ type Transaction struct {
 	Token      *TokenParams `json:"token,omitempty"`
 	// Smart contracts no-code :
 	Contract   *ContractParams `json:"contract,omitempty"`    // contract_create
-	ContractID string          `json:"contract_id,omitempty"` // contract_exec
-	Action     string          `json:"action,omitempty"`      // contract_exec
+	ContractID string          `json:"contract_id,omitempty"` // contract_exec / wasm_call : adresse du contrat
+	Action     string          `json:"action,omitempty"`      // contract_exec / wasm_call : nom de la fonction
 	Proposal   uint64          `json:"proposal,omitempty"`    // multisig approve : index de la proposition
-	Timestamp  int64           `json:"timestamp"`
-	Signature  []byte          `json:"signature,omitempty"`
+	// Contrats WASM arbitraires :
+	Code []byte   `json:"code,omitempty"` // wasm_deploy : bytecode du contrat
+	Args []uint64 `json:"args,omitempty"` // wasm_call : arguments (i64) passés à la fonction
+	Gas  uint64   `json:"gas,omitempty"`  // wasm_call : plafond de gas (borne d'arrêt déterministe)
+	Timestamp int64  `json:"timestamp"`
+	Signature []byte `json:"signature,omitempty"`
 }
 
 // txCanonical : alias de Transaction sans méthodes. Sert à deux choses :
@@ -295,6 +305,19 @@ func (tx *Transaction) ValidateBasic() error {
 			}
 		default:
 			return fmt.Errorf("unknown action %q (claim|release|refund|propose|approve|reject)", tx.Action)
+		}
+	case TxWasmDeploy:
+		if len(tx.Code) == 0 {
+			return errors.New("wasm_deploy: code (bytecode) required")
+		}
+		// La validation fine du bytecode (opcodes, taille max, gate WasmEnabled)
+		// est faite à l'exécution avec les Params de la chaîne.
+	case TxWasmCall:
+		if tx.ContractID == "" {
+			return errors.New("wasm_call: contract_id required")
+		}
+		if tx.Action == "" {
+			return errors.New("wasm_call: action (nom de la fonction) required")
 		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)

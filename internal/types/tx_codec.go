@@ -50,6 +50,18 @@ func (tx *Transaction) MarshalBinary() ([]byte, error) {
 	e.WriteUvarint(tx.Proposal)
 	e.WriteVarint(tx.Timestamp)
 	e.WriteBytes(tx.Signature)
+	// Extension WASM (champs Code/Args/Gas) écrite APRÈS la signature, et
+	// SEULEMENT pour les tx qui en ont besoin. Conséquence : toute tx existante
+	// (non-WASM) garde un encodage binaire OCTET POUR OCTET identique, et les
+	// blocs déjà stockés (sans extension) restent décodables (0 octet en trop).
+	if len(tx.Code) > 0 || len(tx.Args) > 0 || tx.Gas > 0 {
+		e.WriteBytes(tx.Code)
+		e.WriteUvarint(uint64(len(tx.Args)))
+		for _, a := range tx.Args {
+			e.WriteUvarint(a)
+		}
+		e.WriteUvarint(tx.Gas)
+	}
 	return e.Bytes(), nil
 }
 
@@ -134,6 +146,29 @@ func (tx *Transaction) UnmarshalBinary(data []byte) error {
 	}
 	if tx.Signature, err = d.ReadBytes(); err != nil {
 		return fmt.Errorf("tx.signature: %w", err)
+	}
+	// Extension WASM optionnelle (cf MarshalBinary) : présente seulement s'il
+	// reste des octets. Les blocs anciens (sans extension) tombent dans le else
+	// et laissent Code/Args/Gas à zéro.
+	if d.Remaining() > 0 {
+		if tx.Code, err = d.ReadBytes(); err != nil {
+			return fmt.Errorf("tx.code: %w", err)
+		}
+		n, err := d.ReadLen()
+		if err != nil {
+			return fmt.Errorf("tx.args count: %w", err)
+		}
+		if n > 0 {
+			tx.Args = make([]uint64, n)
+			for i := range tx.Args {
+				if tx.Args[i], err = d.ReadUvarint(); err != nil {
+					return fmt.Errorf("tx.args[%d]: %w", i, err)
+				}
+			}
+		}
+		if tx.Gas, err = d.ReadUvarint(); err != nil {
+			return fmt.Errorf("tx.gas: %w", err)
+		}
 	}
 	if err := d.MustFinish(); err != nil {
 		return fmt.Errorf("tx: %w", err)

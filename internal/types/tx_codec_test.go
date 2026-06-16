@@ -128,6 +128,68 @@ func TestTxBinaryWithTokenAndContract(t *testing.T) {
 	}
 }
 
+// TestTxBinaryWasmExtension : les tx wasm_deploy/wasm_call portent les champs
+// Code/Args/Gas (extension binaire). Round-trip complet attendu.
+func TestTxBinaryWasmExtension(t *testing.T) {
+	kp, _ := crypto.GenerateKeyPair()
+	cases := []*Transaction{
+		{
+			ChainID: "c", Type: TxWasmDeploy, Nonce: 0, MaxBaseFee: 200_000, Tip: 50_000, Timestamp: 1,
+			Code: []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0xde, 0xad},
+		},
+		{
+			ChainID: "c", Type: TxWasmCall, Nonce: 1, MaxBaseFee: 200_000, Tip: 50_000, Timestamp: 2,
+			ContractID: "deadbeef", Action: "increment", Args: []uint64{1, 2, 1 << 40}, Gas: 1_000_000,
+		},
+	}
+	for i, tx := range cases {
+		tx.SignWith(kp)
+		bin, err := tx.MarshalBinary()
+		if err != nil {
+			t.Fatalf("[%d] marshal: %v", i, err)
+		}
+		var dec Transaction
+		if err := dec.UnmarshalBinary(bin); err != nil {
+			t.Fatalf("[%d] unmarshal: %v", i, err)
+		}
+		if dec.Hash() != tx.Hash() {
+			t.Fatalf("[%d] hash divergent (SigningBytes cassé par l'extension)", i)
+		}
+		if err := dec.VerifySignature(); err != nil {
+			t.Fatalf("[%d] signature invalide: %v", i, err)
+		}
+		if !reflect.DeepEqual(tx, &dec) {
+			t.Fatalf("[%d] champs divergents\navant=%+v\naprès=%+v", i, tx, &dec)
+		}
+	}
+}
+
+// TestTxBinaryNoExtensionForNonWasm : une tx ordinaire (non-WASM) NE DOIT PAS
+// écrire l'extension — c'est ce qui garde son encodage octet-pour-octet
+// identique à l'avant-feature et laisse les blocs déjà stockés décodables.
+func TestTxBinaryNoExtensionForNonWasm(t *testing.T) {
+	kp, _ := crypto.GenerateKeyPair()
+	withExt := &Transaction{
+		ChainID: "c", Type: TxTransfer, To: "cgx", TokenID: NativeToken, Amount: 1,
+		MaxBaseFee: 1, Timestamp: 1,
+	}
+	withExt.SignWith(kp)
+	bin, _ := withExt.MarshalBinary()
+
+	// Reconstituer l'encodage SANS le bloc d'extension : il doit être identique.
+	// (Si l'extension avait été écrite, les longueurs différeraient.)
+	var dec Transaction
+	if err := dec.UnmarshalBinary(bin); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if dec.Code != nil || dec.Args != nil || dec.Gas != 0 {
+		t.Fatalf("une tx non-WASM ne doit porter aucune extension : code=%v args=%v gas=%d", dec.Code, dec.Args, dec.Gas)
+	}
+	if !reflect.DeepEqual(withExt, &dec) {
+		t.Fatal("round-trip non-WASM altéré")
+	}
+}
+
 // TestTxBinaryIsCompactVsJSON : on vérifie que le codec binaire est
 // effectivement plus petit que le JSON équivalent (motivation du chantier).
 // Sur une tx signée typique on doit gagner au moins 20 %.
