@@ -5,6 +5,7 @@ package state
 import (
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sync"
 
 	"chaingo/internal/crypto"
+	"chaingo/internal/smt"
 	"chaingo/internal/stark"
 	"chaingo/internal/types"
 	"chaingo/internal/wasmvm"
@@ -1497,6 +1499,9 @@ func bytesEqual(a, b []byte) bool {
 // sorts map keys, so this is deterministic across nodes. (v1: O(n) per
 // block — replaced by a sparse Merkle tree in Phase 2.)
 func (s *State) rootLocked() string {
+	if s.Params.SparseMerkleRoot {
+		return s.sparseRootLocked()
+	}
 	b, _ := json.Marshal(struct {
 		Accounts      map[string]*Account      `json:"accounts"`
 		Tokens        map[string]*Token        `json:"tokens"`
@@ -1511,6 +1516,47 @@ func (s *State) rootLocked() string {
 		BaseFee       uint64                   `json:"base_fee"`
 	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.WasmContracts, s.Shielded, s.Slashed, s.Unbonding, s.Supply, s.Params, s.BaseFee})
 	return crypto.HashHex(b)
+}
+
+// sparseRootLocked : racine d'état via arbre de Merkle creux (internal/smt).
+// Chaque entrée d'état devient UNE feuille (clé préfixée, valeur = JSON canonique),
+// ce qui permet des PREUVES D'INCLUSION par compte pour les clients légers.
+// L'arbre est INDÉPENDANT DE L'ORDRE d'insertion (déterministe entre nœuds).
+// COUVRE EXACTEMENT les mêmes composants que la version JSON ci-dessus — toute
+// omission casserait le consensus (la racine ne refléterait pas un changement) :
+// un test de complétude (mute chaque composant) garde cet invariant.
+func (s *State) sparseRootLocked() string {
+	t := smt.New()
+	put := func(key string, v any) {
+		b, _ := json.Marshal(v)
+		t.Update([]byte(key), b)
+	}
+	for k, v := range s.Accounts {
+		put("acc/"+k, v)
+	}
+	for k, v := range s.Validators {
+		put("val/"+k, v)
+	}
+	for k, v := range s.Tokens {
+		put("tok/"+k, v)
+	}
+	for k, v := range s.Contracts {
+		put("ctr/"+k, v)
+	}
+	for k, v := range s.WasmContracts {
+		put("wasm/"+k, v)
+	}
+	for k, v := range s.Slashed {
+		put("slash/"+k, v)
+	}
+	put("supply", s.Supply)
+	put("params", s.Params)
+	put("base_fee", s.BaseFee)
+	put("unbonding", s.Unbonding)
+	if s.Shielded != nil {
+		put("shielded", s.Shielded)
+	}
+	return hex.EncodeToString(t.Root())
 }
 
 func (s *State) Root() string {

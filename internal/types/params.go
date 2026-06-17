@@ -47,6 +47,12 @@ type Params struct {
 	// REFUSÉES si PrivacyEnabled est false.
 	PrivacyEnabled bool   `json:"privacy_enabled"`
 	ShieldFee      uint64 `json:"shield_fee"` // frais réseau d'une tx blindée (brûlé), en plus du base fee
+	// Racine d'état : false = hash JSON canonique de l'état (par défaut) ;
+	// true = arbre de Merkle creux (internal/smt) → racine granulaire avec
+	// preuves d'inclusion par compte (clients légers). CHANGE la racine → à fixer
+	// à la GENÈSE uniquement (sinon fork). Off par défaut pour ne pas casser les
+	// chaînes existantes ; une genèse fraîche peut l'activer.
+	SparseMerkleRoot bool `json:"sparse_merkle_root"`
 }
 
 func DefaultParams() Params {
