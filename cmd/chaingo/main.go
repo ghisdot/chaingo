@@ -44,6 +44,7 @@ Usage :
   chaingo delegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
   chaingo undelegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
   chaingo unjail --from <wallet>             (validateur jailé pour inactivité)
+  chaingo validator profile --from <wallet> --info "Nom — https://site — desc"  (profil public on-chain)
   chaingo contract vesting --from <wallet> --beneficiary <adresse> --amount 100
                [--token CGO] [--start +0h] [--duration 720h] [--pass MDP] [--api URL]
   chaingo contract escrow --from <wallet> --seller <adresse> --amount 100
@@ -105,6 +106,8 @@ func main() {
 		err = cmdDelegate(os.Args[2:], types.TxUndelegate)
 	case "unjail":
 		err = cmdUnjail(os.Args[2:])
+	case "validator":
+		err = cmdValidator(os.Args[2:])
 	case "contract":
 		err = cmdContract(os.Args[2:])
 	case "faucet":
@@ -514,6 +517,30 @@ func cmdUnjail(args []string) error {
 	}
 	tx := &types.Transaction{Type: types.TxUnjail}
 	fmt.Println("Demande de sortie de jail (échoue si le délai n'est pas écoulé).")
+	return signAndSubmit(*api, kp, tx)
+}
+
+// cmdValidator : opérations validateur. Pour l'instant : profil public on-chain.
+//   chaingo validator profile --from <wallet> --info "Nom — https://site — description"
+func cmdValidator(args []string) error {
+	if len(args) < 1 || args[0] != "profile" {
+		return fmt.Errorf("usage : chaingo validator profile --from <wallet> --info \"texte\"")
+	}
+	fs := flag.NewFlagSet("validator profile", flag.ExitOnError)
+	from := fs.String("from", "", "wallet du validateur")
+	info := fs.String("info", "", "profil public (≤ 256 car.) : nom, site, description")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args[1:])
+	if *from == "" || *info == "" {
+		return fmt.Errorf("--from et --info sont requis")
+	}
+	kp, err := wallet.Load(*from, *pass)
+	if err != nil {
+		return err
+	}
+	tx := &types.Transaction{Type: types.TxValidatorProfile, Memo: *info}
+	fmt.Println("Publication du profil validateur (l'émetteur doit être un validateur staké).")
 	return signAndSubmit(*api, kp, tx)
 }
 

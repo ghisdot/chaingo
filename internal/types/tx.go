@@ -48,6 +48,11 @@ const (
 	TxShield           TxType = "shield"
 	TxShieldedTransfer TxType = "shielded_transfer"
 	TxUnshield         TxType = "unshield"
+
+	// Profil public d'un validateur (nom, site, description) — porté dans le
+	// champ Memo (déjà sérialisé partout, donc aucun changement de codec).
+	// Affiché par l'explorateur / le dashboard validateur.
+	TxValidatorProfile TxType = "validator_profile"
 )
 
 // Templates de contrats disponibles.
@@ -382,6 +387,11 @@ func (tx *Transaction) ValidateBasic() error {
 		}
 		if tx.Action == "" {
 			return errors.New("wasm_call: action (nom de la fonction) required")
+		}
+	case TxValidatorProfile:
+		// Le profil (nom/site/description) est porté par Memo (≤ 256, déjà vérifié).
+		if len(tx.Memo) == 0 {
+			return errors.New("validator_profile: memo (profil public) requis")
 		}
 	default:
 		return fmt.Errorf("unknown tx type %q", tx.Type)

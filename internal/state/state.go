@@ -50,6 +50,9 @@ type Validator struct {
 	Missed      uint64 `json:"missed,omitempty"`
 	Jailed      bool   `json:"jailed,omitempty"`
 	JailedUntil int64  `json:"jailed_until,omitempty"`
+	// Profil public optionnel (nom/site/description) défini par tx
+	// validator_profile. omitempty → racine inchangée tant qu'aucun profil n'est posé.
+	Profile string `json:"profile,omitempty"`
 }
 
 // weight : poids brut (stake + délégations).
@@ -805,6 +808,12 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		}
 		v.Jailed = false
 		v.Missed = 0
+	case types.TxValidatorProfile:
+		v, ok := s.Validators[tx.From]
+		if !ok {
+			return errors.New("only a validator can set a profile")
+		}
+		v.Profile = tx.Memo
 	case types.TxUnstake:
 		v, ok := s.Validators[tx.From]
 		if !ok || from.Staked < tx.Amount {
