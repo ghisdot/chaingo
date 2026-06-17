@@ -60,6 +60,13 @@ Usage :
   chaingo wasm deploy --from <wallet> <fichier.wasm>                  (déploie un contrat WASM ON-CHAIN)
   chaingo wasm call --from <wallet> [--gas N] [--value CGO] <adresse> <fonction> [arg_u64 ...]
   chaingo wasm list [--api URL]                                        (contrats WASM déployés)
+  chaingo shielded shield --from <wallet> --amount 10 [--note-index N] [--pass MDP] [--api URL]
+                     (dépose des CGO PUBLICS dans le pool blindé : crée une note ; affiche son secret)
+  chaingo shielded transfer --from <wallet> --note-index N --value V --fee F --to-tag-seed S
+                     [--out-index M] [--pass MDP] [--api URL]   (⏳ ~90 s : génère la preuve zk-STARK)
+  chaingo shielded unshield --from <wallet> --note-index N --value V --to <adresse|wallet>
+                     [--out-index M] [--pass MDP] [--api URL]   (⏳ ~90 s : sort le montant public vers --to)
+  chaingo shielded info [--api URL]                                     (état agrégé du pool blindé)
   chaingo faucet --to <adresse|wallet> [--amount 100] [--api URL]   (devnet)
   chaingo keygen [--out validator.seed]      (génère une seed de validateur ML-DSA-65)
   chaingo genesis template [--chain-id ID] [--out genesis.json] [--seed-out FILE]
@@ -112,6 +119,8 @@ func main() {
 		err = cmdLoadtest(os.Args[2:])
 	case "wasm":
 		err = cmdWasm(os.Args[2:])
+	case "shielded":
+		err = cmdShielded(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

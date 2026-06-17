@@ -47,6 +47,7 @@ type Backend interface {
 	GetContract(id string) *state.Contract
 	WasmContracts() []*state.WasmContract
 	GetWasmContract(addr string) *state.WasmContract
+	ShieldedPool() *state.ShieldedPool
 	MempoolSize() int
 	MempoolPending(limit int) []mempool.PendingInfo
 	SupplyInfo() state.Supply
@@ -243,6 +244,43 @@ func (s *Server) Start() error {
 		v["storage_hex"] = storage // clés et valeurs en hexadécimal
 		writeJSON(w, 200, v)
 	})
+	// Pool blindé (étage 5). Vue AGRÉGÉE et SANS FUITE de CONTENU : on expose le
+	// nombre de notes, la racine (hex), le nombre de nullifiers dépensés et le solde
+	// public verrouillé. JAMAIS le contenu des notes chiffrées (ShieldNote), JAMAIS
+	// les montants, JAMAIS la table des nullifiers (clés). `enabled` reflète le gate.
+	//
+	// Le paramètre ?commitments=1 ajoute la liste ORDONNÉE des engagements (hex). Ce
+	// sont des digests Poseidon PUBLICS et OPAQUES — exactement ce qu'un pool blindé
+	// publie (cf. l'arbre de note-commitments de Zcash) ; ils ne révèlent ni montant
+	// ni destinataire. Le wallet en a besoin pour reconstruire le chemin de Merkle
+	// d'une dépense. Hors de ce paramètre, la réponse reste un pur agrégat.
+	mux.HandleFunc("GET /v1/shielded", func(w http.ResponseWriter, r *http.Request) {
+		fees := s.b.Fees()
+		enabled, _ := fees["privacy_enabled"].(bool)
+		shieldFee, _ := fees["shield_fee"].(uint64)
+		out := map[string]any{
+			"enabled":    enabled,
+			"shield_fee": shieldFee,
+			"notes":      0,
+			"nullifiers": 0,
+			"balance":    uint64(0),
+			"root":       "",
+		}
+		if pool := s.b.ShieldedPool(); pool != nil {
+			out["notes"] = len(pool.Commitments)
+			out["nullifiers"] = len(pool.Nullifiers)
+			out["balance"] = pool.Balance
+			out["root"] = hex.EncodeToString(pool.Root)
+			if r.URL.Query().Get("commitments") != "" {
+				cms := make([]string, 0, len(pool.Commitments))
+				for _, cm := range pool.Commitments {
+					cms = append(cms, hex.EncodeToString(cm))
+				}
+				out["commitments"] = cms
+			}
+		}
+		writeJSON(w, 200, out)
+	})
 	mux.HandleFunc("GET /v1/genesis", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(s.b.GenesisDoc())
@@ -327,6 +365,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 			"GET  /v1/contracts/{id}",
 			"GET  /v1/wasm/contracts           (contrats WASM arbitraires)",
 			"GET  /v1/wasm/contracts/{addr}",
+			"GET  /v1/shielded                 (pool blindé : agrégats sans fuite)",
 			"GET  /v1/mempool",
 			"GET  /v1/genesis",
 			"POST /v1/dev/faucet               (devnet)",

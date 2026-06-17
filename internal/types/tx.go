@@ -34,6 +34,20 @@ const (
 	// N'est accepté que si Params.WasmEnabled (off sur mainnet jusqu'à audit).
 	TxWasmDeploy TxType = "wasm_deploy"
 	TxWasmCall   TxType = "wasm_call"
+
+	// Pool blindé (zk-STARK maison, étage 5). N'est accepté que si
+	// Params.PrivacyEnabled (off sur mainnet jusqu'à audit) :
+	//   - shield            : dépose des CGO PUBLICS dans le pool, crée une note
+	//                         (engagement ShieldCommitment, blob chiffré ShieldNote).
+	//                         Montant PUBLIC (Amount).
+	//   - shielded_transfer : dépense une note et en crée une autre, montants
+	//                         CACHÉS, prouvé par SpendProof. Seul Fee est public
+	//                         (brûlé).
+	//   - unshield          : dépense une note ; le montant public (= Fee de la
+	//                         preuve) sort du pool vers To en CGO public.
+	TxShield           TxType = "shield"
+	TxShieldedTransfer TxType = "shielded_transfer"
+	TxUnshield         TxType = "unshield"
 )
 
 // Templates de contrats disponibles.
@@ -110,6 +124,18 @@ type Transaction struct {
 	Code []byte   `json:"code,omitempty"` // wasm_deploy : bytecode du contrat
 	Args []uint64 `json:"args,omitempty"` // wasm_call : arguments (i64) passés à la fonction
 	Gas  uint64   `json:"gas,omitempty"`  // wasm_call : plafond de gas (borne d'arrêt déterministe)
+	// Pool blindé (zk-STARK maison) :
+	//   - ShieldCommitment : engagement de note (cm = [4]Felt sérialisé) — shield.
+	//   - ShieldNote       : blob chiffré destiné au bénéficiaire (opaque au
+	//                        consensus) — shield / shielded_transfer / unshield.
+	//   - SpendProof       : preuve de dépense sérialisée (stark.MarshalSpendProof)
+	//                        — shielded_transfer / unshield.
+	//   - SpendPublic      : énoncé public sérialisé (stark.MarshalSpendPublic)
+	//                        — shielded_transfer / unshield.
+	ShieldCommitment []byte `json:"shield_commitment,omitempty"`
+	ShieldNote       []byte `json:"shield_note,omitempty"`
+	SpendProof       []byte `json:"spend_proof,omitempty"`
+	SpendPublic      []byte `json:"spend_public,omitempty"`
 	Timestamp int64  `json:"timestamp"`
 	Signature []byte `json:"signature,omitempty"`
 }
@@ -305,6 +331,44 @@ func (tx *Transaction) ValidateBasic() error {
 			}
 		default:
 			return fmt.Errorf("unknown action %q (claim|release|refund|propose|approve|reject)", tx.Action)
+		}
+	case TxShield:
+		// Dépôt de CGO publics dans le pool : montant public + note à insérer.
+		// La VÉRIFICATION de la preuve n'a pas lieu ici (shield n'en a pas) ;
+		// les structures fines (taille du commitment) sont vérifiées à l'exécution.
+		if tx.Amount == 0 {
+			return errors.New("shield: amount must be > 0")
+		}
+		if len(tx.ShieldCommitment) == 0 {
+			return errors.New("shield: shield_commitment required")
+		}
+		if len(tx.ShieldNote) == 0 {
+			return errors.New("shield: shield_note required")
+		}
+	case TxShieldedTransfer:
+		// Transfert blindé : montants cachés, prouvés. On exige juste la présence
+		// des blobs ; la VÉRIFICATION de la preuve (VerifySpend) est à l'exécution.
+		if len(tx.SpendProof) == 0 {
+			return errors.New("shielded_transfer: spend_proof required")
+		}
+		if len(tx.SpendPublic) == 0 {
+			return errors.New("shielded_transfer: spend_public required")
+		}
+		if len(tx.ShieldNote) == 0 {
+			return errors.New("shielded_transfer: shield_note required")
+		}
+	case TxUnshield:
+		// Sortie du pool vers une adresse PUBLIQUE : To requis. Le montant public
+		// est porté par la preuve (SpendPublic.Fee) — pas dans Amount. La preuve
+		// est vérifiée à l'exécution.
+		if !crypto.ValidAddress(tx.To) {
+			return errors.New("unshield: invalid to address")
+		}
+		if len(tx.SpendProof) == 0 {
+			return errors.New("unshield: spend_proof required")
+		}
+		if len(tx.SpendPublic) == 0 {
+			return errors.New("unshield: spend_public required")
 		}
 	case TxWasmDeploy:
 		if len(tx.Code) == 0 {

@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"chaingo/internal/crypto"
+	"chaingo/internal/stark"
 	"chaingo/internal/types"
 	"chaingo/internal/wasmvm"
 )
@@ -137,6 +138,27 @@ type WasmContract struct {
 	CreatedAt uint64            `json:"created_at_height"`
 }
 
+// ShieldedPool est le POOL BLINDÉ (zk-STARK maison, étage 5) : l'ensemble des
+// notes (engagements) déposées, leur racine de Merkle Poseidon, les nullifiers
+// déjà dépensés (anti double-dépense) et le solde public verrouillé.
+//
+// PORTÉE / GAP DOCUMENTÉ : le circuit de dépense fige la profondeur d'arbre à
+// stark.SpendDepth() (= 4 dans ce prototype), soit AU PLUS 2^SpendDepth notes
+// (16). Au-delà, la racine du pool ne correspondrait plus à un arbre dépensable
+// par le circuit. C'est une borne ASSUMÉE du prototype (à élargir avec un arbre
+// incrémental / une profondeur supérieure dans une version auditée).
+//
+// DÉTERMINISME : Commitments/Notes sont des slices ordonnés (insertion), Root est
+// recalculée par poolRootLocked (Poseidon Merkle, padding fixe), Nullifiers est
+// une map[string]bool (json trie ses clés). Aucun time/rand dans ce chemin.
+type ShieldedPool struct {
+	Commitments [][]byte        `json:"commitments"`          // engagements de notes (cm sérialisés, [4]Felt = 32 octets)
+	Root        []byte          `json:"root"`                 // racine Merkle Poseidon courante (32 octets), recalculée à chaque mutation
+	Nullifiers  map[string]bool `json:"nullifiers"`           // nullifiers dépensés (clé = hex), anti double-dépense
+	Notes       [][]byte        `json:"notes,omitempty"`      // blobs chiffrés (opaques au consensus), parallèles aux Commitments
+	Balance     uint64          `json:"balance"`              // CGO publics verrouillés dans le pool
+}
+
 type State struct {
 	mu         sync.RWMutex
 	Accounts      map[string]*Account      `json:"accounts"`
@@ -144,6 +166,11 @@ type State struct {
 	Validators    map[string]*Validator    `json:"validators"`
 	Contracts     map[string]*Contract     `json:"contracts"`
 	WasmContracts map[string]*WasmContract `json:"wasm_contracts,omitempty"`
+	// Shielded : pool blindé (étage 5). omitempty + nil par défaut => quand le
+	// pool n'a jamais servi (mainnet, ou réseau privacy-off), il est ABSENT du
+	// JSON, donc la racine d'état est OCTET-POUR-OCTET identique à avant l'ajout
+	// du champ : les chaînes existantes ne forkent pas.
+	Shielded *ShieldedPool `json:"shielded,omitempty"`
 	// Slashed : équivocations déjà punies (clé "voter@height") — garantit
 	// qu'une même faute n'est slashée qu'une fois, même si plusieurs nœuds
 	// l'incluent dans des blocs.
@@ -682,6 +709,11 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	if tx.Type == types.TxWasmCall {
 		burn += s.Params.WasmCallFee
 	}
+	// Frais réseau d'une tx blindée (brûlé, en plus du base fee) — payé en CGO
+	// public par l'émetteur pour les trois types de tx du pool.
+	if tx.Type == types.TxShield || tx.Type == types.TxShieldedTransfer || tx.Type == types.TxUnshield {
+		burn += s.Params.ShieldFee
+	}
 	fee := burn + tx.Tip
 	needNative := fee
 	if tx.Type == types.TxTransfer && tx.TokenID == types.NativeToken {
@@ -695,6 +727,9 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	}
 	if tx.Type == types.TxWasmCall {
 		needNative += tx.Amount // value (CGO) envoyée au contrat
+	}
+	if tx.Type == types.TxShield {
+		needNative += tx.Amount // CGO publics déposés dans le pool blindé
 	}
 	if from.Balances[types.NativeToken] < needNative {
 		return errors.New("insufficient CGO balance for amount + fees")
@@ -975,6 +1010,117 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		default:
 			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
 		}
+	case types.TxShield:
+		// GATE EN PREMIER (verrou de sûreté du système de preuve maison).
+		if !s.Params.PrivacyEnabled {
+			return errors.New("shielded pool disabled on this network (params.privacy_enabled=false)")
+		}
+		// --- VALIDATION COMPLÈTE AVANT TOUTE MUTATION (atomicité) ---
+		// On ne crée PAS encore le pool : tout est calculé sur des copies locales,
+		// de sorte qu'un échec ne laisse aucune trace (ni pool vide, ni solde
+		// modifié). C'est crucial en mode non-strict (proposeur) où une tx en échec
+		// est simplement abandonnée sans rollback.
+		if _, derr := cmToDigest(tx.ShieldCommitment); derr != nil {
+			return fmt.Errorf("shield: %w", derr)
+		}
+		var curCommits [][]byte
+		if s.Shielded != nil {
+			curCommits = s.Shielded.Commitments
+		}
+		// Capacité : l'arbre du circuit a 2^SpendDepth feuilles. On refuse d'insérer
+		// au-delà (sinon la racine ne serait plus dépensable par le circuit).
+		capacity := 1 << uint(stark.SpendDepth())
+		if len(curCommits)+1 > capacity {
+			return fmt.Errorf("shield: pool plein (capacité %d notes)", capacity)
+		}
+		newCommits := append(append([][]byte(nil), curCommits...), append([]byte(nil), tx.ShieldCommitment...))
+		newRoot, rerr := poolRoot(newCommits)
+		if rerr != nil {
+			return fmt.Errorf("shield: %w", rerr)
+		}
+		// --- MUTATION (tout est validé) — c'est seulement ICI que le pool naît. ---
+		pool := s.ensureShieldedLocked()
+		from.Balances[types.NativeToken] -= tx.Amount
+		pool.Balance += tx.Amount
+		pool.Commitments = newCommits
+		pool.Notes = append(pool.Notes, append([]byte(nil), tx.ShieldNote...))
+		pool.Root = newRoot
+	case types.TxShieldedTransfer:
+		if !s.Params.PrivacyEnabled {
+			return errors.New("shielded pool disabled on this network (params.privacy_enabled=false)")
+		}
+		// --- VALIDATION (avant toute mutation) ---
+		public, proof, perr := s.verifySpendLocked(tx)
+		if perr != nil {
+			return fmt.Errorf("shielded_transfer: %w", perr)
+		}
+		_ = proof
+		pool := s.Shielded // verifySpendLocked garantit pool != nil
+		fee := public.Fee.Uint64()
+		if pool.Balance < fee {
+			return errors.New("shielded_transfer: pool balance below proof fee")
+		}
+		// La note de sortie (OutCm) est insérée dans l'arbre : capacité.
+		outCm := digestToBytes(public.OutCm)
+		capacity := 1 << uint(stark.SpendDepth())
+		if len(pool.Commitments)+1 > capacity {
+			return fmt.Errorf("shielded_transfer: pool plein (capacité %d notes)", capacity)
+		}
+		newCommits := append(append([][]byte(nil), pool.Commitments...), outCm)
+		newRoot, rerr := poolRoot(newCommits)
+		if rerr != nil {
+			return fmt.Errorf("shielded_transfer: %w", rerr)
+		}
+		nfKey := nullifierKey(public.Nf)
+		// --- MUTATION ---
+		pool.Nullifiers[nfKey] = true
+		pool.Commitments = newCommits
+		pool.Notes = append(pool.Notes, append([]byte(nil), tx.ShieldNote...))
+		pool.Root = newRoot
+		// Fee (seul montant public) brûlé depuis le pool : la valeur quitte la
+		// supply. Les montants des notes restent cachés dans le pool.
+		pool.Balance -= fee
+		s.Supply.Total -= fee
+		s.Supply.Burned += fee
+	case types.TxUnshield:
+		if !s.Params.PrivacyEnabled {
+			return errors.New("shielded pool disabled on this network (params.privacy_enabled=false)")
+		}
+		// --- VALIDATION (avant toute mutation) ---
+		public, proof, perr := s.verifySpendLocked(tx)
+		if perr != nil {
+			return fmt.Errorf("unshield: %w", perr)
+		}
+		_ = proof
+		pool := s.Shielded
+		amount := public.Fee.Uint64() // ici, Fee = montant public RENDU (pas brûlé)
+		if pool.Balance < amount {
+			return errors.New("unshield: pool balance below public amount")
+		}
+		// La note de monnaie rendue (OutCm) est réinsérée : capacité.
+		outCm := digestToBytes(public.OutCm)
+		capacity := 1 << uint(stark.SpendDepth())
+		if len(pool.Commitments)+1 > capacity {
+			return fmt.Errorf("unshield: pool plein (capacité %d notes)", capacity)
+		}
+		newCommits := append(append([][]byte(nil), pool.Commitments...), outCm)
+		newRoot, rerr := poolRoot(newCommits)
+		if rerr != nil {
+			return fmt.Errorf("unshield: %w", rerr)
+		}
+		nfKey := nullifierKey(public.Nf)
+		// --- MUTATION ---
+		pool.Nullifiers[nfKey] = true
+		pool.Commitments = newCommits
+		if len(tx.ShieldNote) > 0 {
+			pool.Notes = append(pool.Notes, append([]byte(nil), tx.ShieldNote...))
+		}
+		pool.Root = newRoot
+		// Le montant public sort du pool vers To en CGO public (déplacement, pas
+		// de burn : la supply est inchangée). Le ShieldFee réseau, lui, est déjà
+		// brûlé depuis le compte émetteur (cf. section frais).
+		pool.Balance -= amount
+		s.acct(tx.To).Balances[types.NativeToken] += amount
 	case types.TxWasmDeploy:
 		if !s.Params.WasmEnabled {
 			return errors.New("wasm contracts disabled on this network (params.wasm_enabled=false)")
@@ -1179,6 +1325,163 @@ func (s *State) Commit(height uint64, hash string) {
 	s.LastHash = hash
 }
 
+// ---- pool blindé (étage 5) ----
+
+// poseidonDigestBytes : taille d'un digest [4]Felt sérialisé (4 × 8 octets BE).
+const poseidonDigestBytes = 4 * 8 // 32
+
+// ensureShieldedLocked initialise le pool blindé à la PREMIÈRE utilisation
+// (lazy). Tant qu'aucune tx blindée n'a été appliquée, s.Shielded reste nil =>
+// absent du JSON => racine d'état inchangée pour les chaînes existantes.
+func (s *State) ensureShieldedLocked() *ShieldedPool {
+	if s.Shielded == nil {
+		s.Shielded = &ShieldedPool{Nullifiers: map[string]bool{}}
+	}
+	if s.Shielded.Nullifiers == nil {
+		s.Shielded.Nullifiers = map[string]bool{}
+	}
+	return s.Shielded
+}
+
+// cmToDigest décode un engagement sérialisé (32 octets = 4 Felt big-endian) en
+// digest [4]Felt. Renvoie une erreur si la taille est mauvaise (refus propre,
+// jamais de panique).
+func cmToDigest(b []byte) ([4]stark.Felt, error) {
+	var d [4]stark.Felt
+	if len(b) != poseidonDigestBytes {
+		return d, fmt.Errorf("commitment de taille %d, attendu %d", len(b), poseidonDigestBytes)
+	}
+	for k := 0; k < 4; k++ {
+		d[k] = stark.FeltFromBytes(b[k*8 : k*8+8])
+	}
+	return d, nil
+}
+
+// digestToBytes sérialise un digest [4]Felt en 32 octets big-endian (inverse de
+// cmToDigest).
+func digestToBytes(d [4]stark.Felt) []byte {
+	out := make([]byte, 0, poseidonDigestBytes)
+	for k := 0; k < 4; k++ {
+		out = append(out, d[k].Bytes()...)
+	}
+	return out
+}
+
+// poolRoot recalcule la racine de Merkle POSEIDON des engagements du pool. Les
+// feuilles sont COMPLÉTÉES à EXACTEMENT 2^SpendDepth (feuille de padding fixe =
+// digest nul) : la profondeur de l'arbre vaut donc toujours stark.SpendDepth(),
+// ce qui est la profondeur que le circuit de dépense sait prouver. Un wallet qui
+// reconstruit l'arbre des MÊMES engagements (même padding) obtient la MÊME
+// racine, donc sa preuve vérifie SpendPublic.MerkleRoot == pool.Root.
+//
+// DÉTERMINISME : ordre d'insertion des engagements + padding fixe ; PoseidonCommit
+// est pur. Renvoie une erreur si un engagement est mal formé (taille).
+func poolRoot(commitments [][]byte) ([]byte, error) {
+	full := 1 << uint(stark.SpendDepth()) // nombre de feuilles de l'arbre (2^profondeur)
+	if len(commitments) > full {
+		return nil, fmt.Errorf("pool plein : %d notes > capacité %d (profondeur %d)",
+			len(commitments), full, stark.SpendDepth())
+	}
+	leaves := make([][4]stark.Felt, full)
+	for i, cm := range commitments {
+		d, err := cmToDigest(cm)
+		if err != nil {
+			return nil, fmt.Errorf("commitment %d: %w", i, err)
+		}
+		leaves[i] = d
+	}
+	// Les emplacements [len(commitments), full) restent à la feuille de padding
+	// (digest nul = [4]Felt zéro), valeur déterministe et connue du wallet.
+	root, _ := stark.PoseidonCommit(leaves)
+	return digestToBytes(root), nil
+}
+
+// GetShieldedPool renvoie une COPIE profonde du pool blindé (ou nil si jamais
+// utilisé) — pour l'API/explorateur. La copie évite toute mutation concurrente
+// de l'état réel par l'appelant.
+func (s *State) GetShieldedPool() *ShieldedPool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.Shielded == nil {
+		return nil
+	}
+	cp := &ShieldedPool{
+		Balance:    s.Shielded.Balance,
+		Root:       append([]byte(nil), s.Shielded.Root...),
+		Nullifiers: make(map[string]bool, len(s.Shielded.Nullifiers)),
+	}
+	for _, c := range s.Shielded.Commitments {
+		cp.Commitments = append(cp.Commitments, append([]byte(nil), c...))
+	}
+	for _, n := range s.Shielded.Notes {
+		cp.Notes = append(cp.Notes, append([]byte(nil), n...))
+	}
+	for k, v := range s.Shielded.Nullifiers {
+		cp.Nullifiers[k] = v
+	}
+	return cp
+}
+
+// nullifierKey dérive la clé (hex) d'un nullifier [4]Felt pour l'index
+// Nullifiers. Déterministe (big-endian via digestToBytes).
+func nullifierKey(nf [4]stark.Felt) string {
+	return crypto.HashHex(digestToBytes(nf))
+}
+
+// verifySpendLocked effectue TOUTE la vérification d'une dépense blindée
+// (shielded_transfer / unshield), SANS muter l'état :
+//   - décode SpendPublic puis SpendProof (formats bornés, jamais de panique) ;
+//   - VÉRIFIE la preuve zk-STARK (VerifySpend) — le cœur de la soundness ;
+//   - exige que la racine prouvée == la racine COURANTE du pool (la note dépensée
+//     appartient bien à l'arbre actuel) ;
+//   - exige que le nullifier ne soit pas déjà dépensé (anti double-dépense).
+//
+// Renvoie l'énoncé public décodé et la preuve si tout passe ; une erreur sinon.
+// Le pool DOIT exister (sinon il n'y a aucune note à dépenser).
+func (s *State) verifySpendLocked(tx *types.Transaction) (stark.SpendPublic, stark.AirProof, error) {
+	var public stark.SpendPublic
+	var proof stark.AirProof
+	if s.Shielded == nil || len(s.Shielded.Commitments) == 0 {
+		return public, proof, errors.New("pool blindé vide : aucune note à dépenser")
+	}
+	public, err := stark.UnmarshalSpendPublic(tx.SpendPublic)
+	if err != nil {
+		return public, proof, fmt.Errorf("spend_public invalide: %w", err)
+	}
+	proof, err = stark.UnmarshalSpendProof(tx.SpendProof)
+	if err != nil {
+		return public, proof, fmt.Errorf("spend_proof invalide: %w", err)
+	}
+	// Vérification cryptographique de la preuve (déterministe, rapide).
+	if !stark.VerifySpend(public, proof) {
+		return public, proof, errors.New("preuve de dépense invalide")
+	}
+	// La racine prouvée doit être la racine COURANTE du pool : on dépense bien
+	// une note de l'arbre actuel (pas d'un arbre obsolète / forgé).
+	if !bytesEqual(digestToBytes(public.MerkleRoot), s.Shielded.Root) {
+		return public, proof, errors.New("racine de la preuve != racine courante du pool")
+	}
+	// Anti double-dépense : le nullifier ne doit pas déjà figurer.
+	if s.Shielded.Nullifiers[nullifierKey(public.Nf)] {
+		return public, proof, errors.New("nullifier déjà dépensé (double-dépense)")
+	}
+	return public, proof, nil
+}
+
+// bytesEqual compare deux slices d'octets (évite d'importer bytes pour un seul
+// usage ; nil et slice vide sont considérés égaux).
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // ---- racine d'état & persistance ----
 
 // rootLocked hashes the canonical JSON of the chain state. encoding/json
@@ -1191,12 +1494,13 @@ func (s *State) rootLocked() string {
 		Validators    map[string]*Validator    `json:"validators"`
 		Contracts     map[string]*Contract     `json:"contracts"`
 		WasmContracts map[string]*WasmContract `json:"wasm_contracts,omitempty"`
+		Shielded      *ShieldedPool            `json:"shielded,omitempty"`
 		Slashed       map[string]bool          `json:"slashed"`
 		Unbonding     []*Unbonding             `json:"unbonding"`
 		Supply        Supply                   `json:"supply"`
 		Params        types.Params             `json:"params"`
 		BaseFee       uint64                   `json:"base_fee"`
-	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.WasmContracts, s.Slashed, s.Unbonding, s.Supply, s.Params, s.BaseFee})
+	}{s.Accounts, s.Tokens, s.Validators, s.Contracts, s.WasmContracts, s.Shielded, s.Slashed, s.Unbonding, s.Supply, s.Params, s.BaseFee})
 	return crypto.HashHex(b)
 }
 
@@ -1228,6 +1532,13 @@ func (s *State) Restore(data []byte) error {
 		tmp.WasmContracts = map[string]*WasmContract{}
 	}
 	s.WasmContracts = tmp.WasmContracts
+	// Pool blindé : restauré tel quel (nil si absent => pool jamais utilisé, racine
+	// inchangée). Si présent avec une map de nullifiers nil (JSON tronqué), on la
+	// ré-initialise pour éviter un nil-deref à la prochaine dépense.
+	if tmp.Shielded != nil && tmp.Shielded.Nullifiers == nil {
+		tmp.Shielded.Nullifiers = map[string]bool{}
+	}
+	s.Shielded = tmp.Shielded
 	if tmp.Slashed == nil {
 		tmp.Slashed = map[string]bool{}
 	}

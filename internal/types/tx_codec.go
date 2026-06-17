@@ -50,17 +50,34 @@ func (tx *Transaction) MarshalBinary() ([]byte, error) {
 	e.WriteUvarint(tx.Proposal)
 	e.WriteVarint(tx.Timestamp)
 	e.WriteBytes(tx.Signature)
-	// Extension WASM (champs Code/Args/Gas) écrite APRÈS la signature, et
-	// SEULEMENT pour les tx qui en ont besoin. Conséquence : toute tx existante
-	// (non-WASM) garde un encodage binaire OCTET POUR OCTET identique, et les
-	// blocs déjà stockés (sans extension) restent décodables (0 octet en trop).
-	if len(tx.Code) > 0 || len(tx.Args) > 0 || tx.Gas > 0 {
+	// Extensions optionnelles écrites APRÈS la signature, et SEULEMENT pour les tx
+	// qui en ont besoin. Conséquence : toute tx existante (sans extension) garde un
+	// encodage binaire OCTET POUR OCTET identique, et les blocs déjà stockés (sans
+	// extension) restent décodables (0 octet en trop).
+	//
+	// Deux blocs d'extension, en ordre FIXE : (1) WASM (Code/Args/Gas), puis
+	// (2) pool blindé (ShieldCommitment/ShieldNote/SpendProof/SpendPublic). Le bloc
+	// WASM est écrit dès qu'UNE extension (WASM OU blindée) est présente : ainsi le
+	// décodeur, voyant des octets après la signature, lit toujours d'abord le bloc
+	// WASM (vide si la tx est purement blindée) puis le bloc blindé. Une tx WASM
+	// PURE (sans champ blindé) n'écrit pas le bloc blindé → son encodage reste
+	// OCTET-POUR-OCTET identique à avant l'ajout du pool blindé.
+	hasShield := len(tx.ShieldCommitment) > 0 || len(tx.ShieldNote) > 0 ||
+		len(tx.SpendProof) > 0 || len(tx.SpendPublic) > 0
+	hasWasm := len(tx.Code) > 0 || len(tx.Args) > 0 || tx.Gas > 0
+	if hasWasm || hasShield {
 		e.WriteBytes(tx.Code)
 		e.WriteUvarint(uint64(len(tx.Args)))
 		for _, a := range tx.Args {
 			e.WriteUvarint(a)
 		}
 		e.WriteUvarint(tx.Gas)
+	}
+	if hasShield {
+		e.WriteBytes(tx.ShieldCommitment)
+		e.WriteBytes(tx.ShieldNote)
+		e.WriteBytes(tx.SpendProof)
+		e.WriteBytes(tx.SpendPublic)
 	}
 	return e.Bytes(), nil
 }
@@ -168,6 +185,23 @@ func (tx *Transaction) UnmarshalBinary(data []byte) error {
 		}
 		if tx.Gas, err = d.ReadUvarint(); err != nil {
 			return fmt.Errorf("tx.gas: %w", err)
+		}
+	}
+	// Extension POOL BLINDÉ optionnelle : présente seulement s'il reste des octets
+	// APRÈS le bloc WASM (qui, pour une tx purement blindée, a été écrit vide). Les
+	// tx WASM pures et les tx anciennes laissent ces champs à nil.
+	if d.Remaining() > 0 {
+		if tx.ShieldCommitment, err = d.ReadBytes(); err != nil {
+			return fmt.Errorf("tx.shield_commitment: %w", err)
+		}
+		if tx.ShieldNote, err = d.ReadBytes(); err != nil {
+			return fmt.Errorf("tx.shield_note: %w", err)
+		}
+		if tx.SpendProof, err = d.ReadBytes(); err != nil {
+			return fmt.Errorf("tx.spend_proof: %w", err)
+		}
+		if tx.SpendPublic, err = d.ReadBytes(); err != nil {
+			return fmt.Errorf("tx.spend_public: %w", err)
 		}
 	}
 	if err := d.MustFinish(); err != nil {

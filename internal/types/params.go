@@ -39,6 +39,14 @@ type Params struct {
 	WasmCallFee    uint64 `json:"wasm_call_fee"`     // brûlé à chaque appel de contrat WASM
 	WasmMaxCodeLen uint64 `json:"wasm_max_code_len"` // taille max du bytecode déployable (anti-DoS)
 	WasmGasLimit   uint64 `json:"wasm_gas_limit"`    // borne d'arrêt déterministe par appel
+	// Pool blindé (zk-STARK maison, étage 5). PrivacyEnabled est le VERROU de
+	// sûreté, EXACTEMENT comme WasmEnabled : le système de preuve est fait-maison
+	// et NON AUDITÉ, donc le mainnet le laisse à false jusqu'à audit par la
+	// gouvernance. Les réseaux devnet/testnet l'activent (un testnet sert
+	// précisément à éprouver ça). Les tx shield/shielded_transfer/unshield sont
+	// REFUSÉES si PrivacyEnabled est false.
+	PrivacyEnabled bool   `json:"privacy_enabled"`
+	ShieldFee      uint64 `json:"shield_fee"` // frais réseau d'une tx blindée (brûlé), en plus du base fee
 }
 
 func DefaultParams() Params {
@@ -68,6 +76,11 @@ func DefaultParams() Params {
 		WasmCallFee:    1 * Unit,
 		WasmMaxCodeLen: 256 * 1024,  // 256 Kio
 		WasmGasLimit:   100_000_000, // borne d'arrêt par appel
+		// Pool blindé : DÉSACTIVÉ par défaut (= posture mainnet : pas de système
+		// de preuve fait-maison non audité en consensus). Activé explicitement en
+		// devnet/testnet (voir genèse --dev / testnet).
+		PrivacyEnabled: false,
+		ShieldFee:      1 * Unit, // frais réseau d'une tx blindée
 	}
 }
 

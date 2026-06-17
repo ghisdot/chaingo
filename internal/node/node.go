@@ -178,7 +178,8 @@ func (n *Node) initChain() error {
 		// raccourci à 5 minutes pour pouvoir tester le cycle complet.
 		devParams := types.DefaultParams()
 		devParams.UnbondingSeconds = 300
-		devParams.WasmEnabled = true // contrats WASM arbitraires : OK en devnet
+		devParams.WasmEnabled = true    // contrats WASM arbitraires : OK en devnet
+		devParams.PrivacyEnabled = true // pool blindé (zk-STARK maison) : OK en devnet
 		g = &genesis.Genesis{
 			ChainID:   "chaingo-dev-1",
 			Timestamp: time.Now().UnixMilli(),
@@ -198,7 +199,8 @@ func (n *Node) initChain() error {
 		// raccourci à 24 h pour le confort des testeurs. Faucet ouvert.
 		tParams := types.DefaultParams()
 		tParams.UnbondingSeconds = 24 * 3600
-		tParams.WasmEnabled = true // contrats WASM arbitraires : OK en testnet (épreuve avant mainnet)
+		tParams.WasmEnabled = true    // contrats WASM arbitraires : OK en testnet (épreuve avant mainnet)
+		tParams.PrivacyEnabled = true // pool blindé (zk-STARK maison) : OK en testnet (épreuve avant mainnet)
 		g = &genesis.Genesis{
 			ChainID:   "chaingo-testnet-1",
 			Timestamp: time.Now().UnixMilli(),
@@ -343,6 +345,8 @@ func (n *Node) Fees() map[string]any {
 		"wasm_call_fee":             p.WasmCallFee,
 		"wasm_max_code_len":         p.WasmMaxCodeLen,
 		"wasm_gas_limit":            p.WasmGasLimit,
+		"privacy_enabled":           p.PrivacyEnabled,
+		"shield_fee":                p.ShieldFee,
 	}
 }
 
@@ -436,6 +440,11 @@ func (n *Node) WasmContracts() []*state.WasmContract { return n.st.ListWasmContr
 func (n *Node) GetWasmContract(addr string) *state.WasmContract {
 	return n.st.GetWasmContract(addr)
 }
+
+// ShieldedPool : copie profonde du pool blindé (nil si jamais utilisé) — pour
+// l'API. Aucune fuite : l'appelant (handler) n'expose QUE des agrégats (nb de
+// notes/nullifiers, racine, balance), jamais le contenu des notes chiffrées.
+func (n *Node) ShieldedPool() *state.ShieldedPool { return n.st.GetShieldedPool() }
 func (n *Node) MempoolSize() int                                  { return n.pool.Size() }
 func (n *Node) MempoolPending(limit int) []mempool.PendingInfo    { return n.pool.Snapshot(limit) }
 func (n *Node) SupplyInfo() state.Supply              { return n.st.GetSupply() }
