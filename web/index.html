@@ -501,7 +501,10 @@
           <p>Pile <b>zk-STARK maison post-quantique</b> + un <b>circuit de transaction
           blindée fonctionnel</b> : prouve en zero-knowledge une dépense valide,
           <b>montants et destinataire cachés</b>, sécurité hash-only (zéro courbe).
-          <b>Fait-maison, non audité, hors-consensus</b> — audit communautaire ouvert.</p>
+          Durci : <b>grinding Fiat-Shamir</b>, requêtes sans remise, profondeur FRI
+          variable, <b>transactions multi-entrées / multi-sorties</b> (join-split), et
+          <b>prouveur ~77× plus rapide</b> (≈1,8 s). <b>Fait-maison, non audité,
+          hors-consensus</b> — audit communautaire ouvert.</p>
         </div>
       </div>
     </div>
@@ -615,7 +618,7 @@ const EN = {
   'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag prog">In progress · ~94%</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec, fuzzing. Remaining: external audit and independent validators.</p>`,
   'r.p4': `<h3>Phase 4 — Smart contracts <span class="tag live">Shipped · testnet</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> deployable from the studio. A <b>WASM</b> engine (arbitrary contracts) <b>wired into consensus on the testnet</b>: deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after audit.</b></p>`,
   'r.p5': `<h3>Phase 5 — Ecosystem &amp; tooling <span class="tag prog">In progress</span></h3><p>Online: explorer, no-code studio, validator dashboard, load tester, web wallet. The <b><a href="https://github.com/ghisdot/chaingo-sdk-js" rel="noopener">JavaScript</a></b> &amp; <b><a href="https://github.com/ghisdot/chaingo-sdk-py" rel="noopener">Python</a></b> SDKs have their own repos (ML-DSA-65 signing identical to the node); npm/PyPI packages coming. Next: full documentation and community presence.</p>`,
-  'r.p3': `<h3>Phase 3 — Strong anonymity <span class="tag prog">R&amp;D · prototype</span></h3><p>A <b>homemade post-quantum zk-STARK stack</b> + a <b>working shielded-transaction circuit</b>: proves a valid spend in zero-knowledge, <b>amounts and recipient hidden</b>, hash-only security (no curve). <b>Homemade, unaudited, out-of-consensus</b> — open to community audit.</p>`,
+  'r.p3': `<h3>Phase 3 — Strong anonymity <span class="tag prog">R&amp;D · prototype</span></h3><p>A <b>homemade post-quantum zk-STARK stack</b> + a <b>working shielded-transaction circuit</b>: proves a valid spend in zero-knowledge, <b>amounts and recipient hidden</b>, hash-only security (no curve). Hardened: <b>Fiat-Shamir grinding</b>, sampling without replacement, variable FRI depth, <b>multi-input / multi-output transactions</b> (join-split), and a <b>~77× faster prover</b> (≈1.8 s). <b>Homemade, unaudited, out-of-consensus</b> — open to community audit.</p>`,
   'd.kicker': `Get started`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
