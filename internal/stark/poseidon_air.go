@@ -485,7 +485,7 @@ func ProveHash(preimage Felt, n int) (Felt, HashProof) {
 
 	// --- 11) Positions de requête (transcript STARK) et ouvertures ---
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("sbox/query", sbNumQueries, bigN)
+	positions := queryPositions(tr, "sbox/query", sbNumQueries, bigN)
 
 	openings := make([]HashOpening, len(positions))
 	for i, pos := range positions {
@@ -518,7 +518,7 @@ func ProveHash(preimage Felt, n int) (Felt, HashProof) {
 // proveFRISbox lance le prouveur FRI sur les évaluations LDE du quotient DEEP
 // avec les paramètres S-box. Couche 0 = engagement de deepLDE.
 func proveFRISbox(deepLDE []Felt) FriProof {
-	return Prove(deepLDE, FriParams{Blowup: sbBlowup, NumQueries: sbNumQueries})
+	return Prove(deepLDE, FriParams{Blowup: sbBlowup, NumQueries: sbNumQueries, GrindBits: starkGrindBits})
 }
 
 // ---------------------------------------------------------------------------
@@ -549,7 +549,7 @@ func VerifyHash(digest Felt, proof HashProof) bool {
 	}
 	logBigN := log2(bigN)
 
-	friParams := FriParams{Blowup: sbBlowup, NumQueries: sbNumQueries}
+	friParams := FriParams{Blowup: sbBlowup, NumQueries: sbNumQueries, GrindBits: starkGrindBits}
 
 	// La preuve FRI doit prouver le bas degré sur le bon domaine.
 	if proof.Fri.LogDomain != logBigN {
@@ -590,7 +590,7 @@ func VerifyHash(digest Felt, proof HashProof) bool {
 	gamma := drawSboxGammas(tr)
 
 	absorbFriDigest(tr, proof.Fri)
-	positions := tr.ChallengeIndices("sbox/query", sbNumQueries, bigN)
+	positions := queryPositions(tr, "sbox/query", sbNumQueries, bigN)
 
 	// --- Contrôle algébrique hors-domaine (cohérence des contraintes en z) ---
 	if !checkSboxConstraintsAtZ(z, g, n, digest, alpha,

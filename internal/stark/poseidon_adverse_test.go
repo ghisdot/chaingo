@@ -311,7 +311,7 @@ func forgeTraceBruitee(pre Felt, n, nCorrupt int) (Felt, HashProof) {
 	deepTree := buildDeepTree(deepLDE)
 
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("sbox/query", sbNumQueries, bigN)
+	positions := queryPositions(tr, "sbox/query", sbNumQueries, bigN)
 	openings := make([]HashOpening, len(positions))
 	for i, pos := range positions {
 		openings[i] = HashOpening{

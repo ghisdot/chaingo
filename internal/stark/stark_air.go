@@ -401,7 +401,7 @@ func absorbFriDigest(tr *Transcript, p FriProof) {
 // proveFRI lance le prouveur FRI sur les évaluations LDE du quotient DEEP avec
 // les paramètres STARK. La couche 0 de la preuve engage exactement deepLDE.
 func proveFRI(deepLDE []Felt) FriProof {
-	return Prove(deepLDE, FriParams{Blowup: starkBlowup, NumQueries: starkNumQueries})
+	return Prove(deepLDE, FriParams{Blowup: starkBlowup, NumQueries: starkNumQueries, GrindBits: starkGrindBits})
 }
 
 // buildDeepTree reconstruit l'arbre de Merkle des évaluations LDE du quotient

@@ -257,7 +257,7 @@ func ProveFib(n int, publicOutput Felt) FibProof {
 	// On absorbe l'énoncé de FRI dans le transcript STARK pour lier les requêtes
 	// à la preuve FRI produite (un changement de FRI change les positions).
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("fib/query", starkNumQueries, bigN)
+	positions := queryPositions(tr, "fib/query", starkNumQueries, bigN)
 
 	openings := make([]FibOpening, len(positions))
 	for i, pos := range positions {
@@ -319,7 +319,7 @@ func VerifyFib(proof FibProof, n int, publicOutput Felt) bool {
 	logBigN := log2(bigN)
 	omegaN := RootOfUnity(logBigN)
 
-	friParams := FriParams{Blowup: starkBlowup, NumQueries: starkNumQueries}
+	friParams := FriParams{Blowup: starkBlowup, NumQueries: starkNumQueries, GrindBits: starkGrindBits}
 
 	// La preuve FRI doit prouver le bas degré sur le bon domaine.
 	if proof.Fri.LogDomain != logBigN {
@@ -363,7 +363,7 @@ func VerifyFib(proof FibProof, n int, publicOutput Felt) bool {
 	gamma := drawGammas(tr)
 
 	absorbFriDigest(tr, proof.Fri)
-	positions := tr.ChallengeIndices("fib/query", starkNumQueries, bigN)
+	positions := queryPositions(tr, "fib/query", starkNumQueries, bigN)
 
 	// --- Contrôle algébrique hors-domaine (cohérence des contraintes en z) ---
 	if !checkConstraintsAtZ(z, g, n, publicOutput, alpha,

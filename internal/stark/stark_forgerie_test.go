@@ -94,7 +94,7 @@ func TestForgerieOodMensongerCohérentEnZ(t *testing.T) {
 	deepTree := buildDeepTree(deepLDE)
 
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("fib/query", starkNumQueries, bigN)
+	positions := queryPositions(tr, "fib/query", starkNumQueries, bigN)
 	openings := make([]FibOpening, len(positions))
 	for i, pos := range positions {
 		openings[i] = FibOpening{
@@ -176,7 +176,7 @@ func TestForgerieGreffeFriIncohérente(t *testing.T) {
 	}
 	fakeLDE := evalOnLDE(fakeCoeffs, bigN)
 	fakeFri := proveFRI(fakeLDE)
-	if !Verify(fakeFri, FriParams{Blowup: starkBlowup, NumQueries: starkNumQueries}) {
+	if !Verify(fakeFri, FriParams{Blowup: starkBlowup, NumQueries: starkNumQueries, GrindBits: starkGrindBits}) {
 		t.Fatal("setup : la preuve FRI greffée devait vérifier isolément")
 	}
 	_, fakeTree := commitEvals(fakeLDE)

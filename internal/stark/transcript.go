@@ -34,6 +34,7 @@ var (
 	domAbsorb  = []byte("stark/fs/absorb\x00")
 	domFeltChl = []byte("stark/fs/challenge-felt\x00")
 	domIdxChl  = []byte("stark/fs/challenge-indices\x00")
+	domGrind   = []byte("stark/fs/grind\x00")
 )
 
 // Transcript est un canal Fiat-Shamir déterministe. Le zéro-valeur n'est PAS
@@ -284,6 +285,164 @@ func (t *Transcript) reSqueezeIndices(label string, counter uint64, n int) []byt
 	out := make([]byte, n)
 	_, _ = clone.Read(out)
 	return out
+}
+
+// ---------------------------------------------------------------------------
+// Grinding Fiat-Shamir (proof-of-work anti-grinding)
+// ---------------------------------------------------------------------------
+//
+// Le grinding ferme l'attaque de « broyage » (grinding) du défi Fiat-Shamir :
+// sans lui, un prouveur malhonnête peut REJOUER la dérivation des positions
+// d'interrogation des milliers de fois (en faisant varier un champ libre de la
+// preuve) jusqu'à tomber sur un tirage qui évite ses positions de triche — ce
+// qui réduit la soundness effective. En exigeant qu'un nonce produise un défi à
+// `bits` zéros de tête AVANT de tirer les positions, chaque tentative de broyage
+// coûte 2^bits hachages : on AJOUTE donc `bits` bits de sécurité à la soundness
+// par requête. Le coût prouveur est 2^bits hachages (≈ instantané pour bits ≤ 20)
+// ; le coût vérifieur est UN hachage.
+//
+// Protocole : le prouveur appelle Grind après avoir tout engagé (colonnes, comp,
+// FRI) et AVANT de tirer les positions. Le nonce gagnant est placé dans la preuve
+// et ré-absorbé dans le transcript (il devient une entrée publique liée). Le
+// vérifieur rejoue VerifyGrind avec le nonce de la preuve : il revérifie les
+// zéros de tête et ré-absorbe le MÊME nonce, gardant les transcripts synchrones.
+
+// grindDigest produit, SANS muter l'état vivant, un mot de 64 bits dérivé de
+// l'état courant, de l'étiquette et d'un nonce. C'est la « cible » de preuve de
+// travail : on cherche un nonce dont le digest a assez de zéros de tête.
+func (t *Transcript) grindDigest(label string, nonce uint64) uint64 {
+	clone := t.sponge.Clone()
+	prefix := labelWithDomain(domGrind, label)
+	var hdr [8]byte
+	binary.BigEndian.PutUint64(hdr[:], uint64(len(prefix)))
+	_, _ = clone.Write(hdr[:])
+	_, _ = clone.Write(prefix)
+	binary.BigEndian.PutUint64(hdr[:], nonce)
+	_, _ = clone.Write(hdr[:])
+	var out [8]byte
+	_, _ = clone.Read(out[:])
+	return binary.BigEndian.Uint64(out[:])
+}
+
+// grindOK indique si le digest du nonce a au moins `bits` zéros binaires de tête.
+// bits <= 0 accepte tout nonce (grinding désactivé).
+func (t *Transcript) grindOK(label string, nonce uint64, bits int) bool {
+	if bits <= 0 {
+		return true
+	}
+	if bits > 64 {
+		bits = 64
+	}
+	// Zéros de tête sur 64 bits : on exige digest < 2^(64-bits), c.-à-d. au moins
+	// `bits` bits de poids fort nuls.
+	return leadingZeros64(t.grindDigest(label, nonce)) >= bits
+}
+
+// Grind cherche (côté PROUVEUR) le plus petit nonce dont le défi a `bits` zéros
+// de tête, l'absorbe dans le transcript (liaison publique) et le renvoie. La
+// recherche est déterministe (parcours croissant des nonces) : même état + même
+// bits => même nonce. Coût moyen 2^bits hachages.
+func (t *Transcript) Grind(label string, bits int) uint64 {
+	var nonce uint64
+	for !t.grindOK(label, nonce, bits) {
+		nonce++
+	}
+	t.AbsorbFelt(label, FromUint64(nonce))
+	return nonce
+}
+
+// VerifyGrind rejoue (côté VÉRIFIEUR) le contrôle de grinding : il vérifie que le
+// `nonce` fourni par la preuve produit bien `bits` zéros de tête, PUIS ré-absorbe
+// ce nonce (comme l'a fait le prouveur) pour garder les transcripts synchrones.
+// Renvoie false si le nonce ne satisfait pas la preuve de travail. Le nonce est
+// absorbé dans TOUS les cas afin que, sur une preuve par ailleurs bien formée, la
+// divergence vienne du booléen et non d'un transcript désynchronisé.
+func (t *Transcript) VerifyGrind(label string, nonce uint64, bits int) bool {
+	ok := t.grindOK(label, nonce, bits)
+	t.AbsorbFelt(label, FromUint64(nonce))
+	return ok
+}
+
+// ---------------------------------------------------------------------------
+// Échantillonnage SANS REMISE des positions d'interrogation
+// ---------------------------------------------------------------------------
+
+// ChallengeIndicesDistinct renvoie `count` indices DEUX À DEUX DISTINCTS dans
+// [0, max), dérivés du transcript. Contrairement à ChallengeIndices (avec remise),
+// les doublons sont rejetés : chaque requête FRI/STARK porte alors sur une
+// position NOUVELLE, ce qui élimine le « gaspillage » de requêtes redondantes et
+// rend la soundness par requête exacte (q requêtes distinctes = q contrôles
+// indépendants, sans la perte due aux collisions de l'échantillonnage avec
+// remise).
+//
+// Déterminisme : même état + (label, count, max) => même ensemble ordonné. La
+// dérivation d'octets et le rejet de biais sont identiques à ChallengeIndices ;
+// on ajoute un ensemble « déjà vu » et on continue à tirer jusqu'à obtenir count
+// valeurs distinctes.
+//
+// Panique si count > max (impossible d'obtenir count distinctes dans [0,max)),
+// si max <= 0 ou count < 0. count == 0 renvoie un slice vide non nil.
+func (t *Transcript) ChallengeIndicesDistinct(label string, count, max int) []int {
+	if max <= 0 {
+		panic("stark: ChallengeIndicesDistinct: max doit être strictement positif")
+	}
+	if count < 0 {
+		panic("stark: ChallengeIndicesDistinct: count doit être >= 0")
+	}
+	if count > max {
+		panic("stark: ChallengeIndicesDistinct: count > max (distinctes impossibles)")
+	}
+	out := make([]int, 0, count)
+	if count == 0 {
+		return out
+	}
+
+	bitsNeeded := 0
+	for (uint64(1) << bitsNeeded) < uint64(max) {
+		bitsNeeded++
+	}
+	var mask uint64
+	if bitsNeeded > 0 {
+		mask = (uint64(1) << bitsNeeded) - 1
+	}
+
+	seen := make(map[int]struct{}, count)
+	var counter uint64
+	buf := t.squeeze(domIdxChl, label, indicesLotSize(count))
+	off := 0
+	for len(out) < count {
+		if off+8 > len(buf) {
+			counter++
+			buf = t.reSqueezeIndices(label, counter, indicesLotSize(count))
+			off = 0
+		}
+		x := binary.BigEndian.Uint64(buf[off:off+8]) & mask
+		off += 8
+		if x >= uint64(max) {
+			continue // rejet de biais
+		}
+		idx := int(x)
+		if _, dup := seen[idx]; dup {
+			continue // sans remise : on saute les doublons
+		}
+		seen[idx] = struct{}{}
+		out = append(out, idx)
+	}
+	return out
+}
+
+// leadingZeros64 renvoie le nombre de bits à zéro en tête de x (0 => 64). Repris
+// de math/bits.LeadingZeros64 pour éviter une dépendance d'import supplémentaire
+// dans ce fichier ; comportement identique.
+func leadingZeros64(x uint64) int {
+	n := 0
+	for shift := 63; shift >= 0; shift-- {
+		if x&(uint64(1)<<uint(shift)) != 0 {
+			break
+		}
+		n++
+	}
+	return n
 }
 
 // Clone renvoie une copie profonde et indépendante du transcript dans son état

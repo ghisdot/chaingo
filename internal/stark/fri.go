@@ -45,6 +45,13 @@ package stark
 // de tout autre usage du transcript dans le STARK complet.
 const friDomain = "stark/fri/v1"
 
+// starkGrindBits est le nombre de bits de grinding (proof-of-work Fiat-Shamir)
+// appliqué par les provers de PROTOCOLE (multi-colonnes, s-box, démonstrateur
+// Fibonacci). 16 bits ajoutent 16 bits de soundness pour ~2^16 hachages côté
+// prouveur (quelques dizaines de ms) et UN hachage côté vérifieur. Les tests FRI
+// bas-niveau gardent GrindBits=0 (champ par défaut) pour rester rapides.
+const starkGrindBits = 16
+
 // Conception du critère de bas degré (POINT CRUCIAL de soundness)
 // ----------------------------------------------------------------
 // Le domaine initial a une taille N = Blowup·(d+1) où d est la borne de degré
@@ -76,6 +83,26 @@ type FriParams struct {
 	// NumQueries est le nombre de positions interrogées en phase de requêtes.
 	// La soundness décroît exponentiellement avec ce nombre (ex. 32).
 	NumQueries int
+	// GrindBits est le nombre de bits de PROOF-OF-WORK (grinding) exigés avant le
+	// tirage des positions d'interrogation. 0 = désactivé. Chaque bit AJOUTE un bit
+	// de soundness en rendant le « broyage » du défi Fiat-Shamir 2× plus coûteux ;
+	// le prouveur paie 2^GrindBits hachages, le vérifieur UN. Fait partie de
+	// l'énoncé (absorbé) : prouveur et vérifieur DOIVENT s'accorder.
+	GrindBits int
+}
+
+// queryPositions tire les positions d'interrogation SANS REMISE quand c'est
+// possible (count <= max), sinon retombe sur l'échantillonnage AVEC remise.
+// L'échantillonnage sans remise élimine les requêtes redondantes (chaque position
+// distincte = un contrôle indépendant) ; le repli avec remise ne sert que pour des
+// domaines dégénérément petits (count > max), inatteignables avec des paramètres de
+// sécurité réels. Prouveur et vérifieur appliquent la MÊME règle => positions
+// identiques.
+func queryPositions(tr *Transcript, label string, count, max int) []int {
+	if count <= max {
+		return tr.ChallengeIndicesDistinct(label, count, max)
+	}
+	return tr.ChallengeIndices(label, count, max)
 }
 
 // QueryStep est l'ouverture, à une couche donnée et pour une requête donnée, du
@@ -103,6 +130,10 @@ type FriProof struct {
 	// jusqu'à l'avant-dernière incluse ; la couche finale n'est pas engagée par
 	// Merkle mais envoyée en clair).
 	LayerRoots [][32]byte
+	// PowNonce est le nonce de grinding (proof-of-work) trouvé par le prouveur :
+	// absorbé avant le tirage des positions, il atteste 2^GrindBits hachages. Le
+	// vérifieur revérifie ses bits de tête. 0 si GrindBits == 0 (grinding off).
+	PowNonce uint64
 	// FinalCoeffs sont les coefficients (ordre croissant) du polynôme de la
 	// couche finale, reconstruits par interpolation des Blowup évaluations
 	// finales et envoyés en clair. Pour une fonction réellement de bas degré, ce
@@ -237,10 +268,20 @@ func Prove(evals []Felt, params FriParams) FriProof {
 	finalCoeffs := Interpolate(cur)
 	absorbFinal(tr, finalCoeffs)
 
+	// --- Grinding (proof-of-work Fiat-Shamir) AVANT le tirage des positions ---
+	// Le nonce est lié au transcript juste après l'engagement de toute la preuve
+	// (couches + couche finale) et juste avant la dérivation des positions : un
+	// prouveur qui voudrait « broyer » les positions devrait refaire 2^GrindBits
+	// hachages à chaque tentative.
+	var powNonce uint64
+	if params.GrindBits > 0 {
+		powNonce = tr.Grind("fri/pow", params.GrindBits)
+	}
+
 	// Par construction (boucle ci-dessus), il y a au moins une couche pliée
-	// puisque n > Blowup.
+	// puisque n > Blowup. Positions SANS REMISE (cf. queryPositions).
 	firstHalf := len(layers[0].evals) / 2
-	positions := tr.ChallengeIndices("fri/query", params.NumQueries, firstHalf)
+	positions := queryPositions(tr, "fri/query", params.NumQueries, firstHalf)
 
 	queries := make([][]QueryStep, len(positions))
 	for q, pos0 := range positions {
@@ -265,6 +306,7 @@ func Prove(evals []Felt, params FriParams) FriProof {
 
 	return FriProof{
 		LogDomain:   logDomain,
+		PowNonce:    powNonce,
 		LayerRoots:  layerRoots,
 		FinalCoeffs: finalCoeffs,
 		Queries:     queries,
@@ -340,12 +382,20 @@ func Verify(proof FriProof, params FriParams) bool {
 	}
 	absorbFinal(tr, proof.FinalCoeffs)
 
+	// Contrôle de grinding : revérifie les bits de tête du nonce et ré-absorbe le
+	// même nonce (synchronisation des transcripts), à l'identique du prouveur.
+	if params.GrindBits > 0 {
+		if !tr.VerifyGrind("fri/pow", proof.PowNonce, params.GrindBits) {
+			return false
+		}
+	}
+
 	if len(proof.Queries) != params.NumQueries {
 		return false
 	}
 
 	firstHalf := n / 2
-	positions := tr.ChallengeIndices("fri/query", params.NumQueries, firstHalf)
+	positions := queryPositions(tr, "fri/query", params.NumQueries, firstHalf)
 
 	// Racine d'ordre du domaine de la première couche, pour reconstituer le
 	// point x = ω^pos à chaque couche.
@@ -459,6 +509,7 @@ func evalNaïfPoly(coeffs []Felt, x Felt) Felt {
 func absorbParams(tr *Transcript, params FriParams, logDomain uint32) {
 	tr.AbsorbFelt("fri/blowup", FromUint64(uint64(params.Blowup)))
 	tr.AbsorbFelt("fri/num-queries", FromUint64(uint64(params.NumQueries)))
+	tr.AbsorbFelt("fri/grind-bits", FromUint64(uint64(params.GrindBits)))
 	tr.AbsorbFelt("fri/log-domain", FromUint64(uint64(logDomain)))
 }
 

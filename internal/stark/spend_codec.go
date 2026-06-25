@@ -114,6 +114,13 @@ func (w *scWriter) u32(n int) {
 	w.buf = append(w.buf, b[:]...)
 }
 
+// u64 écrit un entier non signé sur 8 octets big-endian (nonce de grinding).
+func (w *scWriter) u64(n uint64) {
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], n)
+	w.buf = append(w.buf, b[:]...)
+}
+
 // felt écrit un Felt sur 8 octets big-endian (représentation canonique).
 func (w *scWriter) felt(f Felt) {
 	w.buf = append(w.buf, f.Bytes()...) // 8 octets BE
@@ -172,6 +179,15 @@ func (r *scReader) u32() (int, error) {
 		return 0, err
 	}
 	return int(binary.BigEndian.Uint32(s)), nil
+}
+
+// u64 lit un entier non signé 8 octets big-endian (nonce de grinding).
+func (r *scReader) u64() (uint64, error) {
+	s, err := r.take(8)
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(s), nil
 }
 
 // boundedLen lit une longueur préfixée (u32) et la valide contre une borne max
@@ -358,6 +374,7 @@ func scReadQueryStep(r *scReader) (QueryStep, error) {
 // Queries (chaque requête = un slice de QueryStep, longueur-préfixé).
 func scWriteFri(w *scWriter, f FriProof) {
 	w.u32(int(f.LogDomain))
+	w.u64(f.PowNonce) // nonce de grinding (proof-of-work Fiat-Shamir)
 	w.hashes(f.LayerRoots)
 	w.felts(f.FinalCoeffs)
 	w.u32(len(f.Queries))
@@ -383,6 +400,10 @@ func scReadFri(r *scReader) (FriProof, error) {
 		return f, fmt.Errorf("%w: LogDomain %d", errSCBound, logDom)
 	}
 	f.LogDomain = uint32(logDom)
+
+	if f.PowNonce, err = r.u64(); err != nil {
+		return f, err
+	}
 
 	if f.LayerRoots, err = r.hashes(scMaxFriLayers); err != nil {
 		return f, err

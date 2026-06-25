@@ -135,7 +135,7 @@ func TestSboxTraceIncorrecteÉchoue(t *testing.T) {
 	deepTree := buildDeepTree(deepLDE)
 
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("sbox/query", sbNumQueries, bigN)
+	positions := queryPositions(tr, "sbox/query", sbNumQueries, bigN)
 	openings := make([]HashOpening, len(positions))
 	for i, pos := range positions {
 		openings[i] = HashOpening{
@@ -367,7 +367,7 @@ func TestSboxForgerieOodCohérentEnZ(t *testing.T) {
 	deepTree := buildDeepTree(deepLDE)
 
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("sbox/query", sbNumQueries, bigN)
+	positions := queryPositions(tr, "sbox/query", sbNumQueries, bigN)
 	openings := make([]HashOpening, len(positions))
 	for i, pos := range positions {
 		openings[i] = HashOpening{

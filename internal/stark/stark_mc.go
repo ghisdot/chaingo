@@ -679,7 +679,7 @@ func ProveAIR(air AIR, trace [][]Felt, public ...Felt) AirProof {
 
 	// --- 11) Positions de requête (transcript STARK) et ouvertures ---
 	absorbFriDigest(tr, friProof)
-	positions := tr.ChallengeIndices("mc/query", mcNumQueries, bigN)
+	positions := queryPositions(tr, "mc/query", mcNumQueries, bigN)
 
 	openings := make([]AirOpening, len(positions))
 	for i, pos := range positions {
@@ -716,7 +716,7 @@ func ProveAIR(air AIR, trace [][]Felt, public ...Felt) AirProof {
 // proveFRImc lance le prouveur FRI sur les évaluations LDE du quotient DEEP avec
 // les paramètres multi-colonnes. Couche 0 = engagement de deepLDE.
 func proveFRImc(deepLDE []Felt) FriProof {
-	return Prove(deepLDE, FriParams{Blowup: mcBlowup, NumQueries: mcNumQueries})
+	return Prove(deepLDE, FriParams{Blowup: mcBlowup, NumQueries: mcNumQueries, GrindBits: starkGrindBits})
 }
 
 // mcAbsorbBoundaries absorbe la liste des contraintes de bord dans le transcript
@@ -782,7 +782,7 @@ func VerifyAIR(air AIR, proof AirProof, public ...Felt) bool {
 		return false
 	}
 
-	friParams := FriParams{Blowup: mcBlowup, NumQueries: mcNumQueries}
+	friParams := FriParams{Blowup: mcBlowup, NumQueries: mcNumQueries, GrindBits: starkGrindBits}
 
 	// La preuve FRI doit prouver le bas degré sur le bon domaine.
 	if proof.Fri.LogDomain != logBigN {
@@ -841,7 +841,7 @@ func VerifyAIR(air AIR, proof AirProof, public ...Felt) bool {
 	gammaZ, gammaGZ, gammaH := mcDrawGammas(tr, w)
 
 	absorbFriDigest(tr, proof.Fri)
-	positions := tr.ChallengeIndices("mc/query", mcNumQueries, bigN)
+	positions := queryPositions(tr, "mc/query", mcNumQueries, bigN)
 
 	// --- Contrôle algébrique hors-domaine (cohérence des contraintes en z) ---
 	if !mcCheckConstraintsAtZ(air, z, g, n, alphaTrans, alphaBound,
