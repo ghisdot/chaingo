@@ -93,8 +93,12 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       (`TxShield`/`TxShieldedTransfer`/`TxUnshield`), CLI `chaingo shielded`, tests d'intégration.
       **Reste l'audit (ci-dessous) avant toute activation.**
 - [ ] **Audit communautaire** (hackers) du circuit blindé — **bloquant** mainnet.
-- [ ] Durcissement : grinding Fiat-Shamir, échantillonnage sans remise, profondeur
-      variable, multi-in/out, optimisation du prouveur (~95 s → secondes).
+- [x] **Durcissement zk-STARK** (livré) : **grinding Fiat-Shamir** (+16 bits de
+      soundness), **échantillonnage des requêtes sans remise**, **profondeur de pliage
+      FRI variable** (`FoldStopBits`), **circuit M-entrées / N-sorties** (join-split,
+      conservation `Σ in = Σ out + frais`), et **prouveur ~77× plus rapide**
+      (141 s → ~1,8 s : inversion par lots, dédup des dénominateurs, parallélisation).
+      Reste : câblage codec des tx blindées au format M-in/N-out ; audit.
 
 ## Phase 4 — Smart contracts no-code
 

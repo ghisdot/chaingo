@@ -153,9 +153,16 @@ Documentation complète :
   zero-knowledge une dépense valide (appartenance Merkle + nullifier + conservation
   de valeur), **montants cachés** (masquage ZK testé) et **destinataire caché**
   (notes chiffrées ML-KEM). Sécurité hash-only (zéro courbe, zéro trusted setup).
-  ⚠️ **Fait-maison, NON audité, hors-consensus, gaté OFF** — audit communautaire de
-  hackers ouvert. Dossier de preuve : [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md).
-  Câblage on-chain livré (tx blindées gatées `PrivacyEnabled` OFF). Reste : audit + durcissement du prouveur.
+  **Durcissement livré** : **grinding Fiat-Shamir** (PoW anti-broyage, +16 bits de
+  soundness), **échantillonnage des requêtes sans remise**, **profondeur de pliage
+  FRI variable**, **transactions blindées M-entrées / N-sorties** (join-split :
+  fusion et fractionnement de notes, conservation `Σ in = Σ out + frais` prouvée),
+  et **prouveur ~77× plus rapide** (141 s → **1,8 s** : inversion par lots, suite
+  géométrique, parallélisation). ⚠️ **Fait-maison, NON audité, hors-consensus, gaté
+  OFF** — audit communautaire de hackers ouvert. Dossier de preuve :
+  [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Câblage on-chain livré (tx
+  blindées gatées `PrivacyEnabled` OFF). Reste : audit externe ; câblage codec des
+  tx M-in/N-out.
 
 Voir [ROADMAP.md](ROADMAP.md) pour le détail complet et honnête.
 

@@ -74,14 +74,16 @@ Plutôt que des comptes, le pool blindé manipule des **notes** non-dépensées 
 ### Réserves du moteur STARK (à durcir / auditer)
 
 Le moteur (`internal/stark`) est un **prototype maison non audité**. La revue adverse
-intégrée a confirmé que les forgeries testées sont rejetées, mais a relevé :
-- **Soundness concrète non paramétrée** : pas d'objectif de bits de sécurité explicite,
-  et **pas de facteur de grinding** (proof-of-work) dans le Fiat-Shamir. Avec `Blowup=8`
-  et `NumQueries=32`, c'est un prototype, pas une garantie 128 bits prouvée.
-- **Échantillonnage avec remise** : les positions de requête FRI sont tirées avec remise
-  (~26 distinctes sur 32) → le nombre *effectif* de requêtes, donc la soundness réelle,
-  est inférieur à `NumQueries`. À corriger (tirage sans remise / plus de requêtes) lors du durcissement.
-- Pas de coset, inversions non batchées, borne de degré implicite : sans impact soundness, à optimiser.
+intégrée a confirmé que les forgeries testées sont rejetées. Le **durcissement** a
+depuis résolu plusieurs réserves :
+- **Grinding Fiat-Shamir livré** (`FriParams.GrindBits`, défaut 16) : proof-of-work
+  anti-broyage avant le tirage des positions, +16 bits de soundness, coût vérifieur
+  = 1 hachage. Reste : une cible « 128 bits » formellement prouvée (analyse fine).
+- **Échantillonnage sans remise livré** (`ChallengeIndicesDistinct`) : positions de
+  requête FRI deux à deux distinctes → soundness par requête exacte.
+- **Profondeur de pliage FRI variable livrée** (`FoldStopBits`) ; **inversions par
+  lots** (Montgomery) + dédup des dénominateurs + parallélisation → prouveur ~77×
+  plus rapide ; **circuit M-entrées / N-sorties** (join-split) livré.
 
 ### Avertissements (à ne pas survendre)
 
