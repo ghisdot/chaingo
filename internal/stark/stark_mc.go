@@ -307,18 +307,32 @@ func mcCompositionLDE(air AIR, colsCoeffs [][]Felt, g Felt, n, bigN int,
 	//   3) TOUS les dénominateurs (Z_D(x_j) et (x_j - g^row)) sont collectés puis
 	//      inversés en lot (Montgomery, batchInv) : 1 inversion au total.
 
-	// (1) g^row par bord, une fois.
-	gRows := make([]Felt, numBound)
+	// (1) Dénominateurs de bord DÉDUPLIQUÉS par ligne : (x_j - g^row) ne dépend que
+	// de `row`, et de NOMBREUSES contraintes de bord partagent la même ligne (p.ex.
+	// toutes les colonnes de structure d'une même ligne). On regroupe donc par ligne
+	// DISTINCTE — sinon dens serait de taille bigN·numBound (explosion mémoire : des
+	// Go pour des circuits à milliers de bords). g^row n'est calculé qu'une fois par
+	// ligne distincte.
+	rowSlot := make(map[int]int) // row -> index de colonne dans dens
+	var distinctGRows []Felt     // g^row pour chaque ligne distincte
+	boundSlot := make([]int, numBound)
 	for b, bc := range boundaries {
-		gRows[b] = g.Exp(uint64(bc.Row))
+		slot, ok := rowSlot[bc.Row]
+		if !ok {
+			slot = len(distinctGRows)
+			rowSlot[bc.Row] = slot
+			distinctGRows = append(distinctGRows, g.Exp(uint64(bc.Row)))
+		}
+		boundSlot[b] = slot
 	}
+	numRows := len(distinctGRows)
 
 	// Collecte des dénominateurs à inverser, mis à plat par ligne :
-	//   dens[j*stride + 0]      = Z_D(x_j) = x_j^n - 1
-	//   dens[j*stride + 1 + b]  = x_j - g^{row_b}   (un par bord)
+	//   dens[j*stride + 0]          = Z_D(x_j) = x_j^n - 1
+	//   dens[j*stride + 1 + slot]   = x_j - g^{row}   (un par ligne DISTINCTE)
 	// et mémorisation du facteur de relâchement relax_j = x_j - g^(n-1) (pas
 	// d'inversion nécessaire) pour la seconde passe.
-	stride := 1 + numBound
+	stride := 1 + numRows
 	dens := make([]Felt, bigN*stride)
 	relaxes := make([]Felt, bigN)
 
@@ -327,10 +341,11 @@ func mcCompositionLDE(air AIR, colsCoeffs [][]Felt, g Felt, n, bigN int,
 	x := eta                   // x_0 = η ; ×ω à chaque pas
 	for j := 0; j < bigN; j++ {
 		// (2) Z_D(x_j) = x_j^n - 1, jamais nul sur le coset (η ∉ D).
-		dens[j*stride] = xn.Sub(one)
-		for b := 0; b < numBound; b++ {
+		base := j * stride
+		dens[base] = xn.Sub(one)
+		for s := 0; s < numRows; s++ {
 			// (x_j - g^row) non nul sur le coset (g^row ∈ D, x_j ∉ D).
-			dens[j*stride+1+b] = x.Sub(gRows[b])
+			dens[base+1+s] = x.Sub(distinctGRows[s])
 		}
 		relaxes[j] = x.Sub(gN1)
 		x = x.Mul(omega)
@@ -366,8 +381,10 @@ func mcCompositionLDE(air AIR, colsCoeffs [][]Felt, g Felt, n, bigN int,
 			}
 
 			// Contraintes de bord : Qb(x) = (T_col(x) - value)/(x - g^row).
+			// L'inverse du dénominateur est partagé par ligne distincte (boundSlot).
+			base := j * stride
 			for b, bc := range boundaries {
-				qb := colsCoset[bc.Col][j].Sub(bc.Value).Mul(dInv[j*stride+1+b])
+				qb := colsCoset[bc.Col][j].Sub(bc.Value).Mul(dInv[base+1+boundSlot[b]])
 				acc = acc.Add(alphaBound[b].Mul(qb))
 			}
 
