@@ -1,100 +1,118 @@
 // STARK MAISON — EXPÉRIMENTAL, NON AUDITÉ, hors-consensus.
 //
-// ÉTAGE 4.3 — Dépense blindée 1-ENTRÉE / N-SORTIES (note splitting).
+// ÉTAGE 4.3 — Dépense blindée M-ENTRÉES / N-SORTIES (join-split généralisé).
 //
-// Généralise le circuit 1-in/1-out (poseidon_spend_air.go) au cas d'UNE entrée
-// dépensée vers PLUSIEURS sorties (fractionnement d'une note). Le côté ENTRÉE est
-// STRICTEMENT identique au circuit 1-out (ownerTag -> inCm -> nf -> appartenance),
-// donc réutilise telle quelle la logique de glue/registres déjà éprouvée. Seul le
-// côté SORTIE change :
+// Généralise le circuit 1-in/1-out (poseidon_spend_air.go) à M entrées dépensées
+// vers N sorties. Chaque ENTRÉE i reproduit la séquence éprouvée du circuit unitaire
+// (ownerTag_i -> inCm_i -> nf_i -> appartenance_i) ; chaque SORTIE j est un bloc de
+// commitment. Tous les blocs sont enchaînés linéairement par des modes de glue :
 //
-//   - au lieu d'un unique bloc outCm, on enchaîne numOut blocs de commitment, le
-//     glue mCommitW de chaque bloc construisant l'entrée du suivant (exactement
-//     comme la chaîne d'appartenance enchaîne ses niveaux) ;
-//   - la CONSERVATION devient une somme : un registre ACCUMULATEUR regAcc additionne
-//     chaque outValue_j (déclenché par le même sélecteur mCommitW qui forme la
-//     sortie), et une contrainte finale impose inValue == Σ outValue_j + fee.
+//   - mCommitS : forme inCm_i (tag = ownerTag courant) ET ajoute inValue_i à
+//     l'accumulateur de conservation ;
+//   - mHash2   : forme nf_i = Hash2(regNk_i, inCm_i) ;
+//   - mReasmReg / mReasm : chaîne d'appartenance de l'entrée i ;
+//   - mPackNk  : à la fin de l'entrée i (< M-1), CHARGE le témoin nk_{i+1} et forme
+//     l'état pack(nk_{i+1}) = entrée du bloc ownerTag de l'entrée suivante ; c'est
+//     le mode « charge-témoin » qui permet d'enchaîner des entrées dont la clé est
+//     un secret frais (et non dérivée du bloc précédent) ;
+//   - mCommitW : forme outCm_j ET retranche outValue_j de l'accumulateur.
 //
-// La hauteur de trace (nombre de blocs · 32) doit être une puissance de 2 ; on
-// COMPLÈTE donc par des blocs IDENTITÉ inertes (active=0, aucun glue) après la
-// dernière sortie. Ces blocs ne portent aucune contrainte de hachage ni de bord.
+// CONSERVATION (accumulateur SIGNÉ) : un registre acc cumule Σ inValue_i (aux glue
+// mCommitS) MOINS Σ outValue_j (aux glue mCommitW) ; une contrainte finale impose
+// acc == fee, soit Σ inValue_i == Σ outValue_j + fee. Un seul accumulateur traite
+// donc symétriquement entrées et sorties.
 //
-// PORTÉE / GAPS : mêmes réserves que le circuit 1-out (profondeur d'arbre FIXE
-// spendDepth, pas de range proof — un wrap-around Goldilocks de la conservation
-// reste un GAP documenté, trace non masquée). 1 ENTRÉE seulement ; le multi-ENTRÉE
-// suit le même schéma d'accumulateur côté entrée et reste à faire.
+// La hauteur (nombre de blocs · 32) est complétée en puissance de 2 par des blocs
+// IDENTITÉ inertes après la dernière sortie.
+//
+// PORTÉE / GAPS : mêmes réserves que le circuit unitaire (profondeur d'arbre FIXE
+// spendDepth, PAS de range proof — un wrap-around Goldilocks de la conservation
+// reste un GAP documenté, trace non masquée, paramètres Poseidon non audités).
+// L'unicité des nullifiers (anti double-dépense, y compris ENTRE les M entrées) est
+// vérifiée HORS-circuit par le pool blindé.
 //
 // DÉTERMINISME ABSOLU : aucun time/rand ; tout l'aléa vient de ProveAIR/VerifyAIR.
 package stark
 
 // ---------------------------------------------------------------------------
-// Disposition (réutilise le layout de colonnes du circuit 1-out + 2 colonnes)
+// Disposition (réutilise le layout de colonnes du circuit unitaire + 3 colonnes)
 // ---------------------------------------------------------------------------
 
 const (
-	// snInBlocks = blocs du côté ENTRÉE : ownerTag(1) + inCm(1) + nf(1) +
+	// snInBlocks = blocs par ENTRÉE : ownerTag(1) + inCm(1) + nf(1) +
 	// appartenance(spendDepth) = spendDepth + 3 (= 7 pour d=4).
 	snInBlocks = spendDepth + 3
 
-	// Colonnes ajoutées au layout du circuit 1-out (qui occupe [0, spNumCols)).
-	snRegAccCol = spNumCols     // accumulateur Σ outValue_j (porté)
+	// Colonnes ajoutées au layout du circuit unitaire (qui occupe [0, spNumCols)).
+	snRegAccCol = spNumCols     // accumulateur SIGNÉ Σ inValue_i - Σ outValue_j (porté)
 	snConsCol   = spNumCols + 1 // sélecteur PUBLIC : ligne de conservation finale
-	snNumCols   = spNumCols + 2 // largeur totale du circuit N-sorties
+	snMPackNk   = spNumCols + 2 // mode de glue « charge-témoin » : pack(nk_{i+1})
+	snNumCols   = spNumCols + 3 // largeur totale du circuit M-in/N-out
 
-	// Résidus : les 23 du circuit 1-out, MOINS sa conservation mono-sortie, PLUS
-	// (accumulateur) + (conservation par accumulateur) = 23 - 1 + 2 = 24.
-	snNumResidues = spNumResidues + 1
+	// Résidus : 12 (état) + 4 (regNk) + 4 (regCm) + 1 (binarité bit) +
+	// 1 (accumulateur) + 1 (conservation) = 23. (regVal du circuit unitaire est
+	// remplacé par l'accumulateur signé.)
+	snNumResidues = pfStateCols + poseidonDigestLen + poseidonDigestLen + 1 + 1 + 1
 )
 
-// snBlkOutput0 est l'indice du PREMIER bloc de sortie (juste après l'entrée).
-const snBlkOutput0 = snInBlocks
+// snInputBase renvoie l'indice du premier bloc de l'entrée i.
+func snInputBase(i int) int { return i * snInBlocks }
 
-// snRealBlocks renvoie le nombre de blocs RÉELS (entrée + numOut sorties), avant
-// complétion en puissance de 2.
-func snRealBlocks(numOut int) int { return snInBlocks + numOut }
+// snBlkOwner_/snBlkInCm_/snBlkNf_/snBlkMemL_ : indices de blocs de l'entrée i.
+func snBlkOwnerI(i int) int { return snInputBase(i) }
+func snBlkInCmI(i int) int  { return snInputBase(i) + 1 }
+func snBlkNfI(i int) int    { return snInputBase(i) + 2 }
+func snBlkMem0I(i int) int  { return snInputBase(i) + 3 }
+func snBlkMemLI(i int) int  { return snInputBase(i) + 3 + spendDepth - 1 }
 
-// snTotalBlocks renvoie le nombre de blocs APRÈS complétion identité (puissance de
-// 2 de blocs, donc hauteur = ·32 puissance de 2 pour la NTT).
-func snTotalBlocks(numOut int) int { return nextPow2(snRealBlocks(numOut)) }
+// snOutputBase renvoie l'indice du premier bloc de SORTIE (après les M entrées).
+func snOutputBase(numIn int) int { return numIn * snInBlocks }
 
-// snSteps renvoie la hauteur de trace (puissance de 2).
-func snSteps(numOut int) int { return snTotalBlocks(numOut) * spBlock }
+// snBlkOutputJ renvoie l'indice de bloc de la sortie j.
+func snBlkOutputJ(numIn, j int) int { return snOutputBase(numIn) + j }
 
-// snBlkOutput renvoie l'indice de bloc de la j-ème sortie.
-func snBlkOutput(j int) int { return snBlkOutput0 + j }
+// snRealBlocks / snTotalBlocks / snSteps : tailles (avant et après complétion).
+func snRealBlocks(numIn, numOut int) int { return numIn*snInBlocks + numOut }
+func snTotalBlocks(numIn, numOut int) int {
+	return nextPow2(snRealBlocks(numIn, numOut))
+}
+func snSteps(numIn, numOut int) int { return snTotalBlocks(numIn, numOut) * spBlock }
 
-// snConsRow renvoie la ligne de conservation : la ligne de SORTIE de la DERNIÈRE
-// sortie (regAcc y vaut la somme totale, regVal y vaut encore inValue).
-func snConsRow(numOut int) int { return spOutputRowOf(snBlkOutput(numOut - 1)) }
+// snConsRow : ligne de conservation = ligne de sortie de la DERNIÈRE sortie.
+func snConsRow(numIn, numOut int) int {
+	return spOutputRowOf(snBlkOutputJ(numIn, numOut-1))
+}
 
 // ---------------------------------------------------------------------------
 // Témoin / énoncé
 // ---------------------------------------------------------------------------
 
-// SpendNOut décrit UNE note de sortie (témoin privé : value/owner/rho).
+// SpendNIn décrit UNE note d'entrée dépensée (témoin privé).
+type SpendNIn struct {
+	Value Felt
+	Rho   [poseidonDigestLen]Felt
+	Nk    [poseidonDigestLen]Felt
+	Path  SpendPath
+}
+
+// SpendNOut décrit UNE note de sortie (témoin privé).
 type SpendNOut struct {
 	Value    Felt
 	OwnerTag [poseidonDigestLen]Felt
 	Rho      [poseidonDigestLen]Felt
 }
 
-// SpendNWitness est le témoin d'une dépense 1-entrée / N-sorties. Le côté entrée
-// est identique à SpendWitness ; le côté sortie est un slice (len == numOut >= 1).
+// SpendNWitness est le témoin d'une dépense M-entrées / N-sorties (M,N >= 1).
 type SpendNWitness struct {
-	// Entrée (identique à SpendWitness).
-	InValue Felt
-	InRho   [poseidonDigestLen]Felt
-	Nk      [poseidonDigestLen]Felt
-	Path    SpendPath
-	// Sorties (au moins une).
+	Ins  []SpendNIn
 	Outs []SpendNOut
 }
 
-// SpendNPublic est l'énoncé public : racine, nullifier (unique : une entrée),
-// les numOut engagements de sortie, et les frais.
+// SpendNPublic est l'énoncé public : racine commune, un nullifier par entrée, un
+// engagement par sortie, et les frais.
 type SpendNPublic struct {
 	MerkleRoot [poseidonDigestLen]Felt
-	Nf         [poseidonDigestLen]Felt
+	Nfs        [][poseidonDigestLen]Felt
 	OutCms     [][poseidonDigestLen]Felt
 	Fee        Felt
 }
@@ -105,19 +123,19 @@ type SpendNPublic struct {
 
 type spendNAIR struct {
 	merkleRoot [poseidonDigestLen]Felt
-	nf         [poseidonDigestLen]Felt
+	nfs        [][poseidonDigestLen]Felt
 	outCms     [][poseidonDigestLen]Felt
 	fee        Felt
+	numIn      int
 	numOut     int
 }
 
 func (a spendNAIR) NumColumns() int { return snNumCols }
-func (a spendNAIR) NumSteps() int   { return snSteps(a.numOut) }
+func (a spendNAIR) NumSteps() int   { return snSteps(a.numIn, a.numOut) }
 func (a spendNAIR) MaxDegree() int  { return spMaxDegree }
 
-// EvalTransition : réplique EXACTE des branches ronde/glue/registres du circuit
-// 1-out (poseidon_spend_air.go) pour l'état et regNk/regCm/regVal/bit, puis
-// remplace la conservation mono-sortie par (accumulateur) + (conservation finale).
+// EvalTransition : branches ronde/glue/registres du circuit unitaire, étendues du
+// mode mPackNk (charge-témoin) et de l'accumulateur signé de conservation.
 func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 	one := One()
 	fsel := cur[spFselCol]
@@ -129,6 +147,7 @@ func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 	mReasmReg := cur[spMReasmReg]
 	mReasm := cur[spMReasm]
 	mCommitW := cur[spMCommitW]
+	mPackNk := cur[snMPackNk]
 
 	// Ronde Poseidon.
 	var arc [pfStateCols]Felt
@@ -163,6 +182,7 @@ func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 	domainSep := FromUint64(poseidonDomainSep)
 	rateF := FromUint64(uint64(poseidonRate))
 	commitSep := FromUint64(spCommitSep)
+	ownerSep := FromUint64(spOwnerSep)
 
 	var commitS, commitW [pfStateCols]Felt
 	for k := 0; k < poseidonDigestLen; k++ {
@@ -197,12 +217,19 @@ func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 	reasm[poseidonRate+1] = rateF
 	reasmReg[poseidonRate+1] = rateF
 
-	sumModes := mCommitS.Add(mHash2).Add(mReasmReg).Add(mReasm).Add(mCommitW)
+	// mPackNk : pack(nk) = [ wTag(nk)(4) | 0(4) | spOwnerSep | 0 | 0 | 0 ].
+	var packNk [pfStateCols]Felt
+	for k := 0; k < poseidonDigestLen; k++ {
+		packNk[k] = wTag[k]
+	}
+	packNk[poseidonRate] = ownerSep
+
+	sumModes := mCommitS.Add(mHash2).Add(mReasmReg).Add(mReasm).Add(mCommitW).Add(mPackNk)
 	idfac := one.Sub(active).Sub(sumModes)
 
 	residues := make([]Felt, snNumResidues)
 
-	// 12 résidus d'état (identique au circuit 1-out).
+	// 12 résidus d'état.
 	for k := 0; k < pfStateCols; k++ {
 		acc := Zero()
 		row := &params.mds[k]
@@ -215,17 +242,16 @@ func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 			Add(mReasmReg.Mul(reasmReg[k])).
 			Add(mReasm.Mul(reasm[k])).
 			Add(mCommitW.Mul(commitW[k])).
+			Add(mPackNk.Mul(packNk[k])).
 			Add(idfac.Mul(cur[spStateOff+k]))
 		residues[k] = next[spStateOff+k].Sub(outk)
 	}
 
-	// Registres (identique au circuit 1-out).
+	// Registres regNk / regCm (load/hold par entrée).
 	loadNk := cur[spLoadNk]
 	holdNk := cur[spHoldNk]
 	loadCm := cur[spLoadCm]
 	holdCm := cur[spHoldCm]
-	loadVal := cur[spLoadVal]
-	holdVal := cur[spHoldVal]
 
 	idx := pfStateCols
 	for k := 0; k < poseidonDigestLen; k++ {
@@ -240,42 +266,36 @@ func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 		residues[idx] = loadRes.Add(holdRes)
 		idx++
 	}
-	{
-		loadRes := loadVal.Mul(cur[spRegValCol].Sub(wVal))
-		holdRes := holdVal.Mul(next[spRegValCol].Sub(cur[spRegValCol]))
-		residues[idx] = loadRes.Add(holdRes)
-		idx++
-	}
 
 	// Binarité du bit (lignes de ré-assemblage).
 	reasmAny := mReasmReg.Add(mReasm)
 	residues[idx] = reasmAny.Mul(bit).Mul(bit.Sub(one))
 	idx++
 
-	// --- ACCUMULATEUR de conservation ---
-	// next.regAcc = cur.regAcc + mCommitW·wVal : chaque glue de sortie (mCommitW)
-	// ajoute sa valeur outValue_j ; partout ailleurs (mCommitW=0) regAcc est tenu.
-	residues[idx] = next[snRegAccCol].Sub(cur[snRegAccCol]).Sub(mCommitW.Mul(wVal))
+	// ACCUMULATEUR SIGNÉ : next.acc = cur.acc + mCommitS·wVal - mCommitW·wVal.
+	// Chaque commit d'ENTRÉE (mCommitS, wVal=inValue_i) ajoute, chaque commit de
+	// SORTIE (mCommitW, wVal=outValue_j) retranche. Tenu partout ailleurs.
+	delta := mCommitS.Mul(wVal).Sub(mCommitW.Mul(wVal))
+	residues[idx] = next[snRegAccCol].Sub(cur[snRegAccCol]).Sub(delta)
 	idx++
 
-	// --- CONSERVATION finale ---
-	// sur la ligne de conservation (snCons=1) : regVal (= inValue) doit valoir
-	// regAcc (= Σ outValue_j) + fee.
+	// CONSERVATION : sur la ligne finale (snCons=1), acc doit valoir fee, soit
+	// Σ inValue_i - Σ outValue_j == fee.
 	cons := cur[snConsCol]
-	residues[idx] = cons.Mul(cur[spRegValCol].Sub(cur[snRegAccCol]).Sub(cur[spFeeCol]))
+	residues[idx] = cons.Mul(cur[snRegAccCol].Sub(cur[spFeeCol]))
 	idx++
 
 	return residues
 }
 
-// Boundaries : structure par ligne (avec snCons), capacités des blocs entrée +
-// sorties, init regAcc=0 (ligne 0), et sorties publiques (nf, racine, chaque outCm).
+// Boundaries : structure par ligne, capacités des blocs (entrées + sorties),
+// init acc=0, et sorties publiques (nf_i, racine_i == merkleRoot, outCm_j).
 func (a spendNAIR) Boundaries() []Boundary {
 	steps := a.NumSteps()
-	bs := make([]Boundary, 0, steps*16)
+	bs := make([]Boundary, 0, steps*18)
 
 	for row := 0; row < steps; row++ {
-		st := spendNRowStructure(row, a.fee, a.numOut)
+		st := spendNRowStructure(row, a.fee, a.numIn, a.numOut)
 		for k := 0; k < pfStateCols; k++ {
 			bs = append(bs, Boundary{Col: spRcOff + k, Row: row, Value: st.rc[k]})
 		}
@@ -286,37 +306,42 @@ func (a spendNAIR) Boundaries() []Boundary {
 		bs = append(bs, Boundary{Col: spMReasmReg, Row: row, Value: st.mReasmReg})
 		bs = append(bs, Boundary{Col: spMReasm, Row: row, Value: st.mReasm})
 		bs = append(bs, Boundary{Col: spMCommitW, Row: row, Value: st.mCommitW})
+		bs = append(bs, Boundary{Col: snMPackNk, Row: row, Value: st.mPackNk})
 		bs = append(bs, Boundary{Col: spLoadNk, Row: row, Value: st.loadNk})
 		bs = append(bs, Boundary{Col: spHoldNk, Row: row, Value: st.holdNk})
 		bs = append(bs, Boundary{Col: spLoadCm, Row: row, Value: st.loadCm})
 		bs = append(bs, Boundary{Col: spHoldCm, Row: row, Value: st.holdCm})
-		bs = append(bs, Boundary{Col: spLoadVal, Row: row, Value: st.loadVal})
-		bs = append(bs, Boundary{Col: spHoldVal, Row: row, Value: st.holdVal})
 		bs = append(bs, Boundary{Col: spFeeCol, Row: row, Value: st.fee})
 		bs = append(bs, Boundary{Col: snConsCol, Row: row, Value: st.cons})
 	}
 
-	// Capacités d'entrée (identiques au circuit 1-out).
-	addCap(&bs, spBlkOwner*spBlock, FromUint64(spOwnerSep), Zero(), Zero(), Zero())
-	addCapPartial(&bs, spBlkInCm*spBlock)
-	addCap(&bs, spBlkNf*spBlock, FromUint64(poseidonDomainSep), FromUint64(uint64(poseidonRate)), Zero(), Zero())
-	for lvl := 0; lvl < spendDepth; lvl++ {
-		addCap(&bs, (spBlkMem0+lvl)*spBlock, FromUint64(poseidonDomainSep), FromUint64(uint64(poseidonRate)), Zero(), Zero())
+	// Capacités par ENTRÉE.
+	for i := 0; i < a.numIn; i++ {
+		addCap(&bs, snBlkOwnerI(i)*spBlock, FromUint64(spOwnerSep), Zero(), Zero(), Zero())
+		addCapPartial(&bs, snBlkInCmI(i)*spBlock)
+		addCap(&bs, snBlkNfI(i)*spBlock, FromUint64(poseidonDomainSep), FromUint64(uint64(poseidonRate)), Zero(), Zero())
+		for lvl := 0; lvl < spendDepth; lvl++ {
+			addCap(&bs, (snBlkMem0I(i)+lvl)*spBlock, FromUint64(poseidonDomainSep), FromUint64(uint64(poseidonRate)), Zero(), Zero())
+		}
 	}
-	// Capacités de CHAQUE bloc de sortie (commitment).
+	// Capacités de chaque bloc de SORTIE.
 	for j := 0; j < a.numOut; j++ {
-		addCapPartial(&bs, snBlkOutput(j)*spBlock)
+		addCapPartial(&bs, snBlkOutputJ(a.numIn, j)*spBlock)
 	}
 
-	// Init de l'accumulateur : regAcc == 0 à la ligne 0.
+	// Init de l'accumulateur : acc == 0 à la ligne 0.
 	bs = append(bs, Boundary{Col: snRegAccCol, Row: 0, Value: Zero()})
 
 	// Sorties publiques.
 	for k := 0; k < poseidonDigestLen; k++ {
-		bs = append(bs, Boundary{Col: spStateOff + k, Row: spNfRow(), Value: a.nf[k]})
-		bs = append(bs, Boundary{Col: spStateOff + k, Row: spRootRow(), Value: a.merkleRoot[k]})
+		for i := 0; i < a.numIn; i++ {
+			// Nullifier de l'entrée i (sortie du bloc nf_i).
+			bs = append(bs, Boundary{Col: spStateOff + k, Row: spOutputRowOf(snBlkNfI(i)), Value: a.nfs[i][k]})
+			// Racine d'appartenance de l'entrée i (== racine commune).
+			bs = append(bs, Boundary{Col: spStateOff + k, Row: spOutputRowOf(snBlkMemLI(i)), Value: a.merkleRoot[k]})
+		}
 		for j := 0; j < a.numOut; j++ {
-			bs = append(bs, Boundary{Col: spStateOff + k, Row: spOutputRowOf(snBlkOutput(j)), Value: a.outCms[j][k]})
+			bs = append(bs, Boundary{Col: spStateOff + k, Row: spOutputRowOf(snBlkOutputJ(a.numIn, j)), Value: a.outCms[j][k]})
 		}
 	}
 
@@ -324,31 +349,30 @@ func (a spendNAIR) Boundaries() []Boundary {
 }
 
 // ---------------------------------------------------------------------------
-// Structure par ligne (généralise spendRowStructure au côté N-sorties)
+// Structure par ligne
 // ---------------------------------------------------------------------------
 
 type spendNStructure struct {
-	rc                                              [pfStateCols]Felt
-	fsel, active                                    Felt
-	mCommitS, mHash2, mReasmReg, mReasm, mCommitW    Felt
-	loadNk, holdNk, loadCm, holdCm, loadVal, holdVal Felt
-	fee, cons                                       Felt
+	rc                                                     [pfStateCols]Felt
+	fsel, active                                           Felt
+	mCommitS, mHash2, mReasmReg, mReasm, mCommitW, mPackNk Felt
+	loadNk, holdNk, loadCm, holdCm                         Felt
+	fee, cons                                              Felt
 }
 
-func spendNRowStructure(row int, fee Felt, numOut int) spendNStructure {
+func spendNRowStructure(row int, fee Felt, numIn, numOut int) spendNStructure {
 	var s spendNStructure
 	block := row / spBlock
 	r := row % spBlock
-	realBlocks := snRealBlocks(numOut)
-	memL := spBlkMem0 + spendDepth - 1
-	lastOut := snBlkOutput(numOut - 1)
+	realBlocks := snRealBlocks(numIn, numOut)
+	outputBase := snOutputBase(numIn)
 
-	// Blocs de COMPLÉTION (identité) : aucune ronde, aucun glue, aucun registre.
+	// Blocs de complétion (identité).
 	if block >= realBlocks {
 		return s
 	}
 
-	// Rondes Poseidon réelles (0..29) de chaque bloc réel.
+	// Rondes Poseidon réelles (0..29).
 	if r < poseidonTotalRounds {
 		s.rc = params.roundConstants[r]
 		s.active = One()
@@ -357,55 +381,67 @@ func spendNRowStructure(row int, fee Felt, numOut int) spendNStructure {
 		}
 	}
 
-	// Glue sur la ligne de sortie (r == pfOutputRow).
+	// Classification du bloc.
+	isInput := block < outputBase
+	var inI, within, outJ int
+	if isInput {
+		inI = block / snInBlocks
+		within = block % snInBlocks // 0=owner,1=inCm,2=nf,3..=mem
+	} else {
+		outJ = block - outputBase
+	}
+
+	// Glue sur la ligne de sortie.
 	if r == pfOutputRow {
 		switch {
-		case block == spBlkOwner:
-			s.mCommitS = One() // ownerTag -> inCm
-		case block == spBlkInCm:
-			s.mHash2 = One() // inCm -> nf
-		case block == spBlkNf:
-			s.mReasmReg = One() // nf -> appartenance L0 (child = regCm)
-		case block >= spBlkMem0 && block < memL:
-			s.mReasm = One() // niveau d'appartenance i -> i+1
-		case block == memL:
-			s.mCommitW = One() // dernier niveau -> sortie 0
-		case block >= snBlkOutput0 && block < lastOut:
-			s.mCommitW = One() // sortie j -> sortie j+1
-		case block == lastOut:
-			// dernière sortie : pas de glue (identité), conservation ici.
+		case isInput && within == 0:
+			s.mCommitS = One() // ownerTag_i -> inCm_i (+inValue_i)
+		case isInput && within == 1:
+			s.mHash2 = One() // inCm_i -> nf_i
+		case isInput && within == 2:
+			s.mReasmReg = One() // nf_i -> appartenance L0 (child = regCm_i)
+		case isInput && within >= 3 && within < snInBlocks-1:
+			s.mReasm = One() // niveau d'appartenance l -> l+1
+		case isInput && within == snInBlocks-1:
+			// dernier niveau d'appartenance de l'entrée i.
+			if inI < numIn-1 {
+				s.mPackNk = One() // -> ownerTag de l'entrée i+1 (charge nk_{i+1})
+			} else {
+				s.mCommitW = One() // dernière entrée -> sortie 0 (-outValue_0)
+			}
+		case !isInput && outJ < numOut-1:
+			s.mCommitW = One() // sortie j -> sortie j+1 (-outValue_{j+1})
+		case !isInput && outJ == numOut-1:
+			// dernière sortie : pas de glue (conservation ici).
 		}
 	}
 
-	// regNk : chargé ligne 0, tenu jusqu'avant la ligne nf-glue.
-	if row == 0 {
-		s.loadNk = One()
-	}
-	if row < spNfRow() {
-		s.holdNk = One()
+	// Registres regNk / regCm, par ENTRÉE.
+	if isInput {
+		ownerRow0 := snBlkOwnerI(inI) * spBlock
+		inCmOutRow := spOutputRowOf(snBlkInCmI(inI))
+		nfOutRow := spOutputRowOf(snBlkNfI(inI))
+
+		// regNk_i : chargé à la ligne 0 du bloc ownerTag_i, tenu jusqu'à la ligne
+		// mHash2 (sortie inCm_i) où il est relu.
+		if row == ownerRow0 {
+			s.loadNk = One()
+		}
+		if row >= ownerRow0 && row < inCmOutRow {
+			s.holdNk = One()
+		}
+		// regCm_i : chargé en sortie inCm_i, tenu jusqu'à la ligne mReasmReg
+		// (sortie nf_i) où il est relu.
+		if row == inCmOutRow {
+			s.loadCm = One()
+		}
+		if row >= inCmOutRow && row < nfOutRow {
+			s.holdCm = One()
+		}
 	}
 
-	// regCm : chargé en sortie inCm, tenu jusqu'avant la ligne nf-glue.
-	loadCmRow := spOutputRowOf(spBlkInCm)
-	if row == loadCmRow {
-		s.loadCm = One()
-	}
-	if row >= loadCmRow && row < spNfRow() {
-		s.holdCm = One()
-	}
-
-	// regVal : chargé à la glue inCm (mCommitS, wVal=inValue), tenu jusqu'à la
-	// ligne de conservation (sortie de la DERNIÈRE sortie).
-	loadValRow := spOutputRowOf(spBlkOwner)
-	consRow := snConsRow(numOut)
-	if row == loadValRow {
-		s.loadVal = One()
-	}
-	if row >= loadValRow && row < consRow {
-		s.holdVal = One()
-	}
-
-	// fee + sélecteur de conservation : uniquement sur la ligne de conservation.
+	// fee + conservation sur la ligne finale.
+	consRow := snConsRow(numIn, numOut)
 	if row == consRow {
 		s.fee = fee
 		s.cons = One()
@@ -418,15 +454,12 @@ func spendNRowStructure(row int, fee Felt, numOut int) spendNStructure {
 // Construction de la trace
 // ---------------------------------------------------------------------------
 
-// spFillBlockN remplit un bloc à partir de l'état d'entrée `in`, en respectant la
-// structure N-sorties. Pour un bloc de complétion (active=0), l'état est tenu
-// constant (pas de ronde) ; pour un bloc réel, identique à spFillBlock.
-func spFillBlockN(trace [][]Felt, b int, in [pfStateCols]Felt, fee Felt, numOut int) (output [pfStateCols]Felt) {
+func spFillBlockN(trace [][]Felt, b int, in [pfStateCols]Felt, fee Felt, numIn, numOut int) {
 	base := b * spBlock
 	s := in
 	for r := 0; r < spBlock; r++ {
 		row := base + r
-		st := spendNRowStructure(row, fee, numOut)
+		st := spendNRowStructure(row, fee, numIn, numOut)
 		line := make([]Felt, snNumCols)
 		for k := 0; k < pfStateCols; k++ {
 			line[spStateOff+k] = s[k]
@@ -439,182 +472,207 @@ func spFillBlockN(trace [][]Felt, b int, in [pfStateCols]Felt, fee Felt, numOut 
 		line[spMReasmReg] = st.mReasmReg
 		line[spMReasm] = st.mReasm
 		line[spMCommitW] = st.mCommitW
+		line[snMPackNk] = st.mPackNk
 		line[spLoadNk] = st.loadNk
 		line[spHoldNk] = st.holdNk
 		line[spLoadCm] = st.loadCm
 		line[spHoldCm] = st.holdCm
-		line[spLoadVal] = st.loadVal
-		line[spHoldVal] = st.holdVal
 		line[spFeeCol] = st.fee
 		line[snConsCol] = st.cons
 		trace[row] = line
 
-		// Avance de l'état uniquement sur les rondes ACTIVES (blocs réels).
 		if r < poseidonTotalRounds && !st.active.IsZero() {
 			s = pfApplyRound(s, st.rc, !st.fsel.IsZero())
 		}
 	}
-	return s
 }
 
-// buildSpendNTrace construit la trace satisfaisante 1-entrée/N-sorties et renvoie
-// l'énoncé public reconstruit.
-func buildSpendNTrace(w SpendNWitness, fee Felt) (trace [][]Felt, public SpendNPublic) {
-	numOut := len(w.Outs)
-	if numOut < 1 {
-		panic("stark: buildSpendNTrace: au moins une sortie requise")
+// snOverwriteService écrase l'état de la ligne de service (31) du bloc b par nextIn.
+func snOverwriteService(trace [][]Felt, b int, nextIn [pfStateCols]Felt) {
+	row := b*spBlock + (spBlock - 1)
+	for k := 0; k < pfStateCols; k++ {
+		trace[row][spStateOff+k] = nextIn[k]
 	}
-	for i := 0; i < spendDepth; i++ {
-		if !(w.Path.Bits[i].IsZero() || w.Path.Bits[i].Equal(One())) {
-			panic("stark: buildSpendNTrace: bit de direction non binaire")
+}
+
+// buildSpendNTrace construit la trace satisfaisante M-entrées/N-sorties.
+func buildSpendNTrace(w SpendNWitness, fee Felt) (trace [][]Felt, public SpendNPublic) {
+	numIn := len(w.Ins)
+	numOut := len(w.Outs)
+	if numIn < 1 || numOut < 1 {
+		panic("stark: buildSpendNTrace: au moins une entrée et une sortie")
+	}
+	for i := 0; i < numIn; i++ {
+		for l := 0; l < spendDepth; l++ {
+			if !(w.Ins[i].Path.Bits[l].IsZero() || w.Ins[i].Path.Bits[l].Equal(One())) {
+				panic("stark: buildSpendNTrace: bit de direction non binaire")
+			}
 		}
 	}
 
-	steps := snSteps(numOut)
+	steps := snSteps(numIn, numOut)
 	trace = make([][]Felt, steps)
 
-	// Valeurs natives.
-	ownerTag := SpendOwnerTag(w.Nk)
-	inCm := SpendCommit(w.InValue, ownerTag, w.InRho)
-	nf := SpendNullifier(w.Nk, inCm)
-	merkleRoot := spChainRoot(inCm, w.Path)
+	// Valeurs natives par entrée.
+	ownerTag := make([][poseidonDigestLen]Felt, numIn)
+	inCm := make([][poseidonDigestLen]Felt, numIn)
+	nfs := make([][poseidonDigestLen]Felt, numIn)
+	var merkleRoot [poseidonDigestLen]Felt
+	inOwnerState := make([][pfStateCols]Felt, numIn)
+	inInCmState := make([][pfStateCols]Felt, numIn)
+	inNfState := make([][pfStateCols]Felt, numIn)
+	memIn := make([][spendDepth][pfStateCols]Felt, numIn)
+	for i := 0; i < numIn; i++ {
+		in := w.Ins[i]
+		ownerTag[i] = SpendOwnerTag(in.Nk)
+		inCm[i] = SpendCommit(in.Value, ownerTag[i], in.Rho)
+		nfs[i] = SpendNullifier(in.Nk, inCm[i])
+		root := spChainRoot(inCm[i], in.Path)
+		if i == 0 {
+			merkleRoot = root
+		}
+		inOwnerState[i] = spOwnerTagState(in.Nk)
+		inInCmState[i] = spCommitState(in.Value, ownerTag[i], in.Rho)
+		inNfState[i] = spHash2State(in.Nk, inCm[i])
+		child := inCm[i]
+		for lvl := 0; lvl < spendDepth; lvl++ {
+			memIn[i][lvl] = spReasmState(child, in.Path.Siblings[lvl], in.Path.Bits[lvl])
+			child = spChainStep(child, in.Path.Siblings[lvl], in.Path.Bits[lvl])
+		}
+	}
+
+	// Valeurs natives par sortie.
 	outCms := make([][poseidonDigestLen]Felt, numOut)
+	outState := make([][pfStateCols]Felt, numOut)
 	for j := 0; j < numOut; j++ {
-		outCms[j] = SpendCommit(w.Outs[j].Value, w.Outs[j].OwnerTag, w.Outs[j].Rho)
+		o := w.Outs[j]
+		outCms[j] = SpendCommit(o.Value, o.OwnerTag, o.Rho)
+		outState[j] = spCommitState(o.Value, o.OwnerTag, o.Rho)
 	}
-
-	// États d'entrée natifs des blocs.
-	inOwner := spOwnerTagState(w.Nk)
-	inInCm := spCommitState(w.InValue, ownerTag, w.InRho)
-	inNf := spHash2State(w.Nk, inCm)
-	var memIn [spendDepth][pfStateCols]Felt
-	child := inCm
-	for lvl := 0; lvl < spendDepth; lvl++ {
-		memIn[lvl] = spReasmState(child, w.Path.Siblings[lvl], w.Path.Bits[lvl])
-		child = spChainStep(child, w.Path.Siblings[lvl], w.Path.Bits[lvl])
-	}
-	outIn := make([][pfStateCols]Felt, numOut)
-	for j := 0; j < numOut; j++ {
-		outIn[j] = spCommitState(w.Outs[j].Value, w.Outs[j].OwnerTag, w.Outs[j].Rho)
-	}
-
-	memL := spBlkMem0 + spendDepth - 1
 
 	// Remplissage des blocs réels.
-	spFillBlockN(trace, spBlkOwner, inOwner, fee, numOut)
-	spFillBlockN(trace, spBlkInCm, inInCm, fee, numOut)
-	spFillBlockN(trace, spBlkNf, inNf, fee, numOut)
-	for lvl := 0; lvl < spendDepth; lvl++ {
-		spFillBlockN(trace, spBlkMem0+lvl, memIn[lvl], fee, numOut)
+	for i := 0; i < numIn; i++ {
+		spFillBlockN(trace, snBlkOwnerI(i), inOwnerState[i], fee, numIn, numOut)
+		spFillBlockN(trace, snBlkInCmI(i), inInCmState[i], fee, numIn, numOut)
+		spFillBlockN(trace, snBlkNfI(i), inNfState[i], fee, numIn, numOut)
+		for lvl := 0; lvl < spendDepth; lvl++ {
+			spFillBlockN(trace, snBlkMem0I(i)+lvl, memIn[i][lvl], fee, numIn, numOut)
+		}
 	}
 	for j := 0; j < numOut; j++ {
-		spFillBlockN(trace, snBlkOutput(j), outIn[j], fee, numOut)
+		spFillBlockN(trace, snBlkOutputJ(numIn, j), outState[j], fee, numIn, numOut)
 	}
-	// Blocs de complétion : état tenu (= sortie de la dernière sortie).
-	lastOutState := outIn[numOut-1] // état d'ENTRÉE de la dernière sortie...
-	// ... mais pour la complétion on veut l'état de SORTIE (row 31) du dernier bloc.
-	// spFillBlockN a déjà rempli ; on relit la ligne de service du dernier bloc réel.
-	realBlocks := snRealBlocks(numOut)
-	if realBlocks < snTotalBlocks(numOut) {
-		lastReal := snBlkOutput(numOut - 1)
+	// Complétion identité.
+	realBlocks := snRealBlocks(numIn, numOut)
+	totalBlocks := snTotalBlocks(numIn, numOut)
+	if realBlocks < totalBlocks {
+		lastReal := snBlkOutputJ(numIn, numOut-1)
 		var carry [pfStateCols]Felt
 		serviceRow := lastReal*spBlock + (spBlock - 1)
 		for k := 0; k < pfStateCols; k++ {
 			carry[k] = trace[serviceRow][spStateOff+k]
 		}
-		for b := realBlocks; b < snTotalBlocks(numOut); b++ {
-			spFillBlockN(trace, b, carry, fee, numOut)
+		for b := realBlocks; b < totalBlocks; b++ {
+			spFillBlockN(trace, b, carry, fee, numIn, numOut)
 		}
 	}
-	_ = lastOutState
 
-	// Chaînage des états de service (ligne 31 = entrée du bloc suivant).
-	spOverwriteServiceState(trace, spBlkOwner, inInCm)
-	spOverwriteServiceState(trace, spBlkInCm, inNf)
-	spOverwriteServiceState(trace, spBlkNf, memIn[0])
-	for lvl := 0; lvl < spendDepth-1; lvl++ {
-		spOverwriteServiceState(trace, spBlkMem0+lvl, memIn[lvl+1])
+	// Chaînage des états de service (entrée du bloc suivant).
+	for i := 0; i < numIn; i++ {
+		snOverwriteService(trace, snBlkOwnerI(i), inInCmState[i]) // owner -> inCm
+		snOverwriteService(trace, snBlkInCmI(i), inNfState[i])    // inCm -> nf
+		snOverwriteService(trace, snBlkNfI(i), memIn[i][0])       // nf -> mem0
+		for lvl := 0; lvl < spendDepth-1; lvl++ {
+			snOverwriteService(trace, snBlkMem0I(i)+lvl, memIn[i][lvl+1])
+		}
+		// memL_i -> bloc suivant : ownerTag de l'entrée i+1, ou sortie 0.
+		if i < numIn-1 {
+			snOverwriteService(trace, snBlkMemLI(i), inOwnerState[i+1])
+		} else {
+			snOverwriteService(trace, snBlkMemLI(i), outState[0])
+		}
 	}
-	spOverwriteServiceState(trace, memL, outIn[0]) // dernier mem -> sortie 0
 	for j := 0; j < numOut-1; j++ {
-		spOverwriteServiceState(trace, snBlkOutput(j), outIn[j+1]) // sortie j -> j+1
+		snOverwriteService(trace, snBlkOutputJ(numIn, j), outState[j+1])
 	}
-	// dernière sortie -> complétion : la ligne 31 reste la sortie (identité OK).
 
 	// Témoins de glue.
-	// Glue ownerTag (mCommitS) : forme inCm, wVal=inValue (charge regVal).
-	spSetWNote(trace[spOutputRowOf(spBlkOwner)], w.InRho, w.InValue)
-	// Glue memL (mCommitW) : forme la sortie 0.
-	spSetWTag(trace[spOutputRowOf(memL)], w.Outs[0].OwnerTag)
-	spSetWNote(trace[spOutputRowOf(memL)], w.Outs[0].Rho, w.Outs[0].Value)
-	// Glue sortie j (mCommitW) : forme la sortie j+1.
+	for i := 0; i < numIn; i++ {
+		// Glue mCommitS (sortie ownerTag_i) : forme inCm_i, wVal = inValue_i.
+		spSetWNote(trace[spOutputRowOf(snBlkOwnerI(i))], w.Ins[i].Rho, w.Ins[i].Value)
+		// Glue mReasmReg (sortie nf_i) : sibling/bit du niveau 0.
+		spSetSibBit(trace[spOutputRowOf(snBlkNfI(i))], w.Ins[i].Path.Siblings[0], w.Ins[i].Path.Bits[0])
+		// Glue mReasm (sorties mem niveaux 0..depth-2) : sibling/bit du niveau l+1.
+		for lvl := 0; lvl < spendDepth-1; lvl++ {
+			spSetSibBit(trace[spOutputRowOf(snBlkMem0I(i)+lvl)], w.Ins[i].Path.Siblings[lvl+1], w.Ins[i].Path.Bits[lvl+1])
+		}
+		// Glue mPackNk (sortie memL_i, i<numIn-1) : charge nk_{i+1} dans wTag.
+		if i < numIn-1 {
+			spSetWTag(trace[spOutputRowOf(snBlkMemLI(i))], w.Ins[i+1].Nk)
+		}
+	}
+	// Glue mCommitW : memL_{last} -> sortie 0, puis sortie j -> sortie j+1.
+	spSetWTag(trace[spOutputRowOf(snBlkMemLI(numIn-1))], w.Outs[0].OwnerTag)
+	spSetWNote(trace[spOutputRowOf(snBlkMemLI(numIn-1))], w.Outs[0].Rho, w.Outs[0].Value)
 	for j := 0; j < numOut-1; j++ {
-		row := spOutputRowOf(snBlkOutput(j))
+		row := spOutputRowOf(snBlkOutputJ(numIn, j))
 		spSetWTag(trace[row], w.Outs[j+1].OwnerTag)
 		spSetWNote(trace[row], w.Outs[j+1].Rho, w.Outs[j+1].Value)
 	}
-	// Siblings/bits de ré-assemblage.
-	spSetSibBit(trace[spOutputRowOf(spBlkNf)], w.Path.Siblings[0], w.Path.Bits[0])
-	for lvl := 0; lvl < spendDepth-1; lvl++ {
-		spSetSibBit(trace[spOutputRowOf(spBlkMem0+lvl)], w.Path.Siblings[lvl+1], w.Path.Bits[lvl+1])
-	}
 
-	// Registres portés + accumulateur.
-	spFillRegistersN(trace, w, inCm, numOut)
+	// Registres + accumulateur.
+	spFillRegistersN(trace, w, inCm, numIn, numOut)
 
-	public = SpendNPublic{MerkleRoot: merkleRoot, Nf: nf, OutCms: outCms, Fee: fee}
+	public = SpendNPublic{MerkleRoot: merkleRoot, Nfs: nfs, OutCms: outCms, Fee: fee}
 	return trace, public
 }
 
-// spFillRegistersN remplit regNk/regCm/regVal (comme le circuit 1-out, fenêtre
-// regVal étendue jusqu'à la conservation) et l'accumulateur regAcc.
-func spFillRegistersN(trace [][]Felt, w SpendNWitness, inCm [poseidonDigestLen]Felt, numOut int) {
-	nfGlue := spOutputRowOf(spBlkNf)
-	loadCmRow := spOutputRowOf(spBlkInCm)
-	loadValRow := spOutputRowOf(spBlkOwner)
-	consRow := snConsRow(numOut)
-	steps := snSteps(numOut)
-	memL := spBlkMem0 + spendDepth - 1
+// spFillRegistersN remplit regNk/regCm par entrée et l'accumulateur signé.
+func spFillRegistersN(trace [][]Felt, w SpendNWitness, inCm [][poseidonDigestLen]Felt, numIn, numOut int) {
+	steps := snSteps(numIn, numOut)
 
-	// Lignes de glue mCommitW (ajout à l'accumulateur), dans l'ordre, avec la
-	// valeur ajoutée : memL.out -> +outValue_0, sortie j.out -> +outValue_{j+1}.
-	type addPt struct {
+	// Fenêtres regNk_i / regCm_i.
+	for i := 0; i < numIn; i++ {
+		ownerRow0 := snBlkOwnerI(i) * spBlock
+		inCmOutRow := spOutputRowOf(snBlkInCmI(i))
+		nfOutRow := spOutputRowOf(snBlkNfI(i))
+		for row := ownerRow0; row <= inCmOutRow; row++ {
+			for k := 0; k < poseidonDigestLen; k++ {
+				trace[row][spRegNkOff+k] = w.Ins[i].Nk[k]
+			}
+		}
+		for row := inCmOutRow; row <= nfOutRow; row++ {
+			for k := 0; k < poseidonDigestLen; k++ {
+				trace[row][spRegCmOff+k] = inCm[i][k]
+			}
+		}
+	}
+
+	// Accumulateur signé : points d'ajout (mCommitS, +inValue_i) et de retrait
+	// (mCommitW, -outValue_j), dans l'ordre des lignes de glue.
+	type pt struct {
 		row int
-		val Felt
+		val Felt // signée (positive=ajout, négative=retrait)
 	}
-	adds := make([]addPt, 0, numOut)
-	adds = append(adds, addPt{spOutputRowOf(memL), w.Outs[0].Value})
+	pts := make([]pt, 0, numIn+numOut)
+	for i := 0; i < numIn; i++ {
+		pts = append(pts, pt{spOutputRowOf(snBlkOwnerI(i)), w.Ins[i].Value})
+	}
+	// Retraits : memL_last -> sortie0 (-outValue_0), sortie j -> j+1 (-outValue_{j+1}).
+	pts = append(pts, pt{spOutputRowOf(snBlkMemLI(numIn - 1)), Zero().Sub(w.Outs[0].Value)})
 	for j := 0; j < numOut-1; j++ {
-		adds = append(adds, addPt{spOutputRowOf(snBlkOutput(j)), w.Outs[j+1].Value})
+		pts = append(pts, pt{spOutputRowOf(snBlkOutputJ(numIn, j)), Zero().Sub(w.Outs[j+1].Value)})
 	}
 
-	// regAcc[row] = somme des val dont la ligne d'ajout est STRICTEMENT < row
-	// (l'ajout prend effet à la ligne suivante : next.regAcc = cur.regAcc + ...).
-	accAt := func(row int) Felt {
-		sum := Zero()
-		for _, a := range adds {
-			if a.row < row {
-				sum = sum.Add(a.val)
-			}
-		}
-		return sum
-	}
-
+	// acc[row] = somme des val dont la ligne d'ajout/retrait est STRICTEMENT < row.
 	for row := 0; row < steps; row++ {
-		if row <= nfGlue {
-			for k := 0; k < poseidonDigestLen; k++ {
-				trace[row][spRegNkOff+k] = w.Nk[k]
+		sum := Zero()
+		for _, p := range pts {
+			if p.row < row {
+				sum = sum.Add(p.val)
 			}
 		}
-		if row >= loadCmRow && row <= nfGlue {
-			for k := 0; k < poseidonDigestLen; k++ {
-				trace[row][spRegCmOff+k] = inCm[k]
-			}
-		}
-		if row >= loadValRow && row <= consRow {
-			trace[row][spRegValCol] = w.InValue
-		}
-		trace[row][snRegAccCol] = accAt(row)
+		trace[row][snRegAccCol] = sum
 	}
 }
 
@@ -622,11 +680,13 @@ func spFillRegistersN(trace [][]Felt, w SpendNWitness, inCm [poseidonDigestLen]F
 // Prouveur / Vérifieur
 // ---------------------------------------------------------------------------
 
-// spendNPublicInputs : MerkleRoot(4) | Nf(4) | OutCm_0..(4·numOut) | Fee(1).
+// spendNPublicInputs : MerkleRoot(4) | Nf_0..(4·numIn) | OutCm_0..(4·numOut) | Fee.
 func spendNPublicInputs(public SpendNPublic) []Felt {
-	out := make([]Felt, 0, 2*poseidonDigestLen+poseidonDigestLen*len(public.OutCms)+1)
+	out := make([]Felt, 0, poseidonDigestLen*(1+len(public.Nfs)+len(public.OutCms))+1)
 	out = append(out, public.MerkleRoot[:]...)
-	out = append(out, public.Nf[:]...)
+	for i := range public.Nfs {
+		out = append(out, public.Nfs[i][:]...)
+	}
 	for j := range public.OutCms {
 		out = append(out, public.OutCms[j][:]...)
 	}
@@ -637,17 +697,19 @@ func spendNPublicInputs(public SpendNPublic) []Felt {
 func spendNAirOf(public SpendNPublic) spendNAIR {
 	return spendNAIR{
 		merkleRoot: public.MerkleRoot,
-		nf:         public.Nf,
+		nfs:        public.Nfs,
 		outCms:     public.OutCms,
 		fee:        public.Fee,
+		numIn:      len(public.Nfs),
 		numOut:     len(public.OutCms),
 	}
 }
 
-// ProveSpendN construit une preuve STARK de dépense 1-entrée / N-sorties. Atteste,
-// sans révéler le témoin : inCm = Commit(inValue, Hash(Nk), inRho) ∈ arbre(root) ;
-// Nf = Hash2(Nk, inCm) ; OutCm_j = Commit(outValue_j, ownerTag_j, rho_j) ;
-// et la conservation inValue = Σ outValue_j + Fee.
+// ProveSpendN construit une preuve STARK de dépense M-entrées / N-sorties. Atteste,
+// sans révéler le témoin : pour chaque entrée i, inCm_i = Commit(inValue_i,
+// Hash(Nk_i), inRho_i) ∈ arbre(root) et Nf_i = Hash2(Nk_i, inCm_i) ; pour chaque
+// sortie j, OutCm_j = Commit(outValue_j, ownerTag_j, rho_j) ; et la conservation
+// Σ inValue_i = Σ outValue_j + Fee.
 func ProveSpendN(w SpendNWitness, fee Felt) (SpendNPublic, AirProof) {
 	trace, public := buildSpendNTrace(w, fee)
 	air := spendNAirOf(public)
@@ -657,7 +719,7 @@ func ProveSpendN(w SpendNWitness, fee Felt) (SpendNPublic, AirProof) {
 
 // VerifySpendN vérifie une preuve produite par ProveSpendN pour l'énoncé `public`.
 func VerifySpendN(public SpendNPublic, proof AirProof) bool {
-	if len(public.OutCms) < 1 {
+	if len(public.Nfs) < 1 || len(public.OutCms) < 1 {
 		return false
 	}
 	air := spendNAirOf(public)
