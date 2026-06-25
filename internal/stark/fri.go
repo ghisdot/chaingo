@@ -89,6 +89,28 @@ type FriParams struct {
 	// le prouveur paie 2^GrindBits hachages, le vérifieur UN. Fait partie de
 	// l'énoncé (absorbé) : prouveur et vérifieur DOIVENT s'accorder.
 	GrindBits int
+	// FoldStopBits règle la PROFONDEUR DE PLIAGE (arrêt anticipé du FRI). Au lieu
+	// de plier jusqu'au domaine de taille Blowup (couche finale CONSTANTE), on
+	// s'arrête à la taille Blowup<<FoldStopBits et on transmet un polynôme final de
+	// degré < 2^FoldStopBits. On retire ainsi FoldStopBits couches (moins de
+	// racines Merkle et d'étapes par requête) au prix de coefficients finaux
+	// supplémentaires — un compromis taille/couches. 0 = comportement historique
+	// (couche finale constante). La redondance Reed-Solomon reste Blowup, donc la
+	// soundness terminale est préservée. Fait partie de l'énoncé (absorbé).
+	FoldStopBits int
+}
+
+// friFinalSize renvoie la taille du domaine de la couche finale : Blowup<<
+// FoldStopBits. À FoldStopBits=0 c'est Blowup (couche finale constante).
+func friFinalSize(params FriParams) int {
+	return params.Blowup << uint(params.FoldStopBits)
+}
+
+// friFinalDegBound renvoie la borne STRICTE de degré du polynôme final autorisé :
+// 2^FoldStopBits. Les coefficients d'indice >= cette borne DOIVENT être nuls
+// (critère de bas degré terminal généralisé ; =1 donc « constante » à bits=0).
+func friFinalDegBound(params FriParams) int {
+	return 1 << uint(params.FoldStopBits)
 }
 
 // queryPositions tire les positions d'interrogation SANS REMISE quand c'est
@@ -227,8 +249,12 @@ func Prove(evals []Felt, params FriParams) FriProof {
 	if !isPow2(params.Blowup) || params.Blowup < 2 {
 		panic("stark: Prove: Blowup doit être une puissance de 2 >= 2")
 	}
-	if !isPow2(n) || n <= params.Blowup {
-		panic("stark: Prove: len(evals) doit être une puissance de 2 > Blowup")
+	if params.FoldStopBits < 0 {
+		panic("stark: Prove: FoldStopBits doit être >= 0")
+	}
+	finalSize := friFinalSize(params)
+	if !isPow2(n) || n <= finalSize {
+		panic("stark: Prove: len(evals) doit être une puissance de 2 > Blowup<<FoldStopBits")
 	}
 	if params.NumQueries < 1 {
 		panic("stark: Prove: NumQueries doit être >= 1")
@@ -247,9 +273,10 @@ func Prove(evals []Felt, params FriParams) FriProof {
 	cur := clonePoly(evals)
 	omega := RootOfUnity(log2(len(cur))) // racine d'ordre = taille courante
 
-	// On plie jusqu'à atteindre le domaine final de taille Blowup. À cet instant
-	// la borne de degré est tombée à 1 : la couche finale doit être constante.
-	for len(cur) > params.Blowup {
+	// On plie jusqu'à atteindre le domaine final de taille finalSize =
+	// Blowup<<FoldStopBits. La borne de degré finale est alors 2^FoldStopBits
+	// (=1, couche constante, si FoldStopBits==0).
+	for len(cur) > finalSize {
 		root, tree := commitEvals(cur)
 		tr.Absorb("fri/layer-root", root[:])
 		layers = append(layers, friLayer{evals: cur, tree: tree})
@@ -339,28 +366,33 @@ func Verify(proof FriProof, params FriParams) bool {
 	if proof.LogDomain > TwoAdicity() {
 		return false
 	}
+	if params.FoldStopBits < 0 {
+		return false
+	}
+	finalSize := friFinalSize(params)
 	n := 1 << proof.LogDomain
-	// Le domaine initial doit être > Blowup (au moins une couche pliée).
-	if n <= params.Blowup {
+	// Le domaine initial doit être > finalSize (au moins une couche pliée).
+	if n <= finalSize {
 		return false
 	}
 
-	// La couche finale couvre exactement le domaine de taille Blowup : on attend
-	// donc Blowup coefficients. CRITÈRE DE BAS DEGRÉ : le polynôme final doit être
-	// CONSTANT, donc tous les coefficients de degré >= 1 sont nuls. Une fonction
-	// aléatoire produit ici un polynôme de degré plein => rejet.
-	if len(proof.FinalCoeffs) != params.Blowup {
+	// La couche finale couvre exactement le domaine de taille finalSize =
+	// Blowup<<FoldStopBits : on attend donc finalSize coefficients. CRITÈRE DE BAS
+	// DEGRÉ GÉNÉRALISÉ : le polynôme final est de degré < 2^FoldStopBits, donc tous
+	// les coefficients d'indice >= 2^FoldStopBits sont nuls (à FoldStopBits=0 cela
+	// impose la constante). Une fonction aléatoire produit un degré plein => rejet.
+	if len(proof.FinalCoeffs) != finalSize {
 		return false
 	}
-	for i := 1; i < len(proof.FinalCoeffs); i++ {
+	for i := friFinalDegBound(params); i < len(proof.FinalCoeffs); i++ {
 		if !proof.FinalCoeffs[i].IsZero() {
 			return false
 		}
 	}
 
-	// Nombre de couches pliées attendu : on plie de N jusqu'à Blowup.
+	// Nombre de couches pliées attendu : on plie de N jusqu'à finalSize.
 	expectedLayers := 0
-	for sz := n; sz > params.Blowup; sz /= 2 {
+	for sz := n; sz > finalSize; sz /= 2 {
 		expectedLayers++
 	}
 	if len(proof.LayerRoots) != expectedLayers {
@@ -510,6 +542,7 @@ func absorbParams(tr *Transcript, params FriParams, logDomain uint32) {
 	tr.AbsorbFelt("fri/blowup", FromUint64(uint64(params.Blowup)))
 	tr.AbsorbFelt("fri/num-queries", FromUint64(uint64(params.NumQueries)))
 	tr.AbsorbFelt("fri/grind-bits", FromUint64(uint64(params.GrindBits)))
+	tr.AbsorbFelt("fri/fold-stop-bits", FromUint64(uint64(params.FoldStopBits)))
 	tr.AbsorbFelt("fri/log-domain", FromUint64(uint64(logDomain)))
 }
 

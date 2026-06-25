@@ -44,6 +44,51 @@ func TestFriGrinding_DesactiveParDefaut(t *testing.T) {
 	}
 }
 
+// Profondeur de pliage VARIABLE : pour FoldStopBits = 0..3, une preuve honnête
+// vérifie, le nombre de couches diminue de FoldStopBits, et une preuve dont la
+// couche finale dépasse le degré 2^FoldStopBits est rejetée.
+func TestFriVariableDepth(t *testing.T) {
+	const n = 1024
+	for stop := 0; stop <= 3; stop++ {
+		params := FriParams{Blowup: 8, NumQueries: 24, FoldStopBits: stop}
+		evals := friLowDegree(40, n, uint64(500+stop))
+
+		proof := Prove(evals, params)
+		if !Verify(proof, params) {
+			t.Fatalf("FoldStopBits=%d: preuve honnête rejetée", stop)
+		}
+
+		// Taille de la couche finale = Blowup<<stop ; couches = log2(n/finalSize).
+		wantFinal := 8 << uint(stop)
+		if len(proof.FinalCoeffs) != wantFinal {
+			t.Fatalf("FoldStopBits=%d: %d coeffs finaux, attendu %d", stop, len(proof.FinalCoeffs), wantFinal)
+		}
+		wantLayers := log2(n) - log2(wantFinal)
+		if len(proof.LayerRoots) != int(wantLayers) {
+			t.Fatalf("FoldStopBits=%d: %d couches, attendu %d", stop, len(proof.LayerRoots), wantLayers)
+		}
+
+		// Falsification : on injecte un coefficient final juste AU-DESSUS de la
+		// borne de degré autorisée (2^stop) ; le critère terminal doit rejeter.
+		bad := proof
+		bad.FinalCoeffs = clonePoly(proof.FinalCoeffs)
+		bad.FinalCoeffs[friFinalDegBound(params)] = One()
+		if Verify(bad, params) {
+			t.Fatalf("FoldStopBits=%d: couche finale de degré trop élevé acceptée", stop)
+		}
+	}
+}
+
+// Un vérifieur qui utilise un FoldStopBits différent du prouveur rejette (le
+// paramètre est lié au transcript).
+func TestFriVariableDepth_ParamLie(t *testing.T) {
+	evals := friLowDegree(40, 1024, 4242)
+	proof := Prove(evals, FriParams{Blowup: 8, NumQueries: 24, FoldStopBits: 2})
+	if Verify(proof, FriParams{Blowup: 8, NumQueries: 24, FoldStopBits: 1}) {
+		t.Fatal("SOUNDNESS : FoldStopBits divergent accepté")
+	}
+}
+
 // Les positions d'interrogation FRI sont DEUX À DEUX DISTINCTES (sans remise) dès
 // que le domaine le permet (count <= firstHalf).
 func TestFriQueryPositions_Distinctes(t *testing.T) {
