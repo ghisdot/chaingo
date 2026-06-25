@@ -15,7 +15,8 @@ info:
     Erreurs uniformes : statut HTTP ≥ 400 → `{ "error": "message" }`.
     CORS ouvert (`Access-Control-Allow-Origin: *`).
   license:
-    name: MIT
+    name: Apache-2.0
+    identifier: Apache-2.0
     url: https://github.com/ghisdot/chaingo/blob/main/LICENSE
   contact:
     name: ChainGO
