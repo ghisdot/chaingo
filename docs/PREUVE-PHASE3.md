@@ -112,7 +112,7 @@ C'est du **crypto maison, non audité**. Points connus à challenger en priorit�
 ## 8. Appel à audit communautaire
 
 ChainGO **assume** la stratégie « crypto maison + audit par une communauté de
-hackers ». Tout est ouvert (MIT) et reproductible. Cibles d'attaque suggérées :
+hackers ». Tout est ouvert (Apache 2.0) et reproductible. Cibles d'attaque suggérées :
 forger une preuve de dépense pour une note inexistante, créer de la valeur, voler
 une note sans `nk`, extraire un montant d'une preuve, casser la collision-résistance
 de Poseidon, exploiter le grinding Fiat-Shamir. Le code vit dans `internal/stark`.

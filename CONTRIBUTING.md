@@ -1,6 +1,6 @@
 # Contribuer à ChainGO
 
-ChainGO est un projet open source (MIT) et accepte les contributions de la
+ChainGO est un projet open source (Apache 2.0) et accepte les contributions de la
 communauté. *English speakers: contributions in English are welcome — please
 open an issue or PR in either language.*
 
