@@ -177,6 +177,43 @@ func (a Felt) Div(b Felt) Felt {
 	return a.Mul(b.Inv())
 }
 
+// batchInv inverse TOUS les éléments d'un slice en UNE seule inversion de corps,
+// par l'astuce de Montgomery (« batch inversion ») :
+//
+//	préfixes  p[i] = a[0]·a[1]·…·a[i-1]      (p[0] = 1)
+//	total     A    = a[0]·…·a[n-1]
+//	inv       I    = A^{-1}                  (la SEULE inversion coûteuse)
+//	puis, en remontant : a[i]^{-1} = p[i]·I ; I ← I·a[i]
+//
+// Coût : 1 inversion + ~3n multiplications, contre n inversions (chacune ≈ 94
+// multiplications via Fermat). Sur la composition STARK c'est le gain décisif.
+//
+// PRÉCONDITION : aucun a[i] nul. Un zéro rendrait le produit total nul, donc non
+// inversible — l'appelant DOIT garantir des dénominateurs non nuls (c'est le cas
+// sur un coset qui évite le domaine de trace). Le résultat est un nouveau slice ;
+// l'entrée n'est pas mutée. Déterministe (aucun aléa).
+func batchInv(a []Felt) []Felt {
+	n := len(a)
+	out := make([]Felt, n)
+	if n == 0 {
+		return out
+	}
+	// out[i] sert d'abord à stocker le produit-préfixe p[i] = a[0]·…·a[i-1].
+	acc := One()
+	for i := 0; i < n; i++ {
+		out[i] = acc
+		acc = acc.Mul(a[i])
+	}
+	// acc = produit total ; une seule inversion.
+	inv := acc.Inv()
+	// Remontée : out[i] = p[i]·I = a[i]^{-1}, puis I ← I·a[i].
+	for i := n - 1; i >= 0; i-- {
+		out[i] = out[i].Mul(inv)
+		inv = inv.Mul(a[i])
+	}
+	return out
+}
+
 // Bytes sérialise le Felt en 8 octets big-endian (représentation canonique).
 // Le big-endian est choisi pour un transcript Fiat-Shamir lisible et stable.
 func (a Felt) Bytes() []byte {

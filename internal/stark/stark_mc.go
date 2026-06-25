@@ -234,16 +234,19 @@ func mcBigN(maxDegree, n int) int {
 func mcEvalColumnsOnLDE(trace [][]Felt, w, n, bigN int) (colsCoeffs, colsLDE [][]Felt) {
 	colsCoeffs = make([][]Felt, w)
 	colsLDE = make([][]Felt, w)
-	for c := 0; c < w; c++ {
-		// Colonne c sous forme d'évaluations sur le domaine de trace D.
-		colEvals := make([]Felt, n)
-		for i := 0; i < n; i++ {
-			colEvals[i] = trace[i][c]
+	// Colonnes indépendantes : chaque c écrit ses propres entrées (disjointes).
+	parallelFor(w, func(start, end int) {
+		for c := start; c < end; c++ {
+			// Colonne c sous forme d'évaluations sur le domaine de trace D.
+			colEvals := make([]Felt, n)
+			for i := 0; i < n; i++ {
+				colEvals[i] = trace[i][c]
+			}
+			coeffs := Interpolate(colEvals) // longueur n, ordre croissant
+			colsCoeffs[c] = coeffs
+			colsLDE[c] = evalOnLDE(coeffs, bigN)
 		}
-		coeffs := Interpolate(colEvals) // longueur n, ordre croissant
-		colsCoeffs[c] = coeffs
-		colsLDE[c] = evalOnLDE(coeffs, bigN)
-	}
+	})
 	return colsCoeffs, colsLDE
 }
 
@@ -272,6 +275,7 @@ func mcCompositionLDE(air AIR, colsCoeffs [][]Felt, g Felt, n, bigN int,
 
 	w := air.NumColumns()
 	boundaries := air.Boundaries()
+	numBound := len(boundaries)
 	one := One()
 	gN1 := g.Exp(uint64(n - 1))
 
@@ -279,57 +283,97 @@ func mcCompositionLDE(air AIR, colsCoeffs [][]Felt, g Felt, n, bigN int,
 	omega := RootOfUnity(logBigN) // racine d'ordre bigN
 	shift := bigN / n             // g = ω^shift => ligne suivante à l'indice +shift
 
-	// Évaluations de chaque colonne sur le COSET LDE {η·ω^j}.
+	// Évaluations de chaque colonne sur le COSET LDE {η·ω^j} (colonnes
+	// indépendantes : parallélisable, écritures disjointes).
 	colsCoset := make([][]Felt, w)
-	for c := 0; c < w; c++ {
-		colsCoset[c] = evalOnCoset(colsCoeffs[c], bigN, eta)
-	}
+	parallelFor(w, func(start, end int) {
+		for c := start; c < end; c++ {
+			colsCoset[c] = evalOnCoset(colsCoeffs[c], bigN, eta)
+		}
+	})
 
 	comp := make([]Felt, bigN)
 
-	// cur/next réutilisés pour éviter des allocations dans la boucle chaude.
-	cur := make([]Felt, w)
-	next := make([]Felt, w)
+	// --- Pré-calculs hoistés HORS de la boucle chaude (perf) ---
+	//
+	// Auparavant chaque ligne j recalculait x^n par exponentiation (Exp(n)),
+	// g^row pour CHAQUE bord (Exp(row), indépendant de j !), puis UNE inversion
+	// de corps par dénominateur — soit ~bigN·(1+numBound) inversions de Fermat,
+	// le coût écrasant du prouveur. On élimine tout cela :
+	//
+	//   1) g^row ne dépend pas de j : calculé une seule fois par bord.
+	//   2) x_j^n = η^n·(ω^n)^j : suite géométrique, calculée incrémentalement
+	//      (une multiplication par ligne) au lieu d'un Exp(n) par ligne.
+	//   3) TOUS les dénominateurs (Z_D(x_j) et (x_j - g^row)) sont collectés puis
+	//      inversés en lot (Montgomery, batchInv) : 1 inversion au total.
 
-	x := eta // x = η·ω^0 = η au départ ; multiplié par ω à chaque pas.
-	for j := 0; j < bigN; j++ {
-		// Ligne courante et ligne suivante au point x = η·ω^j.
-		jn := (j + shift) % bigN
-		for c := 0; c < w; c++ {
-			cur[c] = colsCoset[c][j]
-			next[c] = colsCoset[c][jn]
-		}
-
-		// Dénominateur de la transition : Z_D(x) = x^n - 1. Jamais nul sur le
-		// coset (η n'est pas dans D), donc inversible.
-		zd := x.Exp(uint64(n)).Sub(one)
-		zdInv := zd.Inv()
-		// Facteur de relâchement de la dernière ligne : (x - g^(n-1)).
-		relax := x.Sub(gN1)
-
-		acc := Zero()
-
-		// Contraintes de transition.
-		cons := air.EvalTransition(cur, next)
-		for k := 0; k < len(cons); k++ {
-			// Qk(x) = Ck(x)·(x - g^(n-1)) / (x^n - 1).
-			qk := cons[k].Mul(relax).Mul(zdInv)
-			acc = acc.Add(alphaTrans[k].Mul(qk))
-		}
-
-		// Contraintes de bord.
-		for b, bc := range boundaries {
-			// Qb(x) = (T_col(x) - value)/(x - g^row).
-			gRow := g.Exp(uint64(bc.Row))
-			denom := x.Sub(gRow)
-			// denom est non nul sur le coset (g^row est dans D, x ne l'est pas).
-			qb := colsCoset[bc.Col][j].Sub(bc.Value).Mul(denom.Inv())
-			acc = acc.Add(alphaBound[b].Mul(qb))
-		}
-
-		comp[j] = acc
-		x = x.Mul(omega)
+	// (1) g^row par bord, une fois.
+	gRows := make([]Felt, numBound)
+	for b, bc := range boundaries {
+		gRows[b] = g.Exp(uint64(bc.Row))
 	}
+
+	// Collecte des dénominateurs à inverser, mis à plat par ligne :
+	//   dens[j*stride + 0]      = Z_D(x_j) = x_j^n - 1
+	//   dens[j*stride + 1 + b]  = x_j - g^{row_b}   (un par bord)
+	// et mémorisation du facteur de relâchement relax_j = x_j - g^(n-1) (pas
+	// d'inversion nécessaire) pour la seconde passe.
+	stride := 1 + numBound
+	dens := make([]Felt, bigN*stride)
+	relaxes := make([]Felt, bigN)
+
+	wn := omega.Exp(uint64(n)) // ω^n : raison de la suite géométrique x_j^n
+	xn := eta.Exp(uint64(n))   // η^n = x_0^n
+	x := eta                   // x_0 = η ; ×ω à chaque pas
+	for j := 0; j < bigN; j++ {
+		// (2) Z_D(x_j) = x_j^n - 1, jamais nul sur le coset (η ∉ D).
+		dens[j*stride] = xn.Sub(one)
+		for b := 0; b < numBound; b++ {
+			// (x_j - g^row) non nul sur le coset (g^row ∈ D, x_j ∉ D).
+			dens[j*stride+1+b] = x.Sub(gRows[b])
+		}
+		relaxes[j] = x.Sub(gN1)
+		x = x.Mul(omega)
+		xn = xn.Mul(wn)
+	}
+
+	// (3) Inversion en lot : une seule inversion de corps pour tout le coset.
+	dInv := batchInv(dens)
+
+	// --- Passe de composition (aucune inversion ici) ---
+	// Lignes indépendantes : chaque j écrit comp[j] seul, à partir d'entrées
+	// immuables (colsCoset, dInv, relaxes, boundaries). On parallélise sur j ;
+	// les scratch cur/next sont LOCAUX à chaque tranche (jamais partagés).
+	parallelFor(bigN, func(start, end int) {
+		cur := make([]Felt, w)
+		next := make([]Felt, w)
+		for j := start; j < end; j++ {
+			jn := (j + shift) % bigN
+			for c := 0; c < w; c++ {
+				cur[c] = colsCoset[c][j]
+				next[c] = colsCoset[c][jn]
+			}
+
+			zdInv := dInv[j*stride]
+			relax := relaxes[j]
+			acc := Zero()
+
+			// Contraintes de transition : Qk(x) = Ck(x)·(x - g^(n-1)) / (x^n - 1).
+			cons := air.EvalTransition(cur, next)
+			for k := 0; k < len(cons); k++ {
+				qk := cons[k].Mul(relax).Mul(zdInv)
+				acc = acc.Add(alphaTrans[k].Mul(qk))
+			}
+
+			// Contraintes de bord : Qb(x) = (T_col(x) - value)/(x - g^row).
+			for b, bc := range boundaries {
+				qb := colsCoset[bc.Col][j].Sub(bc.Value).Mul(dInv[j*stride+1+b])
+				acc = acc.Add(alphaBound[b].Mul(qb))
+			}
+
+			comp[j] = acc
+		}
+	})
 
 	return comp
 }
@@ -554,14 +598,18 @@ func ProveAIR(air AIR, trace [][]Felt, public ...Felt) AirProof {
 	// --- 1) Interpolation des colonnes + LDE (sur le domaine {ω^j}) ---
 	colsCoeffs, colsLDE := mcEvalColumnsOnLDE(trace, w, n, bigN)
 
-	// --- 2) Engagement de chaque colonne ---
+	// --- 2) Engagement de chaque colonne (arbres indépendants : parallélisable,
+	//        écritures disjointes ; l'absorption des racines reste séquentielle
+	//        plus bas, dans l'ordre des colonnes). ---
 	colRoots := make([][32]byte, w)
 	colTrees := make([]*MerkleTree, w)
-	for c := 0; c < w; c++ {
-		root, tree := commitEvals(colsLDE[c])
-		colRoots[c] = root
-		colTrees[c] = tree
-	}
+	parallelFor(w, func(start, end int) {
+		for c := start; c < end; c++ {
+			root, tree := commitEvals(colsLDE[c])
+			colRoots[c] = root
+			colTrees[c] = tree
+		}
+	})
 
 	// --- 3) Transcript : énoncé public + engagements de colonnes ---
 	tr := NewTranscript(mcDomain)
