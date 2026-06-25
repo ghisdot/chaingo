@@ -155,7 +155,7 @@ Documentation complète :
   (notes chiffrées ML-KEM). Sécurité hash-only (zéro courbe, zéro trusted setup).
   ⚠️ **Fait-maison, NON audité, hors-consensus, gaté OFF** — audit communautaire de
   hackers ouvert. Dossier de preuve : [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md).
-  Reste : câblage on-chain (tx blindées gatées) + audit.
+  Câblage on-chain livré (tx blindées gatées `PrivacyEnabled` OFF). Reste : audit + durcissement du prouveur.
 
 Voir [ROADMAP.md](ROADMAP.md) pour le détail complet et honnête.
 

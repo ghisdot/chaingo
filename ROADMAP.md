@@ -45,7 +45,10 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       vers le bloc couvert par la polka de plus haut round (reorg sûr avec restauration en cas
       d'échec). Valide par un test de simulation de partition (convergence sans double-finalité).
       Active la machinerie de verrou. Reste : reorg multi-blocs (fork enterré) — durcissement.
-- [ ] Arbre de Merkle creux pour la racine d'état (remplace le hash O(n))
+- [x] **Arbre de Merkle creux** pour la racine d'état (`internal/smt`, remplace le hash O(n)) —
+      [#9](https://github.com/ghisdot/chaingo/issues/9) : racine granulaire avec preuves d'inclusion
+      par compte (clients légers). Gaté `SparseMerkleRoot` (fixé à la genèse — change la racine),
+      OFF par défaut pour ne pas casser les chaînes existantes.
 - [x] **Codec binaire compact** — [#8](https://github.com/ghisdot/chaingo/issues/8)
       Terminé (tranches 1 à 5). Primitives `internal/codec/` (varint, length-prefixed,
       protections taille max et octets parasites). `Transaction`/`Block`/`Vote`/`DoubleSignEvidence`
@@ -84,9 +87,11 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
       appartenance + nullifier + conservation de valeur, **montants cachés**
       (masquage ZK testé), **destinataire caché** (notes chiffrées ML-KEM + scan).
       24 tests dont batterie adverse (vol sans clé, création de valeur, double-spend…).
-- [ ] **Câblage on-chain** : tx `shield`/`shielded_transfer`/`unshield`, arbre de
+- [x] **Câblage on-chain** (étage 5) : tx `shield`/`shielded_transfer`/`unshield`, arbre de
       commitments + nullifiers dans la racine, vérif STARK en consensus
-      (**gate `PrivacyEnabled`, OFF par défaut**) — étage 5, final.
+      (**gate `PrivacyEnabled`, OFF par défaut**). Câblé dans `state.go`
+      (`TxShield`/`TxShieldedTransfer`/`TxUnshield`), CLI `chaingo shielded`, tests d'intégration.
+      **Reste l'audit (ci-dessous) avant toute activation.**
 - [ ] **Audit communautaire** (hackers) du circuit blindé — **bloquant** mainnet.
 - [ ] Durcissement : grinding Fiat-Shamir, échantillonnage sans remise, profondeur
       variable, multi-in/out, optimisation du prouveur (~95 s → secondes).
@@ -126,7 +131,11 @@ Suivi public de l'avancement. `[x]` = implémenté **et vérifié** ; `[~]` = pr
 - [x] **Studio no-code** (`/studio/`) — créer un token et déployer vesting/escrow/multisig/DAO depuis
       le navigateur, signature ML-DSA-65 locale, coût de déploiement « gas » affiché
 - [x] **Validator Dashboard** (`/validator/`) — état, stake/unstake/unjail, liste publique, alerte « nœud à jour »
-- [ ] SDK JavaScript et Python ([#4](https://github.com/ghisdot/chaingo/issues/4))
+- [x] **Profil validateur on-chain** (`validator_profile`) — moniker, identité et métadonnées
+      publiques signées, stockées dans l'état et exposées à l'API / au dashboard ([#25](https://github.com/ghisdot/chaingo/issues/25))
+- [ ] **SDK JavaScript et Python** ([#4](https://github.com/ghisdot/chaingo/issues/4)) — **repos dédiés**
+      (`chaingo-sdk-js` sur npm, `chaingo-sdk-py` sur PyPI), versionnés indépendamment du nœud et
+      consommant l'API REST ; le repo `chaingo` reste la source de vérité du protocole
 - [ ] Documentation (docs/) traduite en anglais
 - [x] Outillage de genèse (`chaingo genesis template|validate`, vesting on-chain à la genèse, empreinte déterministe)
 - [x] Runbook mainnet + checklist de pré-lancement ([docs/MAINNET.md](docs/MAINNET.md))
