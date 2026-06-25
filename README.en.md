@@ -1,7 +1,7 @@
 # ChainGO
 
 [![CI](https://github.com/ghisdot/chaingo/actions/workflows/ci.yml/badge.svg)](https://github.com/ghisdot/chaingo/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 
 🇫🇷 [Version française](README.md) · 🌐 [chaingo.org](https://chaingo.org)
@@ -146,4 +146,4 @@ See [ROADMAP.md](ROADMAP.md) for the full, honest breakdown.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
