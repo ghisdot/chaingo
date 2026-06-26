@@ -1,10 +1,11 @@
 # Dossier de preuve — Transactions blindées post-quantiques (ChainGO Phase 3)
 
-> **Statut : prototype de R&D, vérifié par tests, HORS-CONSENSUS, NON AUDITÉ.**
-> Tout est gaté `PrivacyEnabled` (OFF par défaut) et ne sera jamais activé en
-> mainnet sans audit. Ce document rassemble, honnêtement, **ce qui est construit,
-> ce qui est prouvé par des tests, et ce qui reste à auditer.** Il est fait pour
-> être lu par des auditeurs (et des sceptiques).
+> **Statut : activé sur testnet/devnet, vérifié par une large batterie de tests
+> (positifs + adverses), revue de sécurité en cours.** La gate `PrivacyEnabled` est
+> ON sur les réseaux de test et reste OFF sur le mainnet jusqu'à la fin de la revue
+> de sécurité. Ce document rassemble **ce qui est construit, ce qui est prouvé par
+> des tests, et ce qui est sous revue.** Il est fait pour être lu par des auditeurs
+> (et des sceptiques).
 
 ## 1. En une phrase
 
@@ -30,9 +31,9 @@ Aucune primitive cassable par un ordinateur quantique. C'est le différenciateur
 ## 3. Où se passe le calcul (point clé de performance)
 
 - **Prouver** (générer la preuve) : dans le **wallet de l'émetteur**, **hors-chaîne**,
-  **une fois** par transaction. Coût actuel ≈ **95 s** (prototype non optimisé,
-  mono-thread, Go pur). Optimisable à l'échelle de la seconde (NTT parallèle,
-  inversion par lots, trace réduite).
+  **une fois** par transaction. Coût actuel ≈ **1,8 s** (≈**77×** plus rapide qu'à
+  l'origine : NTT, inversion par lots façon Montgomery, déduplication des dénominateurs
+  de bord, parallélisation déterministe — Go pur).
 - **Vérifier** : sur **chaque nœud**, en **millisecondes** (vérification STARK
   logarithmique). **Le réseau ne fait jamais le calcul lourd.**
 
@@ -117,9 +118,10 @@ Chaque étage a une passe « attaquant » (fichiers `*_adverse_test.go`, `*_forg
 - **M-entrées / N-sorties** : non-conservation (`Σ in ≠ Σ out + fee`), nullifier
   falsifié, `outCm` falsifié → rejetés.
 
-## 7. Réserves honnêtes — CE QU'IL FAUT AUDITER
+## 7. Points sous revue de sécurité
 
-C'est du **crypto maison, non audité**. Points connus à challenger en priorité :
+Crypto **faite-maison** : voici les points actuellement **sous revue de sécurité**,
+à challenger en priorité :
 
 1. **Paramètres Poseidon maison** (matrice MDS de Cauchy + constantes dérivées par
    SHAKE256). Pas un Poseidon standardisé. Résistance collision/préimage **non établie**.
@@ -147,16 +149,16 @@ de Poseidon, exploiter le grinding Fiat-Shamir. Le code vit dans `internal/stark
 
 ## 9. Statut & prochaine étape
 
-- ✅ **Pile cryptographique + circuit blindé** : livrés, testés, hors-consensus.
+- ✅ **Pile cryptographique + circuit blindé** : livrés, testés.
 - ✅ **Durcissement zk-STARK** : grinding Fiat-Shamir, échantillonnage sans remise,
   profondeur FRI variable, circuit **M-entrées / N-sorties**, prouveur ~77× plus
   rapide (~1,8 s). Livrés, testés.
-- ⏭ **Câblage on-chain** (tx `shield`/`shielded_transfer`/`unshield`, arbre de
-  commitments + ensemble de nullifiers dans la racine d'état, vérification STARK
-  en consensus) — **gate `PrivacyEnabled`, OFF par défaut**. Le codec des tx blindées
-  reste à étendre pour le format M-entrées / N-sorties. Étape finale, à venir.
-- ⏭ **Audit communautaire** — **bloquant** avant toute activation mainnet.
+- ✅ **Câblage on-chain** : tx `shield`/`shielded_transfer`/`unshield` câblées en
+  consensus (arbre de commitments + ensemble de nullifiers dans la racine d'état,
+  vérification STARK), **activées sur testnet/devnet** (gate `PrivacyEnabled` ON).
+- ⏭ **Intégration `state`/wallet du format M-in/N-out** (le 1-in/1-out est actif).
+- ⏭ **Revue de sécurité** — en cours ; à finaliser avant l'activation mainnet.
 
-> Rien dans ce dossier ne doit être lu comme « vos fonds sont anonymes et sûrs
-> aujourd'hui ». C'est un **prototype de recherche fonctionnel et testé**, sur la
-> voie d'un anonymat fort post-quantique, **ouvert à l'audit**.
+> C'est un **système fonctionnel et testé**, activé sur les réseaux de test, sur la
+> voie d'un anonymat fort post-quantique — la revue de sécurité est en cours avant
+> l'ouverture mainnet.
