@@ -103,23 +103,52 @@ type SpendPlan struct {
 	Fee uint64
 }
 
-// BuildWitness construit le TÉMOIN de dépense (SpendWitness) et les frais (Felt) à
-// passer à stark.ProveSpend, à partir :
+// SpendPlanN décrit une dépense M-entrées / N-sorties : plusieurs notes dépensées
+// (Ins) vers plusieurs notes créées (Outs), plus un montant public (Fee).
+// Conservation exigée par le circuit : Σ Ins.Value == Σ Outs.Value + Fee.
+type SpendPlanN struct {
+	Ins  []Note
+	Outs []Note
+	Fee  uint64
+}
+
+// BuildWitness construit le témoin du cas 1-entrée/1-sortie (cas particulier M=1,
+// N=1 du format canonique). Délègue à BuildWitnessMulti.
+func BuildWitness(commitments [][]byte, plan SpendPlan) (stark.SpendNWitness, stark.Felt, error) {
+	return BuildWitnessMulti(commitments, SpendPlanN{
+		Ins:  []Note{plan.In},
+		Outs: []Note{plan.Out},
+		Fee:  plan.Fee,
+	})
+}
+
+// BuildWitnessMulti construit le TÉMOIN de dépense M-entrées/N-sorties (SpendNWitness)
+// et les frais (Felt) à passer à stark.ProveSpendN, à partir :
 //   - de la liste ORDONNÉE des engagements actuels du pool (commitments, format
 //     32 octets — exactement state.ShieldedPool.Commitments) ;
-//   - du plan de dépense (note d'entrée, note de sortie, frais).
+//   - du plan de dépense (notes d'entrée, notes de sortie, frais).
 //
-// Elle RECONSTRUIT l'arbre EXACTEMENT comme la machine d'état (poolRoot) : feuilles
-// = engagements réels puis digests NULS jusqu'à 2^SpendDepth(). Ainsi la racine du
-// témoin == pool.Root, et la preuve produite vérifiera côté consensus.
+// L'arbre est RECONSTRUIT EXACTEMENT comme la machine d'état (poolRoot) : feuilles
+// = engagements réels puis digests NULS jusqu'à 2^SpendDepth(). Chaque entrée
+// obtient son chemin d'appartenance dans CE même arbre ⇒ toutes les preuves portent
+// sur pool.Root et vérifient côté consensus.
 //
-// Erreurs (jamais de panique) : note d'entrée introuvable dans le pool, pool plein
-// (capacité dépassée), conservation rompue (In.Value != Out.Value + Fee).
-func BuildWitness(commitments [][]byte, plan SpendPlan) (stark.SpendWitness, stark.Felt, error) {
-	var zero stark.SpendWitness
-	if plan.In.Value != plan.Out.Value+plan.Fee {
-		return zero, stark.Zero(), fmt.Errorf("conservation rompue : in=%d != out=%d + fee=%d",
-			plan.In.Value, plan.Out.Value, plan.Fee)
+// Erreurs (jamais de panique) : aucune entrée/sortie, note d'entrée introuvable,
+// pool plein, conservation rompue (Σ in != Σ out + fee).
+func BuildWitnessMulti(commitments [][]byte, plan SpendPlanN) (stark.SpendNWitness, stark.Felt, error) {
+	var zero stark.SpendNWitness
+	if len(plan.Ins) == 0 || len(plan.Outs) == 0 {
+		return zero, stark.Zero(), errors.New("au moins une entrée et une sortie requises")
+	}
+	var sumIn, sumOut uint64
+	for _, n := range plan.Ins {
+		sumIn += n.Value
+	}
+	for _, n := range plan.Outs {
+		sumOut += n.Value
+	}
+	if sumIn != sumOut+plan.Fee {
+		return zero, stark.Zero(), fmt.Errorf("conservation rompue : Σin=%d != Σout=%d + fee=%d", sumIn, sumOut, plan.Fee)
 	}
 
 	depth := stark.SpendDepth()
@@ -128,11 +157,7 @@ func BuildWitness(commitments [][]byte, plan SpendPlan) (stark.SpendWitness, sta
 		return zero, stark.Zero(), fmt.Errorf("pool plein : %d notes > capacité %d", len(commitments), full)
 	}
 
-	inCm := plan.In.Commitment()
-	inCmBytes := digestBytes(inCm)
-
-	// Localise la feuille dépensée par comparaison d'octets (le format est figé).
-	index := -1
+	// Arbre du pool (padding au digest NUL — MÊME que poolRoot).
 	leaves := make([][digestLen]stark.Felt, full)
 	for i, cm := range commitments {
 		d, err := bytesToDigest(cm)
@@ -140,48 +165,56 @@ func BuildWitness(commitments [][]byte, plan SpendPlan) (stark.SpendWitness, sta
 			return zero, stark.Zero(), fmt.Errorf("engagement %d: %w", i, err)
 		}
 		leaves[i] = d
-		if index < 0 && bytesEqual(cm, inCmBytes) {
-			index = i
-		}
 	}
-	// Les emplacements [len(commitments), full) restent au digest NUL ([4]Felt
-	// zéro) — MÊME padding que poolRoot.
-	if index < 0 {
-		return zero, stark.Zero(), errors.New("note d'entrée absente du pool (engagement introuvable)")
-	}
-
-	// Arbre + ouverture. len(leaves) == full (puissance de 2) => PoseidonCommit
-	// n'ajoute AUCUN padding supplémentaire : racine identique à poolRoot.
 	_, tree := stark.PoseidonCommit(leaves)
-	sibs := stark.PoseidonOpen(tree, index)
-	if len(sibs) != depth {
-		return zero, stark.Zero(), fmt.Errorf("profondeur d'ouverture %d != %d", len(sibs), depth)
-	}
 
-	// SpendPath : siblings + bits. Le bit du niveau i est le LSB de l'indice à ce
-	// niveau — MÊME convention que PoseidonVerifyPath / le circuit.
-	var path stark.SpendPath
-	idx := index
-	for i := 0; i < depth; i++ {
-		path.Siblings[i] = sibs[i]
-		if idx&1 == 0 {
-			path.Bits[i] = stark.Zero()
-		} else {
-			path.Bits[i] = stark.One()
+	// Une entrée par note dépensée : localisation + chemin d'appartenance.
+	ins := make([]stark.SpendNIn, len(plan.Ins))
+	for k, note := range plan.Ins {
+		inCmBytes := digestBytes(note.Commitment())
+		index := -1
+		for i, cm := range commitments {
+			if bytesEqual(cm, inCmBytes) {
+				index = i
+				break
+			}
 		}
-		idx >>= 1
+		if index < 0 {
+			return zero, stark.Zero(), fmt.Errorf("entrée %d absente du pool (engagement introuvable)", k)
+		}
+		sibs := stark.PoseidonOpen(tree, index)
+		if len(sibs) != depth {
+			return zero, stark.Zero(), fmt.Errorf("profondeur d'ouverture %d != %d", len(sibs), depth)
+		}
+		var path stark.SpendPath
+		idx := index
+		for i := 0; i < depth; i++ {
+			path.Siblings[i] = sibs[i]
+			if idx&1 == 0 {
+				path.Bits[i] = stark.Zero()
+			} else {
+				path.Bits[i] = stark.One()
+			}
+			idx >>= 1
+		}
+		ins[k] = stark.SpendNIn{
+			Value: stark.FromUint64(note.Value),
+			Rho:   note.Rho,
+			Nk:    note.Nk,
+			Path:  path,
+		}
 	}
 
-	w := stark.SpendWitness{
-		InValue:     stark.FromUint64(plan.In.Value),
-		InRho:       plan.In.Rho,
-		Nk:          plan.In.Nk,
-		Path:        path,
-		OutValue:    stark.FromUint64(plan.Out.Value),
-		OutOwnerTag: plan.Out.OwnerTag(),
-		OutRho:      plan.Out.Rho,
+	outs := make([]stark.SpendNOut, len(plan.Outs))
+	for k, note := range plan.Outs {
+		outs[k] = stark.SpendNOut{
+			Value:    stark.FromUint64(note.Value),
+			OwnerTag: note.OwnerTag(),
+			Rho:      note.Rho,
+		}
 	}
-	return w, stark.FromUint64(plan.Fee), nil
+
+	return stark.SpendNWitness{Ins: ins, Outs: outs}, stark.FromUint64(plan.Fee), nil
 }
 
 // ---- helpers de (dé)sérialisation digest <-> octets ----

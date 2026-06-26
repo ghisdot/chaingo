@@ -65,7 +65,7 @@ func TestBuildWitnessPathMatchesPoolRoot(t *testing.T) {
 		}
 		root := poolRootLike(t, commits)
 		leaf := inNote.Commitment()
-		if !stark.PoseidonVerifyPath(root, index, leaf, sibsFromPath(w.Path)) {
+		if !stark.PoseidonVerifyPath(root, index, leaf, sibsFromPath(w.Ins[0].Path)) {
 			t.Fatalf("index %d: chemin reconstruit ne vérifie pas contre la racine du pool", index)
 		}
 	}

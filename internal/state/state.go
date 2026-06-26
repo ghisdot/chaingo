@@ -1071,20 +1071,23 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		if pool.Balance < fee {
 			return errors.New("shielded_transfer: pool balance below proof fee")
 		}
-		// La note de sortie (OutCm) est insérée dans l'arbre : capacité.
-		outCm := digestToBytes(public.OutCm)
+		// Les N notes de sortie (OutCms) sont insérées dans l'arbre : capacité.
 		capacity := 1 << uint(stark.SpendDepth())
-		if len(pool.Commitments)+1 > capacity {
+		if len(pool.Commitments)+len(public.OutCms) > capacity {
 			return fmt.Errorf("shielded_transfer: pool plein (capacité %d notes)", capacity)
 		}
-		newCommits := append(append([][]byte(nil), pool.Commitments...), outCm)
+		newCommits := append([][]byte(nil), pool.Commitments...)
+		for _, oc := range public.OutCms {
+			newCommits = append(newCommits, digestToBytes(oc))
+		}
 		newRoot, rerr := poolRoot(newCommits)
 		if rerr != nil {
 			return fmt.Errorf("shielded_transfer: %w", rerr)
 		}
-		nfKey := nullifierKey(public.Nf)
 		// --- MUTATION ---
-		pool.Nullifiers[nfKey] = true
+		for _, nf := range public.Nfs {
+			pool.Nullifiers[nullifierKey(nf)] = true
+		}
 		pool.Commitments = newCommits
 		pool.Notes = append(pool.Notes, append([]byte(nil), tx.ShieldNote...))
 		pool.Root = newRoot
@@ -1108,20 +1111,23 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		if pool.Balance < amount {
 			return errors.New("unshield: pool balance below public amount")
 		}
-		// La note de monnaie rendue (OutCm) est réinsérée : capacité.
-		outCm := digestToBytes(public.OutCm)
+		// Les N notes de change (OutCms) sont réinsérées : capacité.
 		capacity := 1 << uint(stark.SpendDepth())
-		if len(pool.Commitments)+1 > capacity {
+		if len(pool.Commitments)+len(public.OutCms) > capacity {
 			return fmt.Errorf("unshield: pool plein (capacité %d notes)", capacity)
 		}
-		newCommits := append(append([][]byte(nil), pool.Commitments...), outCm)
+		newCommits := append([][]byte(nil), pool.Commitments...)
+		for _, oc := range public.OutCms {
+			newCommits = append(newCommits, digestToBytes(oc))
+		}
 		newRoot, rerr := poolRoot(newCommits)
 		if rerr != nil {
 			return fmt.Errorf("unshield: %w", rerr)
 		}
-		nfKey := nullifierKey(public.Nf)
 		// --- MUTATION ---
-		pool.Nullifiers[nfKey] = true
+		for _, nf := range public.Nfs {
+			pool.Nullifiers[nullifierKey(nf)] = true
+		}
 		pool.Commitments = newCommits
 		if len(tx.ShieldNote) > 0 {
 			pool.Notes = append(pool.Notes, append([]byte(nil), tx.ShieldNote...))
@@ -1449,13 +1455,13 @@ func nullifierKey(nf [4]stark.Felt) string {
 //
 // Renvoie l'énoncé public décodé et la preuve si tout passe ; une erreur sinon.
 // Le pool DOIT exister (sinon il n'y a aucune note à dépenser).
-func (s *State) verifySpendLocked(tx *types.Transaction) (stark.SpendPublic, stark.AirProof, error) {
-	var public stark.SpendPublic
+func (s *State) verifySpendLocked(tx *types.Transaction) (stark.SpendNPublic, stark.AirProof, error) {
+	var public stark.SpendNPublic
 	var proof stark.AirProof
 	if s.Shielded == nil || len(s.Shielded.Commitments) == 0 {
 		return public, proof, errors.New("pool blindé vide : aucune note à dépenser")
 	}
-	public, err := stark.UnmarshalSpendPublic(tx.SpendPublic)
+	public, err := stark.UnmarshalSpendNPublic(tx.SpendPublic)
 	if err != nil {
 		return public, proof, fmt.Errorf("spend_public invalide: %w", err)
 	}
@@ -1463,18 +1469,31 @@ func (s *State) verifySpendLocked(tx *types.Transaction) (stark.SpendPublic, sta
 	if err != nil {
 		return public, proof, fmt.Errorf("spend_proof invalide: %w", err)
 	}
-	// Vérification cryptographique de la preuve (déterministe, rapide).
-	if !stark.VerifySpend(public, proof) {
+	// Vérification cryptographique de la preuve M-entrées/N-sorties (déterministe).
+	if !stark.VerifySpendN(public, proof) {
 		return public, proof, errors.New("preuve de dépense invalide")
 	}
-	// La racine prouvée doit être la racine COURANTE du pool : on dépense bien
-	// une note de l'arbre actuel (pas d'un arbre obsolète / forgé).
+	// La racine prouvée doit être la racine COURANTE du pool : toutes les notes
+	// dépensées appartiennent à l'arbre actuel (pas d'un arbre obsolète / forgé).
 	if !bytesEqual(digestToBytes(public.MerkleRoot), s.Shielded.Root) {
 		return public, proof, errors.New("racine de la preuve != racine courante du pool")
 	}
-	// Anti double-dépense : le nullifier ne doit pas déjà figurer.
-	if s.Shielded.Nullifiers[nullifierKey(public.Nf)] {
-		return public, proof, errors.New("nullifier déjà dépensé (double-dépense)")
+	// Anti double-dépense : chaque nullifier ne doit pas déjà figurer, ET les
+	// nullifiers de CETTE tx doivent être DEUX À DEUX DISTINCTS. Sans ce second
+	// contrôle, une même note pourrait être utilisée plusieurs fois en entrée d'une
+	// même tx (le circuit ne l'interdit pas : il produit alors des nullifiers
+	// identiques) — ce qui CRÉERAIT DE LA VALEUR. C'est une garantie portée par la
+	// couche état, pas par le circuit.
+	seen := make(map[string]bool, len(public.Nfs))
+	for _, nf := range public.Nfs {
+		key := nullifierKey(nf)
+		if s.Shielded.Nullifiers[key] {
+			return public, proof, errors.New("nullifier déjà dépensé (double-dépense)")
+		}
+		if seen[key] {
+			return public, proof, errors.New("nullifier en double dans la tx (double-dépense intra-tx)")
+		}
+		seen[key] = true
 	}
 	return public, proof, nil
 }

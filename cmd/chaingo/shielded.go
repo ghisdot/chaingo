@@ -143,7 +143,7 @@ func cmdShieldedTransfer(args []string) error {
 	tx := &types.Transaction{
 		Type:        types.TxShieldedTransfer,
 		SpendProof:  stark.MarshalSpendProof(proof),
-		SpendPublic: stark.MarshalSpendPublic(public),
+		SpendPublic: stark.MarshalSpendNPublic(public),
 		ShieldNote:  []byte(fmt.Sprintf("xfer/v1/out=%d", *outIndex)),
 	}
 	fmt.Printf("Transfert blindé : note #%d (%s CGO) -> note de sortie, Fee %s CGO brûlé\n", *noteIndex, *value, *fee)
@@ -203,7 +203,7 @@ func cmdShieldedUnshield(args []string) error {
 		Type:        types.TxUnshield,
 		To:          dest,
 		SpendProof:  stark.MarshalSpendProof(proof),
-		SpendPublic: stark.MarshalSpendPublic(public),
+		SpendPublic: stark.MarshalSpendNPublic(public),
 		ShieldNote:  []byte(fmt.Sprintf("unshield/v1/out=%d", *outIndex)),
 	}
 	fmt.Printf("Désanonymisation : %s CGO publics -> %s ; reliquat blindé en note #%d\n", *amountOut, dest, *outIndex)
@@ -271,16 +271,16 @@ func fetchCommitments(api string) ([][]byte, error) {
 
 // proveShieldedSpend construit le témoin (chemin de Merkle aligné sur le pool) et
 // GÉNÈRE la preuve zk-STARK. Lent (~90 s) — on l'annonce à l'utilisateur.
-func proveShieldedSpend(commits [][]byte, in, out shieldedwallet.Note, fee uint64) (stark.SpendPublic, stark.AirProof, error) {
-	var zp stark.SpendPublic
+func proveShieldedSpend(commits [][]byte, in, out shieldedwallet.Note, fee uint64) (stark.SpendNPublic, stark.AirProof, error) {
+	var zp stark.SpendNPublic
 	var za stark.AirProof
 	w, feeFelt, err := shieldedwallet.BuildWitness(commits, shieldedwallet.SpendPlan{In: in, Out: out, Fee: fee})
 	if err != nil {
 		return zp, za, err
 	}
-	fmt.Println("⏳ Génération de la preuve zk-STARK (~90 s, CPU intensif)…")
+	fmt.Println("⏳ Génération de la preuve zk-STARK (~2 s)…")
 	t0 := time.Now()
-	public, proof := stark.ProveSpend(w, feeFelt)
-	fmt.Printf("✓ Preuve générée en %s\n", time.Since(t0).Round(time.Second))
+	public, proof := stark.ProveSpendN(w, feeFelt)
+	fmt.Printf("✓ Preuve générée en %s\n", time.Since(t0).Round(time.Millisecond))
 	return public, proof, nil
 }

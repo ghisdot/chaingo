@@ -33,7 +33,7 @@ type spendFixture struct {
 	inValue  uint64
 	outValue uint64
 	fee      uint64
-	public   stark.SpendPublic
+	public   stark.SpendNPublic
 	proof    stark.AirProof
 	poolRoot []byte // racine du pool au moment de la preuve (= public.MerkleRoot sérialisée)
 }
@@ -83,7 +83,7 @@ func buildSpendFixture(t *testing.T) *spendFixture {
 		}
 
 		// UNIQUE génération de preuve (lente).
-		public, proof := stark.ProveSpend(w, feeFelt)
+		public, proof := stark.ProveSpendN(w, feeFelt)
 
 		spendFix = &spendFixture{
 			inNote:   inNote,
@@ -164,7 +164,7 @@ func TestShieldedCycleEndToEnd(t *testing.T) {
 
 		pool := st.GetShieldedPool()
 		// 1) Nullifier marqué.
-		nfKey := nullifierKey(fix.public.Nf)
+		nfKey := nullifierKey(fix.public.Nfs[0])
 		if !pool.Nullifiers[nfKey] {
 			t.Fatal("nullifier non marqué après shielded_transfer")
 		}
@@ -207,7 +207,7 @@ func TestShieldedCycleEndToEnd(t *testing.T) {
 
 		pool := st.GetShieldedPool()
 		// 1) Nullifier marqué.
-		if !pool.Nullifiers[nullifierKey(fix.public.Nf)] {
+		if !pool.Nullifiers[nullifierKey(fix.public.Nfs[0])] {
 			t.Fatal("nullifier non marqué après unshield")
 		}
 		// 2) Montant public (= Fee de la preuve) sorti du pool vers To.
@@ -260,7 +260,7 @@ func provedTx(typ types.TxType, from, to string, fix *spendFixture) *types.Trans
 		To:          to,
 		MaxBaseFee:  1,
 		SpendProof:  stark.MarshalSpendProof(fix.proof),
-		SpendPublic: stark.MarshalSpendPublic(fix.public),
+		SpendPublic: stark.MarshalSpendNPublic(fix.public),
 		ShieldNote:  []byte("out-note-blob"),
 	}
 }
