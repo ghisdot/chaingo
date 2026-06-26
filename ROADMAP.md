@@ -147,7 +147,8 @@ en cours · `[ ]` planifié.
       (calibrage blowup / requêtes / grinding).
 - [ ] **Zero-knowledge formel** : indistinguabilité prouvée (le masquage est testé,
       la preuve formelle reste à établir).
-- [ ] **Profondeur d'arbre variable** dans le circuit blindé (fixe aujourd'hui) +
+- [x] **Profondeur d'arbre portée à 12** (4096 notes ; capacité du pool ×256 vs 16).
+- [ ] Profondeur d'arbre **variable par-preuve** (aujourd'hui un format unique) +
       **range-proofs** (borner les montants, éviter tout wrap-around du corps).
 
 ## Phase 4 — Smart contracts no-code

@@ -147,9 +147,9 @@ type WasmContract struct {
 // notes (engagements) déposées, leur racine de Merkle Poseidon, les nullifiers
 // déjà dépensés (anti double-dépense) et le solde public verrouillé.
 //
-// PORTÉE / GAP DOCUMENTÉ : le circuit de dépense fige la profondeur d'arbre à
-// stark.SpendDepth() (= 4 dans ce prototype), soit AU PLUS 2^SpendDepth notes
-// (16). Au-delà, la racine du pool ne correspondrait plus à un arbre dépensable
+// PORTÉE / CAPACITÉ : le circuit de dépense fixe la profondeur d'arbre à
+// stark.SpendDepth() (= 12), soit AU PLUS 2^SpendDepth notes (4096). Au-delà, la
+// racine du pool ne correspondrait plus à un arbre dépensable
 // par le circuit. C'est une borne ASSUMÉE du prototype (à élargir avec un arbre
 // incrémental / une profondeur supérieure dans une version auditée).
 //

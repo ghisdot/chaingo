@@ -132,9 +132,10 @@ Crypto **faite-maison** : voici les points actuellement **sous revue de sécurit
    (positions distinctes) livré.
 4. **Masquage ZK** : LDE randomisé présent et testé (montant non extractible), mais
    le *zero-knowledge formel* (indistinguabilité prouvée) n'est pas démontré.
-5. **Périmètre du circuit** : profondeur d'arbre **fixe (spendDepth=4 = 16 feuilles
-   dans le circuit blindé)** reste fixe. En revanche **multi-entrées / multi-sorties
-   livré** (join-split) et **profondeur de pliage FRI variable** livrée.
+5. **Périmètre du circuit** : profondeur d'arbre **spendDepth=12 (4096 feuilles)** —
+   capacité du pool blindé portée de 16 à **4096 notes**. **Multi-entrées /
+   multi-sorties** (join-split) et **profondeur de pliage FRI variable** livrés.
+   Reste : profondeur d'arbre PAR-PREUVE variable (aujourd'hui un format unique).
 6. **Anonymat ML-KEM** : la *confidentialité* des notes est garantie ; la
    *non-liaison* (key-privacy de ML-KEM) reste à établir.
 7. ~~Performance ~95 s~~ → **résolu** : **~1,8 s/preuve** (≈77× plus rapide).

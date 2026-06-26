@@ -23,20 +23,22 @@ package stark
 // ---------------------------------------------------------------------------
 
 const (
-	// spendDepth est la profondeur FIXE de l'arbre d'appartenance prouvé par le
-	// circuit de dépense. d=4 => 2^4 = 16 feuilles. Réduit (vs memDepth=8) pour
-	// garder le prouveur tractable (voir bandeau de portée). C'est un format unique.
-	spendDepth = 4
+	// spendDepth est la profondeur de l'arbre d'appartenance prouvé par le circuit
+	// de dépense. d=12 => 2^12 = 4096 feuilles (capacité du pool blindé on-chain).
+	// Choisi pour que spNumBlocks = spendDepth+4 = 16 reste une PUISSANCE DE 2 (le
+	// circuit 1-out n'a pas de complétion ; le circuit M-in/N-out, lui, complète à
+	// la puissance de 2 supérieure et accepte donc n'importe quelle profondeur).
+	spendDepth = 12
 
 	// spBlock = lignes par bloc Poseidon (= pfSteps : 30 rondes + sortie + service).
 	spBlock = pfSteps // 32
 
 	// Nombre de blocs : ownerTag(1) + inCm(1) + nf(1) + appartenance(spendDepth) +
-	// outCm(1) = spendDepth + 4. Pour d=4 : 8 blocs.
-	spNumBlocks = spendDepth + 4 // 8
+	// outCm(1) = spendDepth + 4. Pour d=12 : 16 blocs.
+	spNumBlocks = spendDepth + 4 // 16
 
-	// spSteps = hauteur de trace = spNumBlocks·32 = 256 (puissance de 2).
-	spSteps = spNumBlocks * spBlock // 256
+	// spSteps = hauteur de trace = spNumBlocks·32 = 512 (puissance de 2).
+	spSteps = spNumBlocks * spBlock // 512
 
 	// --- Colonnes ---
 	// Bloc Poseidon (réutilise le layout de poseidon_air_full.go).
