@@ -158,11 +158,13 @@ Documentation complète :
   FRI variable**, **transactions blindées M-entrées / N-sorties** (join-split :
   fusion et fractionnement de notes, conservation `Σ in = Σ out + frais` prouvée),
   et **prouveur ~77× plus rapide** (141 s → **1,8 s** : inversion par lots, suite
-  géométrique, parallélisation). ⚠️ **Fait-maison, NON audité, hors-consensus, gaté
-  OFF** — audit communautaire de hackers ouvert. Dossier de preuve :
-  [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Câblage on-chain livré (tx
-  blindées gatées `PrivacyEnabled` OFF). Reste : audit externe ; câblage codec des
-  tx M-in/N-out.
+  géométrique, parallélisation). Câblé **en consensus** et **ACTIVÉ sur devnet +
+  testnet** (gate `PrivacyEnabled` ON) — utilisable et testable dès maintenant sur
+  le réseau de test. ⚠️ **Fait-maison, NON audité** : la gate reste **OFF sur
+  mainnet jusqu'à l'audit communautaire** (bloquant) — ne confiez pas de fonds
+  critiques à la confidentialité tant que l'audit n'est pas passé. Dossier de
+  preuve : [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Reste : audit externe ;
+  câblage `state`/wallet du format M-in/N-out (le 1-in/1-out est actif on-chain).
 
 Voir [ROADMAP.md](ROADMAP.md) pour le détail complet et honnête.
 
