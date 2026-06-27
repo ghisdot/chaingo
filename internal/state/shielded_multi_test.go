@@ -37,6 +37,9 @@ func seedPoolWithNotes(t *testing.T, notes []shieldedwallet.Note) *State {
 // TestShieldedTransfer_MultiInput : une dépense 2-entrées / 1-sortie RÉELLE passe le
 // consensus — les DEUX nullifiers sont marqués et la note de sortie insérée.
 func TestShieldedTransfer_MultiInput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("preuve zk lourde (depth 12) — exclue en -short")
+	}
 	in0 := shieldedwallet.Note{Value: 600_000, Nk: shieldedwallet.DeriveNk([]byte("multi/0"), 0), Rho: shieldedwallet.DeriveRho([]byte("multi/0"), 0)}
 	in1 := shieldedwallet.Note{Value: 400_000, Nk: shieldedwallet.DeriveNk([]byte("multi/1"), 0), Rho: shieldedwallet.DeriveRho([]byte("multi/1"), 0)}
 	fee := uint64(2_500)
@@ -82,6 +85,9 @@ func TestShieldedTransfer_MultiInput(t *testing.T) {
 // mais la couche état DOIT rejeter (sinon création de valeur). Invariant porté par
 // l'état, pas par le circuit.
 func TestShieldedTransfer_DoublonEntreeRejete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("preuve zk lourde (depth 12) — exclue en -short")
+	}
 	in := shieldedwallet.Note{Value: 500_000, Nk: shieldedwallet.DeriveNk([]byte("dup/in"), 0), Rho: shieldedwallet.DeriveRho([]byte("dup/in"), 0)}
 	fee := uint64(2_500)
 	out := shieldedwallet.Note{Value: 2*500_000 - fee, Nk: shieldedwallet.DeriveNk([]byte("dup/out"), 0), Rho: shieldedwallet.DeriveRho([]byte("dup/out"), 0)}

@@ -137,6 +137,9 @@ func freshPoolWithProvedNote(t *testing.T, fix *spendFixture, spender string) *S
 // TestShieldedCycleEndToEnd : le test d'intégration principal. Une preuve, deux
 // usages (transfer puis unshield), plus conservation et anti double-dépense.
 func TestShieldedCycleEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("preuve zk lourde (depth 12) — exclue en -short")
+	}
 	fix := buildSpendFixture(t)
 
 	// --- Alignement arbre/circuit : la racine reconstruite côté wallet (via le

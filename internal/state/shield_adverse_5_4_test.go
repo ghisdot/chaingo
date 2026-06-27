@@ -217,6 +217,9 @@ func TestShieldPoolBalanceConservation(t *testing.T) {
 // notes (sinon la racine ne serait plus dépensable par le circuit). La (capacité+1)-
 // ième est rejetée, sans mutation partielle.
 func TestShieldPoolCapacityEnforced(t *testing.T) {
+	if testing.Short() {
+		t.Skip("remplit le pool à 2^SpendDepth (4096) notes — lourd, exclu en -short")
+	}
 	st := New()
 	st.SetParams(privacyParams())
 	alice := mustKey(t)
