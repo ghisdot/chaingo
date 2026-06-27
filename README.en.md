@@ -10,13 +10,13 @@
 blocks, votes) uses **ML-DSA-65** (FIPS 204, NIST security level 3), the
 quantum-resistant signature standard. SHA3-256 hashing.
 
-**Public testnet is live.** Mainnet ships after external security audit and
-finalization of the BFT consensus (Phase 2).
+**Public testnet is live.** Mainnet ships after community hardening, independent
+validators, and finalization of the BFT consensus (Phase 2).
 
 - 🔐 **Native post-quantum security**, end-to-end.
 - ⚡ **~31,000 TPS** end-to-end (parallel PQ verification + execution).
 - 🔥 **Deflationary economics**: burned EIP-1559 base fees, elastic supply.
-- 🪙 **No-code**: tokens, vesting, escrow, multisig, DAO — deploy **from the browser** (studio), without writing a smart contract.
+- 🪙 **No-code**: tokens (mintable/capped/burnable) and 8 contract templates (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) — deploy **and operate** them **from the browser** (studio), without writing a smart contract.
 - 🌐 **P2P** network, anyone can join.
 
 ---
@@ -48,6 +48,9 @@ No install needed. Everything runs in the browser:
   to respect (post-quantum crypto, determinism).
 - [Roadmap](ROADMAP.md) — what's shipped, what's left.
 - [API reference](docs/API.md) — for building clients or integrating.
+- **[Security review report](docs/SECURITY-REVIEW.md)** — internal self-audit +
+  reproducible proof dossier (consensus, state, zk-STARK anonymity).
+- **[Bug bounty](BUG-BOUNTY.md)** — attack the code, get rewarded (CGO + credit).
 - Security policy: [SECURITY.md](SECURITY.md).
 
 ---
@@ -63,8 +66,8 @@ picks its own. Defaults:
 | Mainnet distribution | 50 % community · 20 % treasury · 15 % team (4-year vesting) · 10 % ecosystem · 5 % genesis/liquidity |
 | Emission | ~3 %/year on total stake, minted to block proposers |
 | Fees | dynamic EIP-1559: **burned** base fee + free-market tip |
-| Token creation | 10 CGO burned (anti-spam), fully no-code |
-| No-code smart contracts | vesting, escrow, multisig, DAO — 1 CGO burned per contract |
+| Token creation | 10 CGO burned (anti-spam), fully no-code — optional **max-supply cap**, **burnable**, display metadata |
+| No-code smart contracts | vesting, escrow, multisig, DAO, **presale**, **timelock**, **airdrop**, **streaming** — 1 CGO burned per contract |
 | Validators | 10,000 CGO minimum stake; fallback rounds keep liveness when validators go offline |
 | Delegation | from 1 CGO, 10 % validator commission, pro-rata rewards every block |
 | Unbonding | 21 days (mainnet), 24 h (testnet) |
@@ -119,28 +122,34 @@ Full documentation:
 - **Phase 1 — Foundations**: ✅ complete.
 - **Phase 2 — Production security**: 🟢 hardened BFT (height-frozen validator set, POL
   locking, full slashing, fork-choice + reorg with a partition test), binary codec, fuzzing,
-  network-upgrade governance. **Remaining**: external audit and — above all — **independent
-  validators** (today on the maintainer's machines; this is the real decentralization milestone
-  before mainnet).
-- **Phase 4 — No-code smart contracts**: 🟢 vesting / escrow / multisig / **DAO** templates
-  shipped and deployable from the studio. A **WASM** engine (arbitrary contracts, in WebAssembly):
-  **wired into consensus on testnet/devnet** — deploy bytecode (`wasm_deploy`) and call it
-  (`wasm_call`) from the studio, CLI or API. Determinism is enforced by deterministic gas
-  (instrumentation, fuzzed 5.3M execs), a restricted opcode set validated at deploy time, and the
-  wazero interpreter; verified by a multi-validator test (4 nodes, identical state root).
-  **Disabled on mainnet (`WasmEnabled=false`) until an external audit** — see
+  network-upgrade governance. **Remaining**: **independent validators** (today on the maintainer's
+  machines; this is the real decentralization milestone before mainnet).
+- **Phase 4 — No-code smart contracts**: 🟢 **8 templates** — vesting, escrow, multisig, **DAO**,
+  **presale**, **timelock**, **airdrop**, **streaming** — deployable **and operable** from the
+  studio. Tokens gained **max-supply caps**, **burn** and display metadata. A **WASM** engine
+  (arbitrary contracts): **wired into consensus on testnet/devnet** — deploy bytecode
+  (`wasm_deploy`) and call it (`wasm_call`) from the studio, CLI or API. Determinism enforced by
+  deterministic gas (instrumentation, fuzzed 5.3M execs), a restricted opcode set, and the wazero
+  interpreter; verified by a multi-validator test (4 nodes, identical state root).
+  **Disabled on mainnet (`WasmEnabled=false`) until community hardening** — see
   [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 - **Phase 5 — Ecosystem**: 🟢 web wallet, explorer, studio, validator dashboard, load tester.
   **Remaining**: JS/Python SDKs, full EN docs.
-- **Phase 3 — Strong anonymity (zk-STARK)**: 🟡 **advanced R&D**. A **homemade
+- **Phase 3 — Strong anonymity (zk-STARK)**: 🟢 **live on testnet**. A **homemade
   post-quantum zk-STARK stack** (Goldilocks field, FRI, multi-column AIR, Poseidon
   hash) + a **working shielded-transaction circuit**: proves a valid spend in
   zero-knowledge (Merkle membership + nullifier + value conservation), with
   **hidden amounts** (ZK masking, tested) and **hidden recipient** (ML-KEM-encrypted
-  notes). Hash-only security (no elliptic curve, no trusted setup). ⚠️ **Homemade,
-  UNAUDITED, out-of-consensus, gated OFF** — open to community (hacker) audit.
-  Evidence dossier: [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Remaining:
-  on-chain wiring (gated shielded txs) + audit.
+  notes). Hash-only security (no elliptic curve, no trusted setup). **Hardening shipped**:
+  Fiat-Shamir grinding, sampling without replacement, variable FRI fold depth,
+  **multi-input / multi-output (join-split)** transactions, a **~77× faster prover** (141s →
+  ~1.8s), **range proofs** (note values bounded `< 2⁴⁸`, closing modular value-creation), and
+  **≥128-bit conjectured soundness** (40 FRI queries + grinding + multi-point OOD amplification).
+  The **M-in/N-out format is wired on-chain** (state + wallet/CLI, intra-tx nullifier dedup) and
+  the pool capacity is now 4096 notes. **Enabled on devnet + testnet** (`PrivacyEnabled` ON) —
+  usable today; **security review under way** before mainnet. Evidence dossier:
+  [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Remaining: security review; *proven* (not
+  conjectured) 128-bit soundness via a field extension.
 
 See [ROADMAP.md](ROADMAP.md) for the full, honest breakdown.
 

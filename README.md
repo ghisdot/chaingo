@@ -11,13 +11,13 @@
 sécurité NIST 3), le standard de signature résistant aux ordinateurs
 quantiques. Hachage SHA3-256.
 
-**Testnet public en ligne.** Mainnet en préparation après audit externe et
-finalisation du consensus BFT (Phase 2).
+**Testnet public en ligne.** Mainnet en préparation après durcissement
+communautaire, validateurs indépendants et finalisation du consensus BFT (Phase 2).
 
 - 🔐 **Sécurité post-quantique** native, partout dans la chaîne.
 - ⚡ **~31 000 TPS** mesurés bout-en-bout (vérification PQ parallèle + exécution).
 - 🔥 **Économie déflationniste** : frais EIP-1559 brûlés, supply élastique.
-- 🪙 **No-code** : tokens, vesting, escrow, multisig, DAO — déployables **depuis le navigateur** (studio), sans écrire de smart contract.
+- 🪙 **No-code** : tokens (mintable/plafonné/burnable) et 8 templates de contrats (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) — déployables **et opérables depuis le navigateur** (studio), sans écrire de smart contract.
 - 🌐 **P2P** pair-à-pair, rejoignable par n'importe qui, avec gouvernance des mises à jour (version de protocole).
 
 ---
@@ -34,8 +34,9 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
   votre navigateur** (jamais envoyées à un serveur).
 - **Obtenir des CGO de test** : voir [docs/GET-CGO.md](docs/GET-CGO.md).
 - **Studio no-code** : <https://chaingo.org/studio/>
-  Créer un token ou déployer un contrat (vesting, escrow, multisig, DAO) en
-  quelques clics, signature post-quantique dans le navigateur.
+  Créer un token (plafond, burnable, métadonnées) ou déployer **et opérer** un
+  contrat (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming)
+  en quelques clics, signature post-quantique dans le navigateur.
 - **Explorateur de blocs** : <https://chaingo.org/explorer/>
   Parcourir les blocs, transactions, comptes, validateurs et tokens en direct.
 - **Validator Dashboard** : <https://chaingo.org/validator/>
@@ -74,8 +75,8 @@ réseau ChainGO choisit les siennes. Valeurs par défaut :
 | Distribution genèse mainnet | « communauté d'abord » | 50 % communauté · 20 % trésorerie · 15 % équipe (vesting 4 ans) · 10 % écosystème · 5 % validateurs genèse / liquidité |
 | Émission | **~3 %/an sur le stake total** | mintée au proposeur de chaque bloc, pondéré par le stake |
 | Frais | **EIP-1559 dynamiques** | base fee ajusté à la congestion et **brûlé** ; tip libre au validateur |
-| Création de token | 10 CGO brûlés | anti-spam |
-| Smart contracts no-code | vesting, escrow, multisig, DAO | templates natifs paramétrés, 1 CGO brûlé à la création |
+| Création de token | 10 CGO brûlés | anti-spam ; plafond max-supply, burnable, métadonnées en option |
+| Smart contracts no-code | vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming | 8 templates natifs paramétrés, 1 CGO brûlé à la création |
 | Stake validateur | **minimum 10 000 CGO** | en dessous : transaction rejetée |
 | Délégation | dès **1 CGO**, commission 10 % | les petits holders délèguent à un validateur et touchent leur part au pro-rata |
 | Unbonding | **21 jours** (mainnet), 24 h (testnet) | s'applique au stake et aux délégations retirées |
@@ -137,20 +138,21 @@ Documentation complète :
 - **Phase 1 — Fondations** : ✅ complète.
 - **Phase 2 — Sécurité de production** : 🟢 consensus BFT durci (set de validateurs figé
   par hauteur, verrouillage POL, slashing complet, fork-choice + reorg testé en partition),
-  codec binaire, fuzzing, gouvernance des mises à jour. **Reste** : audit externe et, surtout,
-  des **validateurs indépendants** (aujourd'hui sur les machines du mainteneur — c'est le vrai
-  jalon de décentralisation avant mainnet).
-- **Phase 4 — Smart contracts no-code** : 🟢 templates vesting / escrow / multisig / **DAO**
-  livrés + déployables depuis le studio. Moteur **WASM** (contrats arbitraires, en WebAssembly) :
+  codec binaire, fuzzing, gouvernance des mises à jour. **Reste** : surtout des **validateurs
+  indépendants** (aujourd'hui sur les machines du mainteneur — c'est le vrai jalon de
+  décentralisation avant mainnet).
+- **Phase 4 — Smart contracts no-code** : 🟢 **8 templates** (vesting, escrow, multisig, **DAO**,
+  presale, timelock, airdrop, streaming) livrés, déployables **et opérables** depuis le studio ;
+  tokens enrichis (plafond max-supply, burn, métadonnées). Moteur **WASM** (contrats arbitraires) :
   **câblé en consensus sur testnet/devnet** — on déploie du bytecode (`wasm_deploy`) et on
   l'appelle (`wasm_call`) via le studio, la CLI ou l'API. Déterminisme tenu par le gas
   (instrumentation, fuzzé 5,3 M exéc.), un jeu d'opcodes restreint validé au déploiement et
   l'interpréteur wazero ; vérifié par un test multi-validateurs (4 nœuds, même racine d'état).
-  **Désactivé sur mainnet (`WasmEnabled=false`) jusqu'à audit externe** — voir
+  **Désactivé sur mainnet (`WasmEnabled=false`) jusqu'au durcissement communautaire** — voir
   [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 - **Phase 5 — Écosystème** : 🟢 wallet web, explorateur, studio, dashboard validateur, banc d'essai.
   **Reste** : SDK JS/Python, doc EN complète.
-- **Phase 3 — Anonymat fort (zk-STARK)** : 🟡 **R&D avancée**. Pile **zk-STARK
+- **Phase 3 — Anonymat fort (zk-STARK)** : 🟢 **actif sur testnet**. Pile **zk-STARK
   maison post-quantique** (corps Goldilocks, FRI, AIR multi-colonnes, hachage
   Poseidon) + **circuit de transaction blindée fonctionnel** : prouve en
   zero-knowledge une dépense valide (appartenance Merkle + nullifier + conservation

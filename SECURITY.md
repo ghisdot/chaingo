@@ -56,4 +56,6 @@ publiquement (sauf demande contraire) lors de la publication du correctif.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — règles du projet pour contribuer.
 - [ROADMAP.md](ROADMAP.md) — avancement de la Phase 2 (sécurité de
-  production) et de l'audit externe planifié.
+  production) et du durcissement communautaire.
+- [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) — rapport de revue interne.
+- [BUG-BOUNTY.md](BUG-BOUNTY.md) — récompenses pour les failles trouvées.

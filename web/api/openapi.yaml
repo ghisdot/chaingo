@@ -516,13 +516,20 @@ components:
             - transfer
             - create_token
             - mint
+            - burn
             - stake
             - unstake
             - delegate
             - undelegate
             - unjail
+            - validator_profile
             - contract_create
             - contract_exec
+            - wasm_deploy
+            - wasm_call
+            - shield
+            - shielded_transfer
+            - unshield
         from: { type: string }
         from_pub_key:
           type: string
@@ -541,8 +548,9 @@ components:
         contract_id: { type: string }
         action:
           type: string
-          enum: [claim, release, refund, propose, approve]
-        proposal: { type: integer, description: index pour multisig approve }
+          enum: [claim, release, refund, propose, approve, reject, buy, cancel]
+          description: "contract_exec : action selon le template (claim/release/refund/propose/approve/reject/buy/cancel)"
+        proposal: { type: integer, description: index pour multisig/dao approve|reject }
         timestamp: { type: integer, description: ms epoch }
         signature:
           type: string
@@ -640,6 +648,11 @@ components:
         decimals: { type: integer, maximum: 12 }
         supply: { type: integer }
         mintable: { type: boolean }
+        max_supply: { type: integer, description: "plafond dur (0/absent = illimité) ; exige mintable" }
+        burnable: { type: boolean, description: "tout détenteur peut brûler ses jetons (tx burn)" }
+        logo_uri: { type: string, maxLength: 256, description: métadonnée d'affichage }
+        description: { type: string, maxLength: 512, description: métadonnée d'affichage }
+        website: { type: string, maxLength: 256, description: métadonnée d'affichage }
 
     Token:
       allOf:
@@ -655,24 +668,26 @@ components:
       properties:
         template:
           type: string
-          enum: [vesting, escrow, multisig]
+          enum: [vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming]
         token_id: { type: string }
         amount: { type: integer }
-        beneficiary: { type: string }
-        start_ms: { type: integer }
-        end_ms: { type: integer }
-        seller: { type: string }
-        arbiter: { type: string }
+        beneficiary: { type: string, description: "vesting/timelock/streaming" }
+        start_ms: { type: integer, description: "vesting/streaming" }
+        end_ms: { type: integer, description: "vesting/streaming ; timelock : date de déblocage" }
+        seller: { type: string, description: escrow }
+        arbiter: { type: string, description: "escrow (optionnel)" }
         signers:
           type: array
+          description: "multisig/dao : signataires/membres ; airdrop : destinataires"
           items: { type: string }
-        threshold: { type: integer }
+        threshold: { type: integer, description: "multisig/dao : quorum" }
+        price: { type: integer, description: "presale : prix en ucgo par unité de base du token vendu" }
 
     Contract:
       type: object
       properties:
         id: { type: string }
-        template: { type: string, enum: [vesting, escrow, multisig] }
+        template: { type: string, enum: [vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming] }
         creator: { type: string }
         token_id: { type: string }
         amount: { type: integer }
@@ -686,6 +701,11 @@ components:
           type: array
           items: { type: string }
         threshold: { type: integer }
+        price: { type: integer, description: "presale : ucgo par unité de base" }
+        claimed:
+          type: array
+          description: "airdrop : destinataires ayant déjà réclamé"
+          items: { type: string }
         proposals:
           type: array
           items:
@@ -696,8 +716,13 @@ components:
               approvals:
                 type: array
                 items: { type: string }
+              against:
+                type: array
+                description: "dao : votes CONTRE"
+                items: { type: string }
               executed: { type: boolean }
-        status: { type: string, enum: [active, completed, refunded] }
+              rejected: { type: boolean, description: "dao : proposition rejetée" }
+        status: { type: string, enum: [active, completed, refunded, cancelled] }
         created_at_height: { type: integer }
 
     Genesis:
