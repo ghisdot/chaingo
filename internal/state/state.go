@@ -778,12 +778,33 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		if !t.Mintable {
 			return errors.New("token is not mintable")
 		}
+		// Plafond max-supply (0 = illimité) : le mint ne peut le dépasser. Garde
+		// aussi contre le débordement uint64.
+		if t.TotalSupply+tx.Amount < t.TotalSupply {
+			return errors.New("mint: supply overflow")
+		}
+		if t.MaxSupply > 0 && t.TotalSupply+tx.Amount > t.MaxSupply {
+			return fmt.Errorf("mint: would exceed max supply (%d)", t.MaxSupply)
+		}
 		target := tx.From
 		if tx.To != "" {
 			target = tx.To
 		}
 		t.TotalSupply += tx.Amount
 		s.acct(target).Balances[tx.TokenID] += tx.Amount
+	case types.TxBurn:
+		t, ok := s.Tokens[tx.TokenID]
+		if !ok {
+			return fmt.Errorf("unknown token %q", tx.TokenID)
+		}
+		if !t.Burnable {
+			return errors.New("token is not burnable")
+		}
+		if from.Balances[tx.TokenID] < tx.Amount {
+			return errors.New("insufficient token balance to burn")
+		}
+		from.Balances[tx.TokenID] -= tx.Amount
+		t.TotalSupply -= tx.Amount
 	case types.TxStake:
 		v, ok := s.Validators[tx.From]
 		current := uint64(0)

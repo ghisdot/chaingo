@@ -87,7 +87,8 @@ func TestTxBinaryWithTokenAndContract(t *testing.T) {
 		{
 			ChainID: "c", Type: TxCreateToken, Amount: 0, Nonce: 0,
 			MaxBaseFee: 200_000, Tip: 50_000, Timestamp: 1,
-			Token: &TokenParams{Symbol: "AAA", Name: "Triple A", Decimals: 6, Supply: 1_000_000, Mintable: true},
+			Token: &TokenParams{Symbol: "AAA", Name: "Triple A", Decimals: 6, Supply: 1_000_000, Mintable: true,
+				MaxSupply: 10_000_000, Burnable: true, LogoURI: "https://x/logo.png", Description: "jeton de test", Website: "https://x"},
 		},
 		{
 			ChainID: "c", Type: TxContractCreate, Amount: 0, Nonce: 1,

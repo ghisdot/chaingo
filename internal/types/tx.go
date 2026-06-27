@@ -18,6 +18,7 @@ const (
 	TxTransfer    TxType = "transfer"
 	TxCreateToken TxType = "create_token"
 	TxMint        TxType = "mint"
+	TxBurn        TxType = "burn" // le détenteur détruit ses propres jetons (token burnable)
 	TxStake       TxType = "stake"
 	TxUnstake     TxType = "unstake"
 	TxDelegate    TxType = "delegate"   // To = validateur
@@ -104,6 +105,14 @@ type TokenParams struct {
 	Decimals uint8  `json:"decimals"`
 	Supply   uint64 `json:"supply"`
 	Mintable bool   `json:"mintable"`
+	// Champs AJOUTÉS en fin de struct (l'ordre EST le format de signature JSON
+	// canonique : ne jamais réordonner ; les nouveaux champs vont à la fin, en
+	// omitempty pour que les anciennes tx produisent des octets identiques).
+	MaxSupply   uint64 `json:"max_supply,omitempty"`  // plafond dur (0 = illimité) ; exige Mintable
+	Burnable    bool   `json:"burnable,omitempty"`    // tout détenteur peut brûler ses jetons
+	LogoURI     string `json:"logo_uri,omitempty"`    // métadonnée d'affichage (wallet/explorer)
+	Description string `json:"description,omitempty"` // métadonnée d'affichage
+	Website     string `json:"website,omitempty"`     // métadonnée d'affichage
 }
 
 type Transaction struct {
@@ -234,9 +243,33 @@ func (tx *Transaction) ValidateBasic() error {
 		if tx.Token.Decimals > 12 {
 			return errors.New("decimals max 12")
 		}
+		// Plafond max-supply : optionnel, mais n'a de sens que pour un token
+		// mintable, et doit pouvoir contenir au moins le supply initial.
+		if tx.Token.MaxSupply > 0 {
+			if !tx.Token.Mintable {
+				return errors.New("max_supply requires a mintable token")
+			}
+			if tx.Token.MaxSupply < tx.Token.Supply {
+				return errors.New("max_supply must be >= initial supply")
+			}
+		}
+		// Métadonnées : bornées pour éviter le ballonnement de l'état.
+		if len(tx.Token.LogoURI) > 256 || len(tx.Token.Website) > 256 {
+			return errors.New("logo_uri/website max 256 chars")
+		}
+		if len(tx.Token.Description) > 512 {
+			return errors.New("description max 512 chars")
+		}
 	case TxMint:
 		if tx.TokenID == "" || tx.TokenID == NativeToken {
 			return errors.New("mint requires a non-native token_id")
+		}
+		if tx.Amount == 0 {
+			return errors.New("amount must be > 0")
+		}
+	case TxBurn:
+		if tx.TokenID == "" || tx.TokenID == NativeToken {
+			return errors.New("burn requires a non-native token_id")
 		}
 		if tx.Amount == 0 {
 			return errors.New("amount must be > 0")

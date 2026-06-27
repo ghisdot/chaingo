@@ -38,7 +38,10 @@ Usage :
   chaingo send --from <wallet> --to <adresse|wallet> --amount 1.5 [--token CGO]
                [--fast | --tip 0.0002] [--private] [--memo TXT] [--pass MDP] [--api URL]
   chaingo token create --from <wallet> --symbol TKN --name "Mon Token"
-               --supply 1000000 [--decimals 9] [--mintable] [--pass MDP] [--api URL]
+               --supply 1000000 [--decimals 9] [--mintable] [--max-supply N]
+               [--burnable] [--logo URL] [--description TXT] [--website URL] [--pass MDP] [--api URL]
+  chaingo token mint --from <wallet> --token TKN --amount 1000 [--to <adresse>] [--pass MDP]
+  chaingo token burn --from <wallet> --token TKN --amount 1000 [--pass MDP]
   chaingo stake --from <wallet> --amount 10000 [--pass MDP] [--api URL]
   chaingo unstake --from <wallet> --amount 10000 [--pass MDP] [--api URL]
   chaingo delegate --from <wallet> --to <validateur> --amount 50 [--pass MDP] [--api URL]
@@ -383,9 +386,20 @@ func cmdSend(args []string) error {
 // ---------- token (no-code) ----------
 
 func cmdToken(args []string) error {
-	if len(args) < 1 || args[0] != "create" {
-		return fmt.Errorf("usage : chaingo token create [flags]")
+	if len(args) < 1 {
+		return fmt.Errorf("usage : chaingo token <create|mint|burn> [flags]")
 	}
+	switch args[0] {
+	case "create":
+		return cmdTokenCreate(args)
+	case "mint", "burn":
+		return cmdTokenMintBurn(args)
+	default:
+		return fmt.Errorf("usage : chaingo token <create|mint|burn> [flags]")
+	}
+}
+
+func cmdTokenCreate(args []string) error {
 	fs := flag.NewFlagSet("token create", flag.ExitOnError)
 	from := fs.String("from", "", "wallet créateur")
 	symbol := fs.String("symbol", "", "symbole (3-8 caractères, A-Z0-9)")
@@ -393,6 +407,11 @@ func cmdToken(args []string) error {
 	supply := fs.String("supply", "", "supply initiale (en unités entières du token)")
 	decimals := fs.Uint("decimals", 9, "décimales (max 12)")
 	mintable := fs.Bool("mintable", false, "le créateur pourra minter plus tard")
+	maxSupply := fs.String("max-supply", "", "plafond dur (unités entières ; exige --mintable)")
+	burnable := fs.Bool("burnable", false, "tout détenteur pourra brûler ses jetons")
+	logo := fs.String("logo", "", "URL du logo (métadonnée)")
+	desc := fs.String("description", "", "description (métadonnée)")
+	website := fs.String("website", "", "site web (métadonnée)")
 	pass := fs.String("pass", "", "mot de passe du wallet")
 	api := fs.String("api", defaultAPI, "URL de l'API")
 	fs.Parse(args[1:])
@@ -407,17 +426,60 @@ func cmdToken(args []string) error {
 	if err != nil {
 		return err
 	}
-	tx := &types.Transaction{
-		Type: types.TxCreateToken,
-		Token: &types.TokenParams{
-			Symbol:   strings.ToUpper(*symbol),
-			Name:     *name,
-			Decimals: uint8(*decimals),
-			Supply:   sup,
-			Mintable: *mintable,
-		},
+	tp := &types.TokenParams{
+		Symbol:      strings.ToUpper(*symbol),
+		Name:        *name,
+		Decimals:    uint8(*decimals),
+		Supply:      sup,
+		Mintable:    *mintable,
+		Burnable:    *burnable,
+		LogoURI:     *logo,
+		Description: *desc,
+		Website:     *website,
 	}
-	fmt.Printf("Création du token %s (%s) — coût : 10 CGO brûlés\n", strings.ToUpper(*symbol), *name)
+	if *maxSupply != "" {
+		if tp.MaxSupply, err = parseAmount(*maxSupply, uint8(*decimals)); err != nil {
+			return err
+		}
+	}
+	tx := &types.Transaction{Type: types.TxCreateToken, Token: tp}
+	fmt.Printf("Création du token %s (%s)\n", strings.ToUpper(*symbol), *name)
+	return signAndSubmit(*api, kp, tx)
+}
+
+// chaingo token mint|burn --from <wallet> --token SYM --amount N [--to <adr>]
+func cmdTokenMintBurn(args []string) error {
+	sub := args[0] // "mint" | "burn"
+	fs := flag.NewFlagSet("token "+sub, flag.ExitOnError)
+	from := fs.String("from", "", "wallet émetteur (créateur pour mint, détenteur pour burn)")
+	token := fs.String("token", "", "symbole du token")
+	amount := fs.String("amount", "", "montant (unités entières du token)")
+	to := fs.String("to", "", "destinataire du mint (défaut : vous)")
+	pass := fs.String("pass", "", "mot de passe du wallet")
+	api := fs.String("api", defaultAPI, "URL de l'API")
+	fs.Parse(args[1:])
+	if *from == "" || *token == "" || *amount == "" {
+		return fmt.Errorf("--from, --token et --amount sont requis")
+	}
+	kp, err := wallet.Load(*from, *pass)
+	if err != nil {
+		return err
+	}
+	var t struct {
+		Decimals uint8 `json:"decimals"`
+	}
+	if err := getJSON(*api+"/v1/tokens/"+strings.ToUpper(*token), &t); err != nil {
+		return fmt.Errorf("token %s : %w", *token, err)
+	}
+	amt, err := parseAmount(*amount, t.Decimals)
+	if err != nil {
+		return err
+	}
+	tx := &types.Transaction{Type: types.TxMint, TokenID: strings.ToUpper(*token), Amount: amt, To: *to}
+	if sub == "burn" {
+		tx.Type = types.TxBurn
+		tx.To = ""
+	}
 	return signAndSubmit(*api, kp, tx)
 }
 

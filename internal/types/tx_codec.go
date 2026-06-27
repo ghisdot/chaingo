@@ -218,6 +218,12 @@ func writeTokenParams(e *codec.Encoder, t *TokenParams) {
 	e.WriteU8(t.Decimals)
 	e.WriteUvarint(t.Supply)
 	e.WriteBool(t.Mintable)
+	// Champs ajoutés (mêmes que TokenParams, en fin) — ordre figé.
+	e.WriteUvarint(t.MaxSupply)
+	e.WriteBool(t.Burnable)
+	e.WriteString(t.LogoURI)
+	e.WriteString(t.Description)
+	e.WriteString(t.Website)
 }
 
 func readTokenParams(d *codec.Decoder, t *TokenParams) error {
@@ -235,6 +241,21 @@ func readTokenParams(d *codec.Decoder, t *TokenParams) error {
 		return err
 	}
 	if t.Mintable, err = d.ReadBool(); err != nil {
+		return err
+	}
+	if t.MaxSupply, err = d.ReadUvarint(); err != nil {
+		return err
+	}
+	if t.Burnable, err = d.ReadBool(); err != nil {
+		return err
+	}
+	if t.LogoURI, err = d.ReadString(); err != nil {
+		return err
+	}
+	if t.Description, err = d.ReadString(); err != nil {
+		return err
+	}
+	if t.Website, err = d.ReadString(); err != nil {
 		return err
 	}
 	return nil
