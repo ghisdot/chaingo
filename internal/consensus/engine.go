@@ -390,20 +390,27 @@ func (e *Engine) castVoteKind(height uint64, round uint32, kind, hash string) {
 		return
 	}
 
-	// Règle de VERROUILLAGE (POL), uniquement pour les précommits : si ce nœud
-	// est verrouillé sur un autre bloc à cette hauteur, il ne précommet le
-	// nouveau QUE s'il existe une polka pour ce nouveau bloc à un round
-	// STRICTEMENT supérieur au verrou (preuve d'un quorum plus récent). Sinon il
-	// reste fidèle à son verrou. Au PREMIER précommit d'une hauteur (cas nominal
-	// sans reorg), aucun verrou n'existe → comportement identique à l'historique.
-	if kind == types.PrecommitKind {
-		if lk, ok := e.locked[height]; ok && lk.hash != hash {
-			if !(round > lk.round && e.hasPolka(height, round, hash)) {
-				log.Printf("[consensus] VERROU : reste verrouillé sur %s… (round %d) à la hauteur #%d — refus de précommettre %s… sans polka de round supérieur", short(lk.hash), lk.round, height, short(hash))
-				return
-			}
+	// Règle de VERROUILLAGE (POL) — appliquée AUX DEUX kinds (prevote ET precommit).
+	// Si ce nœud est verrouillé sur un AUTRE bloc à cette hauteur, il ne vote le
+	// nouveau QUE s'il existe une polka pour ce nouveau bloc à un round STRICTEMENT
+	// supérieur au verrou (preuve d'un quorum plus récent). Sinon il reste fidèle à
+	// son verrou :
+	//   - PRECOMMIT : règle de sûreté classique (#6) — ne pas finaliser deux blocs.
+	//   - PREVOTE   : « prevote-the-lock » (Tendermint) — un nœud verrouillé ne
+	//     contribue PAS à former une polka pour un bloc concurrent sans justification
+	//     de round, ce qui empêcherait la naissance d'une polka adverse non fondée.
+	// Au PREMIER vote d'une hauteur (cas nominal sans reorg), aucun verrou n'existe
+	// → comportement identique à l'historique.
+	if lk, ok := e.locked[height]; ok && lk.hash != hash {
+		if !(round > lk.round && e.hasPolka(height, round, hash)) {
+			log.Printf("[consensus] VERROU : refus de %s %s… (verrouillé sur %s… round %d) sans polka de round supérieur — hauteur #%d round %d", kind, short(hash), short(lk.hash), lk.round, height, round)
+			return
 		}
-		e.locked[height] = lock{round: round, hash: hash} // (re)verrouillage
+	}
+	// Seul le PRÉCOMMIT (re)pose le verrou sur le bloc voté (le prevote ne verrouille
+	// pas : le verrou naît de l'engagement de finalité qu'est le précommit).
+	if kind == types.PrecommitKind {
+		e.locked[height] = lock{round: round, hash: hash}
 	}
 
 	e.voted[height][rk] = hash

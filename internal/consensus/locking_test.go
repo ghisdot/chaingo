@@ -65,6 +65,62 @@ func TestLockingRule(t *testing.T) {
 	}
 }
 
+// TestPrevoteTheLock : « prevote-the-lock » (Tendermint). Un nœud verrouillé sur
+// un bloc ne PREVOTE un bloc concurrent QUE sur preuve d'une polka à un round
+// strictement supérieur — sinon il reste fidèle à son verrou et ne contribue pas
+// à former une polka adverse non fondée.
+func TestPrevoteTheLock(t *testing.T) {
+	st := state.New()
+	st.SetParams(types.DefaultParams())
+	vs := mkValidators(st, 4) // 4 × 1M, ce nœud = vs[0]
+	e := newEngine(st, vs[0])
+	const h = uint64(2)
+	e.freezeSetLocked(h)
+
+	var prevotesB []*types.Vote
+	e.OnVote = func(v *types.Vote) {
+		if v.Kind == types.PrevoteKind && v.BlockHash == "B" {
+			prevotesB = append(prevotesB, v)
+		}
+	}
+
+	// Verrou sur A au round 0 (via précommit).
+	e.castVoteKind(h, 0, types.PrecommitKind, "A")
+	if e.locked[h].hash != "A" {
+		t.Fatalf("verrou (0,A) attendu, got %+v", e.locked[h])
+	}
+
+	// 1. Prevote B au MÊME round (0) → refusé (verrouillé sur A, pas de polka sup.).
+	e.castVoteKind(h, 0, types.PrevoteKind, "B")
+	if len(prevotesB) != 0 {
+		t.Fatal("verrouillé sur A : ne doit pas prevoter B au même round")
+	}
+
+	// 2. Prevote B au round supérieur (1) SANS polka → refusé.
+	e.castVoteKind(h, 1, types.PrevoteKind, "B")
+	if len(prevotesB) != 0 {
+		t.Fatal("ne doit pas prevoter B au round 1 sans polka de round supérieur")
+	}
+
+	// 3. Polka pour B au round 1 (3/4 prevotes), puis prevote B au round 1 → OK.
+	for i := 1; i <= 3; i++ {
+		addPrevote(e, vs[i], h, 1, "B")
+	}
+	if !e.hasPolka(h, 1, "B") {
+		t.Fatal("polka round 1 pour B attendue (3/4)")
+	}
+	e.castVoteKind(h, 1, types.PrevoteKind, "B")
+	if len(prevotesB) != 1 {
+		t.Fatalf("doit prevoter B sur polka de round supérieur, got %d", len(prevotesB))
+	}
+
+	// Le prevote ne pose PAS de verrou : le nœud reste verrouillé sur A (seul le
+	// précommit verrouille).
+	if e.locked[h].hash != "A" {
+		t.Fatalf("un prevote ne doit pas changer le verrou (reste A), got %+v", e.locked[h])
+	}
+}
+
 // TestLockingDefaultPathUnchanged : au premier vote d'une hauteur (cas nominal
 // sans reorg), le comportement est identique à l'historique — un prevote + un
 // précommit émis, verrou posé, pas de blocage.

@@ -54,8 +54,10 @@ en cours · `[ ]` planifié.
       (≥ 2/3) du parent (`LastCommit` + `LastCommitRoot` au header) → `finalized_height`
       dérivé de la chaîne, survit au redémarrage, jamais recalculé localement.
       **Invariant anti-auto-équivocation** appliqué (un nœud ne signe jamais deux
-      précommits à la même hauteur). Reste : verrouillage Tendermint complet (prevote +
-      locking) — [design](docs/design/phase2-bft-safety.md).
+      précommits à la même hauteur). **Verrouillage POL + « prevote-the-lock »**
+      (un nœud verrouillé ne prevote/précommet un bloc concurrent que sur polka de
+      round strictement supérieur). Reste : reorg multi-blocs + tests de fautes
+      bout-en-bout — [design](docs/design/phase2-bft-safety.md).
 - [x] **Slashing** — [#7](https://github.com/ghisdot/chaingo/issues/7) :
       **double-signature** (preuve d'équivocation dans le bloc, slash 5 % du
       stake+délégations, idempotent) **et inactivité (downtime)** : round inscrit au
