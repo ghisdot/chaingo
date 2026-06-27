@@ -116,3 +116,42 @@ func TestBuriedForkReorgMultiBlock(t *testing.T) {
 	}
 	t.Skip("aucun alignement de proposeurs pour le scénario de fork enterré (tirage de clés)")
 }
+
+// TestReorgNeverBelowFinality : SÛRETÉ ABSOLUE — un bloc concurrent à une hauteur
+// DÉJÀ FINALISÉE est ignoré sans condition (jamais de réécriture de l'histoire
+// finalisée), même prétendant un round élevé. C'est la garde la plus critique du
+// fork-choice/reorg : la finalité est irréversible.
+func TestReorgNeverBelowFinality(t *testing.T) {
+	net := newSimNet(t, 4)
+	for i := 0; i < 5; i++ {
+		net.step()
+	}
+	e := net.engines[0]
+	fin := e.FinalizedHeight()
+	if fin < 1 {
+		t.Skip("finalité pas encore établie")
+	}
+
+	hBefore := net.states[0].GetHeight()
+	hashBefore := net.states[0].GetLastHash()
+	rootBefore := net.states[0].Root()
+
+	// Bloc concurrent BIDON à une hauteur finalisée, round volontairement élevé.
+	bogus := &types.Block{
+		Header: types.BlockHeader{Height: fin, Round: 9},
+		Hash:   "fork-sous-finalite-doit-etre-ignore",
+	}
+	if err := e.ApplyExternalBlock(bogus); err != nil {
+		t.Fatalf("un bloc à une hauteur finalisée doit être ignoré SANS erreur, got %v", err)
+	}
+
+	// L'état (sommet, hash, racine, finalité) doit être STRICTEMENT inchangé.
+	if net.states[0].GetHeight() != hBefore ||
+		net.states[0].GetLastHash() != hashBefore ||
+		net.states[0].Root() != rootBefore {
+		t.Fatal("SÛRETÉ : un fork sous la finalité ne doit JAMAIS modifier l'état")
+	}
+	if e.FinalizedHeight() != fin {
+		t.Fatalf("la finalité ne doit pas bouger (got %d, attendu %d)", e.FinalizedHeight(), fin)
+	}
+}
