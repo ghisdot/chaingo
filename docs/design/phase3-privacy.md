@@ -1,10 +1,12 @@
 # Design — Phase 3 : Anonymat fort (pool de transactions blindées)
 
-> Statut : **prototype de R&D livré** (`internal/shielded` + clés de vue ML-KEM
-> dans `internal/crypto`). **HORS-CONSENSUS · NON AUDITÉ · paramètre OFF partout
-> · interdit en mainnet jusqu'à audit externe.** La couche de chiffrement est du
-> crypto standardisé (sûr) ; la preuve de validité de dépense est un **placeholder
-> transparent** (pas encore zero-knowledge) — voir « État » plus bas.
+> Statut : **livré et câblé en consensus sur testnet/devnet** (gate
+> `PrivacyEnabled` **ON** sur testnet/devnet, **OFF sur mainnet** jusqu'au
+> durcissement communautaire). La couche de chiffrement est du crypto standardisé
+> (ML-KEM-768, sûr) ; la preuve de validité de dépense est un **vrai circuit
+> zk-STARK** M-entrées/N-sorties (montants cachés, range-proofs, soundness ≥128
+> bits conjecturée) — **non audité par un tiers**, voir « État » plus bas et le
+> [rapport de revue de sécurité](../SECURITY-REVIEW.md).
 
 ## Objectif et modèle de menace
 
@@ -52,7 +54,7 @@ Plutôt que des comptes, le pool blindé manipule des **notes** non-dépensées 
   (c) les nullifiers sont bien formés, (d) **Σentrées = Σsorties + frais** — sans
   révéler montants ni notes. **C'est le cœur recherche+audit.**
 
-## État : ce qui est livré (tranche 1)
+## État : ce qui est livré
 
 | Élément | État | Sûreté |
 |---|---|---|
@@ -64,9 +66,9 @@ Plutôt que des comptes, le pool blindé manipule des **notes** non-dépensées 
 | **Hash algébrique Poseidon** + Merkle STARK-friendly | ✅ livré + testé | params maison à auditer |
 | **Moteur AIR multi-colonnes** + **AIR Poseidon complet** (cohérent avec le hash natif) | ✅ livré + testé | — |
 | **Circuit d'appartenance Merkle** (ZK, profondeur 8) | ✅ livré + testé | témoin privé |
-| **Circuit de DÉPENSE blindée** (appartenance + nullifier + conservation) + **masquage ZK** | ✅ **livré + testé** (24 tests, montant non extractible) | **vraie preuve ZK** (≠ placeholder) |
-| Tx on-chain `shield`/`shielded_transfer`/`unshield` + gate `PrivacyEnabled` | ⬜ étage 5 (final) |
-| **Audit communautaire** (hackers) | ⬜ — **bloquant mainnet** |
+| **Circuit de DÉPENSE blindée** M-in/N-out (appartenance + nullifier + conservation + **range-proofs**) + **masquage ZK** | ✅ **livré + testé** (montant non extractible, soundness ≥128 b conjecturée) | **vraie preuve ZK** |
+| Tx on-chain `shield`/`shielded_transfer`/`unshield` + gate `PrivacyEnabled` | ✅ **câblé** (state + wallet/CLI, dédup nullifiers), **ON testnet/devnet** |
+| **Durcissement communautaire** (bug bounty) | ⬜ — **bloquant mainnet** |
 
 > Dossier de preuve complet (composants, tests, reproductibilité, réserves, appel
 > à audit) : [docs/PREUVE-PHASE3.md](../PREUVE-PHASE3.md).
@@ -78,46 +80,52 @@ intégrée a confirmé que les forgeries testées sont rejetées. Le **durcissem
 depuis résolu plusieurs réserves :
 - **Grinding Fiat-Shamir livré** (`FriParams.GrindBits`, défaut 16) : proof-of-work
   anti-broyage avant le tirage des positions, +16 bits de soundness, coût vérifieur
-  = 1 hachage. Reste : une cible « 128 bits » formellement prouvée (analyse fine).
+  = 1 hachage.
 - **Échantillonnage sans remise livré** (`ChallengeIndicesDistinct`) : positions de
   requête FRI deux à deux distinctes → soundness par requête exacte.
 - **Profondeur de pliage FRI variable livrée** (`FoldStopBits`) ; **inversions par
   lots** (Montgomery) + dédup des dénominateurs + parallélisation → prouveur ~77×
   plus rapide ; **circuit M-entrées / N-sorties** (join-split) livré.
+- **Range-proofs livrés** : valeurs de note bornées `< 2⁴⁸` (décomposition binaire)
+  → **création de valeur par débordement modulaire fermée**.
+- **Soundness ≥128 bits conjecturée livrée** : 40 requêtes FRI + grinding +
+  **amplification OOD multi-points** (3 points hors-domaine indépendants). Reste :
+  la borne **prouvée** (non conjecturée), qui exigerait un corps d'extension pour
+  l'aléa de pliage FRI.
 
 ### Avertissements (à ne pas survendre)
 
-- **Deux chemins coexistent.** Le `SpendWitness`/`VerifyTransparent` de
-  `internal/shielded` est le **prototype TRANSPARENT** (révèle les montants) — il
-  a servi à poser le modèle de pool. Le **vrai circuit zk-STARK** (`internal/stark`,
-  `poseidon_spend*.go`) le **remplace** : il cache les montants (masquage ZK testé).
-  Le câblage on-chain (étage 5) utilisera le circuit ZK, pas le placeholder.
+- **Le vrai circuit ZK est le format on-chain.** Le `SpendWitness`/`VerifyTransparent`
+  de `internal/shielded` était le prototype transparent (révèle les montants) ayant
+  servi à poser le modèle ; il est **remplacé** par le **vrai circuit zk-STARK**
+  M-in/N-out (`internal/stark`, `poseidon_spendn.go`), qui cache les montants et
+  **est celui câblé en consensus** (state + wallet/CLI).
 - **Anonymat ≠ confidentialité.** Le chiffrement ML-KEM garantit que personne ne
   **lit** une note. Que la note soit **non-liable** à une clé de vue *connue*
   dépend de la *key-privacy* (anonymat) de ML-KEM — propriété distincte **à
-  vérifier/auditer**. On revendique aujourd'hui la **confidentialité**, pas
-  encore l'anonymat formel.
-- **Rien n'est câblé en consensus.** Aucune tx blindée n'existe encore ; c'est un
-  banc de R&D (`internal/shielded`) avec ses tests.
+  vérifier**. On revendique aujourd'hui la **confidentialité**, pas encore
+  l'anonymat formel.
+- **Crypto maison, non auditée par un tiers.** C'est pourquoi le gate
+  `PrivacyEnabled` reste **OFF sur mainnet** jusqu'au durcissement communautaire,
+  bien qu'il soit **ON sur testnet/devnet** (utilisable, à éprouver).
 
 ## Plan par tranches
 
-| # | Contenu | Risque |
+| # | Contenu | État |
 |---|---|---|
-| 1 | Clés de vue ML-KEM + notes/commitment/nullifier + chiffrement/scan + pool transparent (+ tests) | faible (hors-consensus) |
-| 2 | Arbre de Merkle des commitments (via `internal/smt`) + tx `shield`/`transfer`/`unshield`, **gate `PrivacyEnabled` OFF** | moyen (état, toujours gaté) |
-| 3 | **Circuit zk-STARK** (appartenance + propriété + nullifier + conservation) — prouveur/vérifieur déterministe | **élevé — recherche** |
-| 4 | **Audit externe** + revue key-privacy ML-KEM + vecteurs de test | bloquant |
-| 5 | Activation mainnet par gouvernance (param `PrivacyEnabled`) | post-audit |
+| 1 | Clés de vue ML-KEM + notes/commitment/nullifier + chiffrement/scan + pool transparent (+ tests) | ✅ livré |
+| 2 | Arbre de Merkle des commitments (via `internal/smt`) + tx `shield`/`transfer`/`unshield`, **gate `PrivacyEnabled`** | ✅ livré |
+| 3 | **Circuit zk-STARK** M-in/N-out (appartenance + propriété + nullifier + conservation + range-proofs) — prouveur/vérifieur déterministe | ✅ livré |
+| 4 | **Durcissement communautaire** (bug bounty) + revue key-privacy ML-KEM + vecteurs de test | ⬜ en cours — bloquant mainnet |
+| 5 | Activation mainnet par gouvernance (param `PrivacyEnabled`) | ⬜ post-durcissement (ON testnet/devnet) |
 
 ## Décision
 
 L'anonymat fort est un **différenciateur majeur** (privacy **post-quantique**),
-mais son cœur — le circuit zk-STARK — est du crypto **recherche+audit**. On
-construit donc l'architecture par étapes, chaque cran **gaté et hors-consensus**,
-et **on ne branchera jamais le pool blindé en consensus mainnet avant un audit
-externe**. Un bug de privacy est silencieux (les utilisateurs se croient anonymes
-sans l'être) ou pire (vol de fonds) : ici, « codé soigneusement » ne suffit pas —
-il faut une revue formelle. La tranche 1 livre les **briques sûres et
-standardisées** (chiffrement, scan, modèle de notes) sur lesquelles tout le reste
-s'appuie.
+mais son cœur — le circuit zk-STARK — est du crypto **maison non audité par un
+tiers**. On l'a donc construit par étapes, **gaté** (`PrivacyEnabled`) : il est
+**ON sur testnet/devnet** (utilisable, à éprouver par la communauté) et **restera
+OFF sur mainnet jusqu'au durcissement communautaire**. Un bug de privacy est
+silencieux (les utilisateurs se croient anonymes sans l'être) ou pire (vol de
+fonds) : « codé soigneusement » ne suffit pas — d'où la phase de durcissement
+ouverte (bug bounty) avant toute activation mainnet.

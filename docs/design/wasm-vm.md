@@ -3,9 +3,9 @@
 > Statut : **livré et câblé en consensus sur testnet/devnet** (`internal/wasmvm` +
 > tx `wasm_deploy`/`wasm_call`, stockage par contrat dans la racine d'état).
 > Activé par le Param de genèse **`WasmEnabled`** : **ON** en devnet/testnet,
-> **OFF en mainnet** jusqu'à un **audit externe** — invariant de sûreté : pas de
-> code arbitraire exécuté en consensus mainnet avant audit. Le testnet sert
-> précisément à éprouver ce moteur avant le mainnet.
+> **OFF en mainnet** jusqu'au **durcissement communautaire** — invariant de sûreté :
+> pas de code arbitraire exécuté en consensus mainnet avant ce durcissement. Le
+> testnet sert précisément à éprouver ce moteur avant le mainnet.
 
 ## Objectif
 
@@ -13,7 +13,7 @@ Permettre aux développeurs de déployer des **contrats arbitraires** (pas
 seulement les templates no-code), comme l'EVM sur Ethereum/BNB — mais en
 **WebAssembly**, plus moderne et multi-langage (Rust, AssemblyScript, TinyGo, C).
 
-## Ce qui est livré (preview, hors-consensus)
+## Le moteur d'exécution (`internal/wasmvm`)
 
 `internal/wasmvm` charge et **exécute réellement** du WASM via **wazero** (runtime
 Go pur, **sans CGO** — préserve la compilation native Windows/Linux/macOS du
@@ -70,7 +70,7 @@ via le vrai chemin de consensus, 4 nœuds d'accord sur la racine d'état à chaq
 
 ## Ce qu'il MANQUE encore (avant activation mainnet)
 
-1. **Audit externe** (exécution de bytecode hostile) — le **bloquant** mainnet.
+1. **Durcissement communautaire** (exécution de bytecode hostile, bug bounty) — le **bloquant** mainnet.
 2. **Revue des flottants** : canonicalisation des NaN ou interdiction au
    déploiement (aujourd'hui : autorisés, l'interpréteur wazero est déterministe ;
    à confirmer par l'audit).
@@ -84,11 +84,11 @@ via le vrai chemin de consensus, 4 nœuds d'accord sur la racine d'état à chaq
 | Tranche | Contenu | État |
 |---|---|---|
 | 1 | Instrumentation de gas (injection bytecode) + fuzzing | ✅ **livré** |
-| 2 | Tarification fine (coût par bloc de base) + audit déterminisme | ⬜ (gas = arrêt seul ; audit pending) |
+| 2 | Tarification fine (coût par bloc de base) + revue déterminisme | ⬜ (gas = arrêt seul ; durcissement en cours) |
 | 3 | **API hôte d'état en SANDBOX** (`host.go` : storage_read/write, caller, value, transfer, log) | ✅ **livré** |
 | 3b | Câblage de l'API hôte sur la VRAIE machine d'état (storage par contrat dans la racine) | ✅ **livré** |
 | 4 | Tx `wasm_deploy` / `wasm_call` + frais + déterminisme (interpréteur) | ✅ **livré** (testnet/devnet) |
-| 5 | Limites anti-DoS (taille bytecode ✅, mémoire ✅, gas ✅ ; pile ⬜) + **audit externe** ⬜ | 🟡 partiel |
+| 5 | Limites anti-DoS (taille bytecode ✅, mémoire ✅, gas ✅ ; pile ⬜) + **durcissement communautaire** ⬜ | 🟡 partiel |
 
 ## API hôte (module `env`)
 
@@ -116,8 +116,8 @@ L'adresse d'un contrat = hash de sa tx de déploiement. Frais : `WasmDeployFee` 
 Le moteur WASM est un **différenciateur fort** (contrats arbitraires +
 post-quantique). Il est **livré et câblé** sur testnet/devnet — c'est là qu'on
 l'éprouve avec de vrais contrats et du trafic. Il reste **désactivé sur mainnet
-(`WasmEnabled=false`)** jusqu'à un **audit externe** : il exécute du code
-potentiellement hostile, et l'invariant du projet est de ne jamais faire tourner
-ça en consensus mainnet sans revue de sécurité. Les **templates no-code**
-(vesting, escrow, multisig, DAO) restent l'option recommandée pour la majorité
-des usages, sans surface d'attaque de VM.
+(`WasmEnabled=false`)** jusqu'au **durcissement communautaire** : il exécute du
+code potentiellement hostile, et l'invariant du projet est de ne jamais faire
+tourner ça en consensus mainnet sans cette revue. Les **8 templates no-code**
+(vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) restent
+l'option recommandée pour la majorité des usages, sans surface d'attaque de VM.
