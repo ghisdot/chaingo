@@ -57,6 +57,7 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
 - [Référence API](docs/API.md) — pour développer des clients ou intégrer.
 - **[Rapport de revue de sécurité](docs/SECURITY-REVIEW.md)** — self-audit interne
   + dossier de preuve (consensus, état, anonymat zk-STARK), reproductible.
+- **[Bug bounty](BUG-BOUNTY.md)** — attaquez le code, soyez récompensés (CGO + crédit).
 - Politique de sécurité : [SECURITY.md](SECURITY.md).
 
 ---

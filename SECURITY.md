@@ -9,6 +9,7 @@ La sécurité repose sur une **revue interne (self-audit) + un durcissement
 communautaire** (bug bounty ouvert), et non sur un audit par un cabinet tiers.
 Le détail des surfaces couvertes, des limites assumées et de la méthode est dans
 le **[Rapport de revue de sécurité](docs/SECURITY-REVIEW.md)** (reproductible).
+Les failles trouvées sont **récompensées** : voir le **[Bug bounty](BUG-BOUNTY.md)**.
 Les surfaces « maison » non encore durcies par la communauté — anonymat
 zk-STARK (`PrivacyEnabled`), VM WASM (`WasmEnabled`) — restent **désactivées sur
 mainnet** par un gate.
