@@ -56,8 +56,8 @@ en cours · `[ ]` planifié.
       **Invariant anti-auto-équivocation** appliqué (un nœud ne signe jamais deux
       précommits à la même hauteur). **Verrouillage POL + « prevote-the-lock »**
       (un nœud verrouillé ne prevote/précommet un bloc concurrent que sur polka de
-      round strictement supérieur). Reste : reorg multi-blocs + tests de fautes
-      bout-en-bout — [design](docs/design/phase2-bft-safety.md).
+      round strictement supérieur). **Reorg multi-blocs** (fork enterré) et **tests de
+      fautes bout-en-bout** livrés — [design](docs/design/phase2-bft-safety.md).
 - [x] **Slashing** — [#7](https://github.com/ghisdot/chaingo/issues/7) :
       **double-signature** (preuve d'équivocation dans le bloc, slash 5 % du
       stake+délégations, idempotent) **et inactivité (downtime)** : round inscrit au
@@ -68,10 +68,11 @@ en cours · `[ ]` planifié.
       round (un changement légitime cross-round n'est pas slashable). Quorums mesurés
       contre le **set de validateurs figé par hauteur**. Reste : activation pleine par le
       fork-choice — [design](docs/design/phase2-locking-pol.md).
-- [~] **Fork-choice et réorganisations** : checkpoint d'état par hauteur + bascule du
-      sommet vers le bloc couvert par la polka de plus haut round (reorg sûr avec
-      restauration en cas d'échec), validé par un test de simulation de partition
-      (convergence sans double-finalité). Reste : reorg multi-blocs (fork enterré).
+- [x] **Fork-choice et réorganisations** : checkpoint d'état par hauteur + bascule
+      (reorg sûr avec restauration atomique en cas d'échec), validé par un test de
+      partition. **Reorg MULTI-BLOCS** (fork enterré) livré : un nœud rembobine son
+      sommet jusqu'au point de fork et abandonne plusieurs blocs sur preuve d'une polka
+      de round supérieur — jamais sous la finalité, méta purgée seulement après succès.
 - [x] **Arbre de Merkle creux (SMT)** pour la racine d'état (`internal/smt`) —
       [#9](https://github.com/ghisdot/chaingo/issues/9) : racine granulaire avec preuves
       d'inclusion par compte (clients légers). Gaté `SparseMerkleRoot` (fixé à la genèse).
@@ -86,8 +87,8 @@ en cours · `[ ]` planifié.
       unitaires (consensus, state, genesis) + **intégration multi-validateurs en mémoire**
       (4 nœuds convergent & finalisent, synchro d'un nœud tardif) + **fuzzing des décodeurs**
       (tx/block/vote + frames P2P), qui a révélé et corrigé une faille DoS (allocation non
-      bornée). À étendre : scénarios de fautes bout-en-bout (proposeur hors-ligne,
-      équivocation).
+      bornée). **Scénarios de fautes bout-en-bout** : proposeur hors-ligne, équivocation
+      slashée, fallback soutenu, no-quorum (pas de finalité sans 2/3), reorg enterré.
 - [x] **Mode `--testnet`** (chain_id `chaingo-testnet-1`, faucet ouvert rate-limité,
       unbonding 24 h).
 - [x] **Gouvernance des mises à jour réseau** : version de protocole au handshake P2P,
@@ -129,9 +130,10 @@ en cours · `[ ]` planifié.
       (`state.go`) : arbre de commitments + ensemble de nullifiers dans la racine d'état,
       **vérification STARK en consensus**, CLI `chaingo shielded`, tests d'intégration.
 - [x] **Activé sur devnet + testnet** (gate ON) — utilisable dès maintenant.
-- [ ] Brancher le format **M-in/N-out** dans `state.go` + wallet/CLI (aujourd'hui le
-      1-in/1-out est actif on-chain ; le M-in/N-out est prouvé/codé, reste l'intégration
-      état + production de tx).
+- [x] **Format M-in/N-out câblé on-chain** (format canonique) : `state.go` vérifie via
+      `VerifySpendN`, marque les M nullifiers + insère les N commitments, avec **dédup
+      intra-tx des nullifiers** (anti création de valeur) ; wallet `BuildWitnessMulti`,
+      preuve via `ProveSpendN` ; test 2-in/1-out bout-en-bout + rejet du doublon d'entrée.
 
 **Durcissement** (livré)
 - [x] **Grinding Fiat-Shamir** (`FriParams.GrindBits`, +16 bits de soundness, coût

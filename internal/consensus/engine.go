@@ -669,12 +669,16 @@ func (e *Engine) considerFork(b *types.Block, cur uint64) error {
 	if H <= e.st.GetFinalized() {
 		return nil // finalisée : immuable
 	}
-	if H != cur {
-		return nil // fork enterré : hors scope
+	if H > cur {
+		return nil // futur : le sync normal s'en chargera (pas un fork du passé)
 	}
-	if b.Hash == e.st.GetLastHash() {
+	if H == cur && b.Hash == e.st.GetLastHash() {
 		return nil // exactement notre bloc courant
 	}
+	// H == cur (reorg du SOMMET) OU finalized < H < cur (fork ENTERRÉ, reorg
+	// multi-blocs) : on bufferise et on évalue un reorg justifié par une polka de
+	// round strictement supérieur (jamais sous la finalité — garanti par les gardes
+	// de reorgToLocked / RewindTo).
 	e.bufferForkLocked(b)
 	return e.tryReorgLocked(H)
 }
@@ -693,30 +697,42 @@ func (e *Engine) bufferForkLocked(b *types.Block) {
 // bloc courant (preuve qu'une super-majorité a vu mieux à un round plus récent —
 // règle POL). No-op si aucun candidat ne qualifie. Suppose e.mu détenu.
 func (e *Engine) tryReorgLocked(H uint64) error {
-	if H != e.st.GetHeight() {
-		return nil // plus le sommet
+	tip := e.st.GetHeight()
+	// On considère une hauteur NON finalisée, au sommet OU enterrée sous lui.
+	if H > tip || H <= e.st.GetFinalized() {
+		return nil
 	}
+	// Notre round à cette hauteur (le verrou porte le round de notre bloc à H).
 	ourRound := uint32(0)
 	if lk, ok := e.locked[H]; ok {
 		ourRound = lk.round
 	}
 	for _, b := range e.forks[H] {
-		if b.Hash == e.st.GetLastHash() || b.Header.Round <= ourRound {
+		// Au sommet, on ignore notre propre bloc courant ; un fork enterré a par
+		// construction un hash != notre bloc à H (sinon il n'aurait pas été bufferisé
+		// comme concurrent). Le filtre de round écarte aussi notre propre bloc.
+		if H == tip && b.Hash == e.st.GetLastHash() {
+			continue
+		}
+		if b.Header.Round <= ourRound {
 			continue
 		}
 		if !e.hasPolka(H, b.Header.Round, b.Hash) {
 			continue // pas de quorum de prevotes plus récent → on reste fidèle
 		}
-		return e.reorgToTipLocked(b)
+		return e.reorgToLocked(b)
 	}
 	return nil
 }
 
-// reorgToTipLocked exécute la bascule vers `b` (à la hauteur courante) : restaure
-// l'état au point de fork (H-1), valide + exécute b, re-vote. En cas d'échec,
-// restaure NOTRE tip courant — jamais de perte. Suppose e.mu détenu et
-// b.Header.Height == e.st.GetHeight().
-func (e *Engine) reorgToTipLocked(b *types.Block) error {
+// reorgToLocked exécute la bascule vers `b` (à la hauteur H, AU SOMMET ou ENTERRÉE
+// sous lui) : rembobine l'état au point de fork (H-1), valide + exécute b, et — en
+// cas de fork ENTERRÉ — abandonne nos blocs (H, oldTip] (reorg multi-blocs). En cas
+// d'échec, restaure NOTRE branche d'origine SANS toucher à la méta — jamais de
+// perte. La méta des hauteurs abandonnées n'est purgée qu'APRÈS confirmation du
+// succès, ce qui rend la bascule atomique. Suppose e.mu détenu et
+// e.st.GetFinalized() < H <= e.st.GetHeight().
+func (e *Engine) reorgToLocked(b *types.Block) error {
 	H := b.Header.Height
 	if H-1 < e.st.GetFinalized() {
 		return nil // ne jamais rembobiner sous la finalité
@@ -725,8 +741,9 @@ func (e *Engine) reorgToTipLocked(b *types.Block) error {
 	if !ok {
 		return fmt.Errorf("reorg : pas de snapshot au point de fork %d", H-1)
 	}
+	oldTip := e.st.GetHeight()
 	oldHash := e.st.GetLastHash()
-	backup := e.st.Bytes() // filet : notre tip courant
+	backup := e.st.Bytes() // filet : notre branche courante (jusqu'au sommet)
 	if err := e.st.Restore(forkSnap); err != nil {
 		return err
 	}
@@ -739,15 +756,28 @@ func (e *Engine) reorgToTipLocked(b *types.Block) error {
 	absent := e.absentProposers(H, prev, b.Header.Round, b.Header.Proposer)
 	_, _, root, err := e.st.Execute(b.Txs, b.Evidence, absent, b.Header.Proposer, b.Header.Timestamp, true)
 	if err != nil || root != b.Header.StateRoot {
-		e.st.Restore(backup) // on garde notre bloc d'origine
+		e.st.Restore(backup) // on garde notre branche d'origine — méta intacte
 		if err == nil {
 			err = errors.New("state root mismatch on reorg")
 		}
 		return err
 	}
+	// SUCCÈS confirmé : la nouvelle branche est valide. On peut MAINTENANT (et pas
+	// avant) abandonner la méta des hauteurs de l'ancienne branche au-dessus du point
+	// de fork — pour un fork enterré, cela inclut (H, oldTip]. snapshots[H]/locked[H]
+	// seront ré-posés juste après par snapshotStateLocked/castVote.
+	for h := H; h <= oldTip; h++ {
+		delete(e.voted, h)
+		delete(e.locked, h)
+		delete(e.snapshots, h)
+	}
 	e.st.Commit(H, b.Hash)
 	e.snapshotStateLocked(H)
-	log.Printf("[consensus] REORG #%d : %s… → %s… (round %d, justifié par polka)", H, short(oldHash), short(b.Hash), b.Header.Round)
+	if oldTip > H {
+		log.Printf("[consensus] REORG ENTERRÉ #%d (sommet %d→%d) : %s… → %s… (round %d, polka)", H, oldTip, H, short(oldHash), short(b.Hash), b.Header.Round)
+	} else {
+		log.Printf("[consensus] REORG #%d : %s… → %s… (round %d, justifié par polka)", H, short(oldHash), short(b.Hash), b.Header.Round)
+	}
 	if finalizesParent {
 		e.st.SetFinalized(H - 1)
 		e.votes.prune(H - 1)
