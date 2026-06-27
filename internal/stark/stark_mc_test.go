@@ -71,6 +71,7 @@ func buildCoupledTrace(a0, b0 Felt, n int) [][]Felt {
 // ---------------------------------------------------------------------------
 
 func TestProveVerifyAIR_Coupled(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0 := FromUint64(1)
 	b0 := FromUint64(1)
@@ -107,6 +108,7 @@ func TestProveVerifyAIR_Coupled(t *testing.T) {
 // Déterminisme : deux preuves de la même instance sont bit-à-bit identiques
 // (aléa = transcript uniquement).
 func TestProveAIR_Deterministe(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(3), FromUint64(7)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -139,6 +141,7 @@ func TestProveAIR_Deterministe(t *testing.T) {
 // Valeur publique fausse (lastA erroné) : le transcript diverge ET la contrainte
 // de bord ne tient pas => rejet.
 func TestVerifyAIR_MauvaisPublic(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(1), FromUint64(1)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -163,6 +166,7 @@ func TestVerifyAIR_MauvaisPublic(t *testing.T) {
 // transition (on casse une ligne). La composition n'est pas de bas degré => FRI
 // et/ou OOD rejettent.
 func TestProveVerifyAIR_TraceInvalide(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(1), FromUint64(1)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -181,6 +185,7 @@ func TestProveVerifyAIR_TraceInvalide(t *testing.T) {
 // Falsification d'une valeur de colonne ouverte : l'ouverture Merkle ne
 // correspond plus à la racine OU la combinaison DEEP diverge => rejet.
 func TestVerifyAIR_FalsifieColonne(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(2), FromUint64(5)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -203,6 +208,7 @@ func TestVerifyAIR_FalsifieColonne(t *testing.T) {
 
 // Falsification de la composition H ouverte.
 func TestVerifyAIR_FalsifieComposition(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(4), FromUint64(9)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -219,6 +225,7 @@ func TestVerifyAIR_FalsifieComposition(t *testing.T) {
 
 // Falsification d'un chemin de Merkle (on casse un nœud du chemin DEEP).
 func TestVerifyAIR_FalsifieChemin(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(6), FromUint64(1)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -249,6 +256,7 @@ func TestVerifyAIR_FalsifieChemin(t *testing.T) {
 // Falsification d'une valeur hors-domaine (OOD) : le contrôle algébrique en z
 // échoue (et/ou le transcript diverge) => rejet.
 func TestVerifyAIR_FalsifieOOD(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(1), FromUint64(2)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -281,6 +289,7 @@ func TestVerifyAIR_FalsifieOOD(t *testing.T) {
 // Une seule colonne (W=1) doit aussi fonctionner : AIR « identité décalée »
 // b'=b (constante) avec bord de départ. Vérifie la généralité du cadre.
 func TestProveVerifyAIR_UneColonne(t *testing.T) {
+	skipShort(t)
 	n := 8
 	// Colonne unique constante : x[i+1] = x[i]. Transition r0 = next[0]-cur[0].
 	air := constAIR{n: n, start: FromUint64(42)}
@@ -344,6 +353,7 @@ func buildSquareTrace(start Felt, n int) [][]Felt {
 }
 
 func TestProveVerifyAIR_Degre2(t *testing.T) {
+	skipShort(t)
 	n := 8
 	start := FromUint64(3)
 	trace := buildSquareTrace(start, n)

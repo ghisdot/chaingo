@@ -237,6 +237,7 @@ func sboxInverse(y Felt) Felt {
 // dénuée de portée — il faut un contexte (ex. lier t[0] à un engagement public)
 // pour en faire un énoncé utile. À garder en tête avant tout usage.
 func TestSboxAIRDigestArbitraireAccepte(t *testing.T) {
+	skipShort(t)
 	n := 16
 	for _, cibleU := range []uint64{0xDEADBEEF, 1, 0, 0xFFFFFFFF00000000} {
 		cible := FromUint64(cibleU)
@@ -332,6 +333,7 @@ func forgeTraceBruitee(pre Felt, n, nCorrupt int) (Felt, HashProof) {
 // recombinaison DEEP des ouvertures échouent quasi sûrement). C'est le pendant
 // POSITIF de la soundness : une déviation MACROSCOPIQUE du codeword est attrapée.
 func TestSboxTraceCorruptionMassiveRejetee(t *testing.T) {
+	skipShort(t)
 	n := 16
 	bigN := sbBigN(n)
 	for k := 0; k < 16; k++ {
@@ -355,6 +357,7 @@ func TestSboxTraceCorruptionMassiveRejetee(t *testing.T) {
 // contre les corruptions MINIMES ; calibrer ces paramètres (plus de requêtes,
 // borne de distance) est un point À AUDITER avant tout usage sérieux.
 func TestSboxTraceNearCodewordSoundnessProbabiliste(t *testing.T) {
+	skipShort(t)
 	n := 16
 	bigN := sbBigN(n)
 	trials := 120

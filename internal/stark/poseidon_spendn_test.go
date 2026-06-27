@@ -84,6 +84,7 @@ func TestSpendN_TraceHonnete(t *testing.T) {
 
 // Preuve STARK honnête M-in/N-out.
 func TestSpendN_PreuveHonnete(t *testing.T) {
+	skipShort(t)
 	cases := [][2]int{{1, 1}, {1, 2}, {2, 1}, {2, 2}}
 	for _, c := range cases {
 		w, fee := snBuildScenario("preuve", c[0], c[1])
@@ -97,6 +98,7 @@ func TestSpendN_PreuveHonnete(t *testing.T) {
 // SOUNDNESS : non-conservation (Σ in != Σ out + fee) => trace non satisfaisante et
 // preuve rejetée.
 func TestSpendN_NonConservationRejetee(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("cons", 2, 2)
 	w.Outs[0].Value = w.Outs[0].Value.Add(One()) // casse l'équilibre
 	trace, public := buildSpendNTrace(w, fee)
@@ -121,6 +123,7 @@ func TestSpendN_NonConservationRejetee(t *testing.T) {
 
 // Un nullifier public falsifié est rejeté.
 func TestSpendN_NfFalsifie(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("nf", 2, 2)
 	public, proof := ProveSpendN(w, fee)
 	bad := clonePublic(public)
@@ -132,6 +135,7 @@ func TestSpendN_NfFalsifie(t *testing.T) {
 
 // Un outCm public falsifié est rejeté.
 func TestSpendN_OutCmFalsifie(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("outcm", 2, 3)
 	public, proof := ProveSpendN(w, fee)
 	bad := clonePublic(public)
@@ -143,6 +147,7 @@ func TestSpendN_OutCmFalsifie(t *testing.T) {
 
 // Déterminisme : deux preuves du même témoin partagent les mêmes engagements.
 func TestSpendN_Deterministe(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("det", 2, 2)
 	_, pr1 := ProveSpendN(w, fee)
 	_, pr2 := ProveSpendN(w, fee)

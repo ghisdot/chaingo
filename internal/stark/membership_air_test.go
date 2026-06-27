@@ -133,6 +133,7 @@ func TestMembership_CoherenceAvecMerklePoseidon(t *testing.T) {
 // racine native — recoupe le prouveur lui-même avec merkle_poseidon.go (1 preuve,
 // partagée).
 func TestMembership_ProveMembershipRacineNative(t *testing.T) {
+	skipShort(t)
 	root, _ := memShared()
 	if root != memShareTree.Root() {
 		t.Fatalf("racine ProveMembership != racine native de l'arbre")
@@ -145,6 +146,7 @@ func TestMembership_ProveMembershipRacineNative(t *testing.T) {
 
 // Une preuve honnête (partagée) vérifie contre la racine publique.
 func TestMembership_PreuveHonnete(t *testing.T) {
+	skipShort(t)
 	root, proof := memShared()
 	if !VerifyMembership(root, proof) {
 		t.Fatalf("preuve d'appartenance honnête rejetée")
@@ -154,6 +156,7 @@ func TestMembership_PreuveHonnete(t *testing.T) {
 // Déterminisme : reprouver la MÊME instance redonne la même preuve (aléa =
 // transcript uniquement). Un seul prouveur supplémentaire.
 func TestMembership_Deterministe(t *testing.T) {
+	skipShort(t)
 	root, proof := memShared()
 	r2, p2 := ProveMembership(memShareLeaf, memSharePath)
 
@@ -264,6 +267,7 @@ func TestMembership_BitInverse(t *testing.T) {
 // du vérifieur, les cas feuille/sibling/bit faux : tous mènent à une racine
 // différente présentée au vérifieur.)
 func TestMembership_MauvaiseRacine(t *testing.T) {
+	skipShort(t)
 	root, proof := memShared()
 	wrong := root
 	wrong[0] = wrong[0].Add(One())
@@ -275,6 +279,7 @@ func TestMembership_MauvaiseRacine(t *testing.T) {
 // OUVERTURE FALSIFIÉE : une valeur de colonne ouverte ne correspond plus à sa
 // racine Merkle / la combinaison DEEP diverge => REJET.
 func TestMembership_FalsifieOuverture(t *testing.T) {
+	skipShort(t)
 	root, proof := memShared()
 	bad := clonePoof(proof)
 	bad.Openings[0].ColVals[0] = bad.Openings[0].ColVals[0].Add(One())
@@ -286,6 +291,7 @@ func TestMembership_FalsifieOuverture(t *testing.T) {
 // OOD FALSIFIÉE : corrompre une valeur hors-domaine fait échouer le contrôle
 // algébrique en z => REJET.
 func TestMembership_FalsifieOOD(t *testing.T) {
+	skipShort(t)
 	root, proof := memShared()
 
 	bad := clonePoof(proof)
@@ -310,6 +316,7 @@ func TestMembership_FalsifieOOD(t *testing.T) {
 // plus (et l'état suivant est faux) => la composition n'est pas de bas degré =>
 // REJET. C'est le test dédié de la contrainte de binarité.
 func TestMembership_BitNonBinaire(t *testing.T) {
+	skipShort(t)
 	tree, leaves := memBuildTree("bit-non-binaire")
 	index := 50
 	leaf := leaves[index]
@@ -335,6 +342,7 @@ func TestMembership_BitNonBinaire(t *testing.T) {
 // TRACE FALSIFIÉE (état intermédiaire) : corrompre une cellule d'état à une ronde
 // du milieu viole la transition Poseidon => composition pas de bas degré => REJET.
 func TestMembership_TraceFalsifiee(t *testing.T) {
+	skipShort(t)
 	tree, leaves := memBuildTree("trace-falsifiee")
 	index := 21
 	leaf := leaves[index]

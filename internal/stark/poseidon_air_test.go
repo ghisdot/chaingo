@@ -27,6 +27,7 @@ import "testing"
 // TestSboxHonnêteVérifie : pour diverses tailles n et préimages, une preuve
 // produite avec le VRAI digest doit être acceptée.
 func TestSboxHonnêteVérifie(t *testing.T) {
+	skipShort(t)
 	rng := newPRNG(0x5B0C0DE5)
 	for _, n := range []int{4, 8, 16, 32} {
 		for k := 0; k < 4; k++ {
@@ -51,6 +52,7 @@ func TestSboxHonnêteVérifie(t *testing.T) {
 // tel quel parmi les valeurs exposées. C'est une garantie FAIBLE (le vrai ZK
 // exigerait un masquage) mais elle documente l'intention.
 func TestSboxPreimageNonRévélé(t *testing.T) {
+	skipShort(t)
 	pre := FromUint64(0xDEADBEEFCAFE)
 	digest, proof := ProveHash(pre, 16)
 	if !VerifyHash(digest, proof) {
@@ -74,6 +76,7 @@ func TestSboxPreimageNonRévélé(t *testing.T) {
 // TestSboxMauvaisDigestÉchoue : vérifier une preuve honnête contre un digest
 // FAUX doit échouer (le digest est absorbé en tête du transcript : il diverge).
 func TestSboxMauvaisDigestÉchoue(t *testing.T) {
+	skipShort(t)
 	rng := newPRNG(0xBAD016E57)
 	for _, n := range []int{8, 16, 32} {
 		pre := rng.felt()
@@ -90,6 +93,7 @@ func TestSboxMauvaisDigestÉchoue(t *testing.T) {
 // preuve acceptée pour le digest final de cette trace. On reconstruit une preuve
 // à la main avec une trace altérée, en rejouant le transcript de ProveHash.
 func TestSboxTraceIncorrecteÉchoue(t *testing.T) {
+	skipShort(t)
 	n := 16
 	g := RootOfUnity(log2(n))
 	bigN := sbBigN(n)
@@ -169,6 +173,7 @@ func honnêteHash(n int) (Felt, HashProof) {
 }
 
 func TestSboxRacineTraceFalsifiée(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 	if !VerifyHash(digest, proof) {
 		t.Fatal("contrôle : preuve honnête doit passer")
@@ -181,6 +186,7 @@ func TestSboxRacineTraceFalsifiée(t *testing.T) {
 }
 
 func TestSboxRacineCompFalsifiée(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 	bad := cloneHashProof(proof)
 	bad.CompRoot[0] ^= 0xFF
@@ -190,6 +196,7 @@ func TestSboxRacineCompFalsifiée(t *testing.T) {
 }
 
 func TestSboxOodFalsifiée(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 
 	bad := cloneHashProof(proof)
@@ -212,6 +219,7 @@ func TestSboxOodFalsifiée(t *testing.T) {
 }
 
 func TestSboxValeurOuverteFalsifiée(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 
 	bad := cloneHashProof(proof)
@@ -234,6 +242,7 @@ func TestSboxValeurOuverteFalsifiée(t *testing.T) {
 }
 
 func TestSboxCheminFalsifié(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 
 	bad := cloneHashProof(proof)
@@ -253,6 +262,7 @@ func TestSboxCheminFalsifié(t *testing.T) {
 }
 
 func TestSboxPositionFalsifiée(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 	bad := cloneHashProof(proof)
 	bad.Openings[0].Pos = (bad.Openings[0].Pos + 1) % sbBigN(32)
@@ -262,6 +272,7 @@ func TestSboxPositionFalsifiée(t *testing.T) {
 }
 
 func TestSboxFriFalsifié(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 
 	bad := cloneHashProof(proof)
@@ -278,6 +289,7 @@ func TestSboxFriFalsifié(t *testing.T) {
 }
 
 func TestSboxNombreOuverturesFalsifié(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(32)
 	bad := cloneHashProof(proof)
 	bad.Openings = bad.Openings[:len(bad.Openings)-1]
@@ -289,6 +301,7 @@ func TestSboxNombreOuverturesFalsifié(t *testing.T) {
 // TestSboxMauvaisNFalsifié : modifier proof.N (énoncé public absorbé) doit
 // invalider la preuve (transcript divergent + structure FRI incohérente).
 func TestSboxMauvaisNFalsifié(t *testing.T) {
+	skipShort(t)
 	digest, proof := honnêteHash(16)
 	bad := cloneHashProof(proof)
 	bad.N = 32
@@ -312,6 +325,7 @@ func TestSboxMauvaisNFalsifié(t *testing.T) {
 // un vrai polynôme (reste non nul), donc la recombinaison DEEP des ouvertures ne
 // coïncide pas avec la valeur DEEP engagée. Rejet attendu.
 func TestSboxForgerieOodCohérentEnZ(t *testing.T) {
+	skipShort(t)
 	n := 16
 	g := RootOfUnity(log2(n))
 	bigN := sbBigN(n)
@@ -392,6 +406,7 @@ func TestSboxForgerieOodCohérentEnZ(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSboxDéterminisme(t *testing.T) {
+	skipShort(t)
 	pre := FromUint64(0xABCDEF)
 	n := 16
 	d1, p1 := ProveHash(pre, n)
@@ -431,6 +446,7 @@ func TestSboxDéterminisme(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSboxProveEntréeInvalidePanique(t *testing.T) {
+	skipShort(t)
 	mustPanic := func(name string, f func()) {
 		defer func() {
 			if r := recover(); r == nil {
@@ -445,6 +461,7 @@ func TestSboxProveEntréeInvalidePanique(t *testing.T) {
 }
 
 func TestSboxVerifyNeJamaisPaniquer(t *testing.T) {
+	skipShort(t)
 	// Preuve zéro-valeur (N==0) : rejet propre, sans panique.
 	if VerifyHash(One(), HashProof{}) {
 		t.Fatal("preuve vide acceptée")

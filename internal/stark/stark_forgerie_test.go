@@ -25,6 +25,7 @@ import "testing"
 // position interrogée, la recombinaison DEEP exacte du vérifieur ne coïncide pas
 // avec la valeur DEEP engagée. La preuve DOIT être rejetée.
 func TestForgerieOodMensongerCohérentEnZ(t *testing.T) {
+	skipShort(t)
 	n := 16
 	out := fibValue(n)
 	logN := log2(n)
@@ -125,6 +126,7 @@ func TestForgerieOodMensongerCohérentEnZ(t *testing.T) {
 // AVANT tous les défis, recoudre les ouvertures contre l'arbre corrompu ne suffit
 // pas : z, gamma et les positions divergent de la preuve honnête. Rejet attendu.
 func TestForgerieTraceHautDegré(t *testing.T) {
+	skipShort(t)
 	n := 16
 	out := fibValue(n)
 	bigN := starkBlowup * n
@@ -162,6 +164,7 @@ func TestForgerieTraceHautDegré(t *testing.T) {
 // recombinaison DEEP des ouvertures trace/comp honnêtes ne donne pas le nouveau
 // P. Rejet attendu.
 func TestForgerieGreffeFriIncohérente(t *testing.T) {
+	skipShort(t)
 	n := 16
 	out := fibValue(n)
 	bigN := starkBlowup * n
@@ -198,6 +201,7 @@ func TestForgerieGreffeFriIncohérente(t *testing.T) {
 // sortie), même si la structure FRI est compatible. C'est l'anti-rejeu : la
 // sortie publique et n sont absorbés en tête du transcript.
 func TestForgerieRejouerPreuveAutreInstance(t *testing.T) {
+	skipShort(t)
 	p32 := ProveFib(32, fibValue(32))
 
 	// Réutiliser la preuve de n=32 pour une AUTRE sortie publique (même n).

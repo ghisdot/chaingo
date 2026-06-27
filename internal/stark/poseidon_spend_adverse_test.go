@@ -97,6 +97,7 @@ func TestSpendAdv_NoteAbsenteArbre_Natif(t *testing.T) {
 // honnête n'appartient pas à CET arbre) => REJET. Couvre la note hors-arbre du
 // point de vue du vérifieur, en réutilisant la preuve partagée.
 func TestSpendAdv_NoteAbsenteArbre_Verifieur(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	// Racine d'un AUTRE arbre (note honnête absente de cet arbre-là).
 	_, _, autreRoot := spBuildScenario("adv/absente/autre-arbre", 1)
@@ -251,6 +252,7 @@ func TestSpendAdv_ConservationStricteDansLesDeuxSens(t *testing.T) {
 // bord correspondant et fait diverger le transcript => REJET. (Complète le rejeu
 // global de poseidon_spend_test.go par des substitutions composant par composant.)
 func TestSpendAdv_RejeuSubstitutionPartielle(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	_, other := buildSpendTrace2(t, "adv/rejeu/autre", 6)
 

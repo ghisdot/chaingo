@@ -49,6 +49,7 @@ func itoaU64(x uint64) string {
 // ---------------------------------------------------------------------------
 
 func TestPoseidonFull_CoherenceAvecPermute(t *testing.T) {
+	skipShort(t)
 	for seed := uint64(0); seed < 8; seed++ {
 		input := pfRandomState(seed)
 
@@ -112,6 +113,7 @@ func pfAssertStateRow(t *testing.T, line []Felt, want [pfStateCols]Felt, row int
 // ---------------------------------------------------------------------------
 
 func TestPoseidonFull_PreuveHonnete(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(42)
 	digest, proof := ProveHashFull(input)
 	if !VerifyHashFull(input, digest, proof) {
@@ -122,6 +124,7 @@ func TestPoseidonFull_PreuveHonnete(t *testing.T) {
 // Déterminisme : deux preuves de la même instance sont identiques (aléa =
 // transcript uniquement).
 func TestPoseidonFull_Deterministe(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(7)
 	d1, p1 := ProveHashFull(input)
 	d2, p2 := ProveHashFull(input)
@@ -151,6 +154,7 @@ func TestPoseidonFull_Deterministe(t *testing.T) {
 // Mauvais digest annoncé au vérifieur : le bord de sortie ne tient pas ET le
 // transcript diverge => rejet.
 func TestPoseidonFull_MauvaisDigest(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(99)
 	digest, proof := ProveHashFull(input)
 
@@ -164,6 +168,7 @@ func TestPoseidonFull_MauvaisDigest(t *testing.T) {
 // Mauvais état d'entrée public : le bord d'entrée ne tient pas ET le transcript
 // diverge => rejet.
 func TestPoseidonFull_MauvaisInput(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(100)
 	digest, proof := ProveHashFull(input)
 
@@ -178,6 +183,7 @@ func TestPoseidonFull_MauvaisInput(t *testing.T) {
 // prouve. La transition (et/ou le bord) est violée => la composition n'est pas de
 // bas degré => FRI / OOD rejettent.
 func TestPoseidonFull_TraceFalsifiee(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(7)
 
 	// On reconstruit la trace honnête puis on corrompt une cellule à la ronde 10
@@ -201,6 +207,7 @@ func TestPoseidonFull_TraceFalsifiee(t *testing.T) {
 // rc par une autre valeur. Le bord correspondant (qui ancre cette constante) est
 // violé => rejet. Cela prouve que les constantes ne sont pas manipulables.
 func TestPoseidonFull_ConstanteFalsifiee(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(55)
 	trace, output := buildPoseidonFullTrace(input)
 	var digest [poseidonDigestLen]Felt
@@ -226,6 +233,7 @@ func TestPoseidonFull_ConstanteFalsifiee(t *testing.T) {
 // partielle en « pleine » dans la colonne fsel viole le bord d'ancrage du
 // sélecteur => rejet.
 func TestPoseidonFull_SelecteurFalsifie(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(56)
 	trace, output := buildPoseidonFullTrace(input)
 	var digest [poseidonDigestLen]Felt
@@ -246,6 +254,7 @@ func TestPoseidonFull_SelecteurFalsifie(t *testing.T) {
 // Falsification d'une valeur de colonne ouverte : l'ouverture Merkle ne
 // correspond plus à la racine OU la combinaison DEEP diverge => rejet.
 func TestPoseidonFull_FalsifieColonne(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(11)
 	digest, proof := ProveHashFull(input)
 	if !VerifyHashFull(input, digest, proof) {
@@ -262,6 +271,7 @@ func TestPoseidonFull_FalsifieColonne(t *testing.T) {
 // Falsification d'une valeur hors-domaine (OOD) : le contrôle algébrique en z
 // échoue => rejet.
 func TestPoseidonFull_FalsifieOOD(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(13)
 	digest, proof := ProveHashFull(input)
 

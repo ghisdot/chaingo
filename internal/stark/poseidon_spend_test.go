@@ -245,6 +245,7 @@ func spShared() (SpendPublic, AirProof) {
 
 // Une preuve de dépense honnête vérifie contre son énoncé public.
 func TestSpend_PreuveHonnete(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	if !VerifySpend(public, proof) {
 		t.Fatalf("preuve de dépense honnête rejetée")
@@ -254,6 +255,7 @@ func TestSpend_PreuveHonnete(t *testing.T) {
 // Déterminisme : reprouver le MÊME témoin redonne la même preuve (aléa = transcript
 // uniquement). Un seul prouveur supplémentaire.
 func TestSpend_Deterministe(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	p2, pr2 := ProveSpend(spShareWit, spShareFee)
 
@@ -326,6 +328,7 @@ func TestSpend_TemoinNonPublie(t *testing.T) {
 
 // NULLIFIER FAUX : présenter la preuve honnête avec un nf altéré => REJET.
 func TestSpend_NullifierFaux(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	bad := public
 	bad.Nf[0] = bad.Nf[0].Add(One())
@@ -337,6 +340,7 @@ func TestSpend_NullifierFaux(t *testing.T) {
 // NOTE HORS-ARBRE : présenter la preuve honnête avec une racine fausse (la note
 // d'entrée n'appartiendrait alors pas à l'arbre annoncé) => REJET.
 func TestSpend_NoteHorsArbre(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	bad := public
 	bad.MerkleRoot[1] = bad.MerkleRoot[1].Add(One())
@@ -347,6 +351,7 @@ func TestSpend_NoteHorsArbre(t *testing.T) {
 
 // OUTCM FALSIFIÉ : présenter la preuve honnête avec un outCm altéré => REJET.
 func TestSpend_OutCmFalsifie(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	bad := public
 	bad.OutCm[2] = bad.OutCm[2].Add(One())
@@ -360,6 +365,7 @@ func TestSpend_OutCmFalsifie(t *testing.T) {
 // transcript) => REJET. (Le déséquilibre PROUVÉ — trace mal équilibrée — est testé
 // séparément ci-dessous avec un prouveur dédié.)
 func TestSpend_FeeAnnonceeFausse(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 	bad := public
 	bad.Fee = bad.Fee.Add(One())
@@ -373,6 +379,7 @@ func TestSpend_FeeAnnonceeFausse(t *testing.T) {
 // => REJET. Réutilise la preuve partagée + un énoncé public natif distinct
 // (calculé SANS STARK via buildSpendTrace).
 func TestSpend_RejeuAutreEnonce(t *testing.T) {
+	skipShort(t)
 	public, proof := spShared()
 
 	// Énoncé public d'une dépense DIFFÉRENTE (autre nk, autre arbre), sans prouver.
@@ -521,6 +528,7 @@ func TestSpend_NkLieOwnerTagEtNullifier(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSpend_TraceFalsifieeRejeteeParSTARK(t *testing.T) {
+	skipShort(t)
 	w, fee, _ := spBuildScenario("stark-falsifie", 8)
 	trace, public := buildSpendTrace(w, fee)
 	air := spAirOf(public)

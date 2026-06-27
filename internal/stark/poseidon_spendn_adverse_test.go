@@ -25,6 +25,7 @@ func snTraceViolated(air spendNAIR, trace [][]Felt) bool {
 // a un chemin menant à une autre racine, la contrainte de bord
 // (racine_i == merkleRoot) est violée → trace insatisfaisante, preuve rejetée.
 func TestSpendN_EntreeHorsArbre(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("hors-arbre", 2, 1)
 	// Corrompt le chemin de la 2e entrée : sa racine d'appartenance diffère.
 	w.Ins[1].Path.Siblings[0][0] = w.Ins[1].Path.Siblings[0][0].Add(One())
@@ -45,6 +46,7 @@ func TestSpendN_EntreeHorsArbre(t *testing.T) {
 // recalculé (via ownerTag=Hash(nk)) ne coïncide plus avec la feuille, donc sa
 // racine d'appartenance diverge → rejet.
 func TestSpendN_VolNkFaux(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("vol", 2, 2)
 	// On garde le chemin (vers la feuille de la vraie note) mais on change nk :
 	// l'inCm recalculé ne sera plus celui de la feuille → racine != merkleRoot.
@@ -80,6 +82,7 @@ func TestSpendN_VolNkFaux(t *testing.T) {
 // contenant des nullifiers en double (entre elles ET vs l'ensemble déjà dépensé).
 // Ce test documente l'invariant que le câblage on-chain devra garantir.
 func TestSpendN_DoublonEntreeProduitNfIdentiques(t *testing.T) {
+	skipShort(t)
 	nk := spTestDigest("dup/nk")
 	rho := spTestDigest("dup/rho")
 	val := FromUint64(1_000_000)

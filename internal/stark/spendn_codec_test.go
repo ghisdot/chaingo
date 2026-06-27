@@ -35,6 +35,7 @@ func buildSpendNTraceForCodec(w SpendNWitness, fee Felt) ([][]Felt, SpendNPublic
 // Aller-retour COMPLET (énoncé + preuve) puis vérification : ce qui transite sur le
 // fil vérifie réellement.
 func TestSpendNCodec_RoundtripVerifie(t *testing.T) {
+	skipShort(t)
 	w, fee := snBuildScenario("codec-full", 2, 2)
 	public, proof := ProveSpendN(w, fee)
 

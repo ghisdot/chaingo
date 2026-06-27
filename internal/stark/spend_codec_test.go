@@ -186,6 +186,7 @@ func scProofEqual(t *testing.T, a, b AirProof) bool {
 // La preuve réelle survit à Marshal -> Unmarshal (identique champ-pour-champ) et
 // la preuve décodée VÉRIFIE contre son énoncé public. C'est le test central.
 func TestSpendCodec_RoundTripPreuveReelle(t *testing.T) {
+	skipShort(t)
 	public, proof := scShared()
 
 	enc := MarshalSpendProof(proof)

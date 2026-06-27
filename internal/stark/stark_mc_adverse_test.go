@@ -74,6 +74,7 @@ func buildGhostTrace(start Felt, n int, rng *prng) [][]Felt {
 // son ouverture sans recalculer la racine/chemin => rejet. Cela prouve que le
 // moteur LIE TOUTES les colonnes engagées, pas seulement celles contraintes.
 func TestMC_ColonneFantomeQuandMemeLiee(t *testing.T) {
+	skipShort(t)
 	rng := newPRNG(0x6405701)
 	n := 16
 	start := FromUint64(42)
@@ -114,6 +115,7 @@ func TestMC_ColonneFantomeQuandMemeLiee(t *testing.T) {
 // TestMC_OodColonneTronquee : retirer une colonne du vecteur OOD (len != W) doit
 // être rejeté structurellement, sans panique.
 func TestMC_OodColonneTronquee(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(3), FromUint64(8)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -147,6 +149,7 @@ func TestMC_OodColonneTronquee(t *testing.T) {
 // toucher au reste) brise l'identité algébrique en z et/ou la recombinaison
 // DEEP => rejet. Désynchronisation de l'ouverture hors-domaine.
 func TestMC_OodColonnesPermutees(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(5), FromUint64(2)
 	trace := buildCoupledTrace(a0, b0, n)
@@ -176,6 +179,7 @@ func TestMC_OodColonnesPermutees(t *testing.T) {
 // DEEP, ce décalage passerait. C'est l'attaque « DEEP qui oublie une colonne »,
 // menée exhaustivement sur les 26 colonnes.
 func TestPoseidonFull_ChaqueColonneOodLiee(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(2024)
 	digest, proof := ProveHashFull(input)
 	if !VerifyHashFull(input, digest, proof) {
@@ -204,6 +208,7 @@ func TestPoseidonFull_ChaqueColonneOodLiee(t *testing.T) {
 // (in-domaine) de chaque colonne à une requête doit être rejeté (authenticité
 // Merkle par colonne). On le fait sur la première requête pour les 26 colonnes.
 func TestPoseidonFull_ChaqueOuvertureColonneLiee(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(2025)
 	digest, proof := ProveHashFull(input)
 
@@ -259,6 +264,7 @@ func pfApplyRoundWrongMDS(s [pfStateCols]Felt, rc [pfStateCols]Felt, full bool,
 // La composition n'est pas de bas degré => rejet. On prouve ainsi qu'on ne peut
 // PAS faire passer un calcul dont la couche linéaire diffère de params.mds.
 func TestPoseidonFull_MDSFausseRejetee(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(321)
 
 	// Matrice truquée : params.mds avec un coefficient incrémenté de 1.
@@ -312,6 +318,7 @@ func TestPoseidonFull_MDSFausseRejetee(t *testing.T) {
 // transition n'est violée qu'à cette ronde, mais cela suffit à rendre la
 // composition de degré plein => rejet.
 func TestPoseidonFull_MDSPartielleRejetee(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(322)
 
 	trace := make([][]Felt, pfSteps)
@@ -362,6 +369,7 @@ func TestPoseidonFull_MDSPartielleRejetee(t *testing.T) {
 // partiel : le motif est fixé par les bords sur fsel, et la transition est
 // évaluée selon ce fsel ancré.
 func TestPoseidonFull_MotifSboxInverseRejete(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(404)
 
 	trace := make([][]Felt, pfSteps)
@@ -403,6 +411,7 @@ func TestPoseidonFull_MotifSboxInverseRejete(t *testing.T) {
 // sélecteur d'activité (qui « gèle » l'état après la 30e ronde) n'est pas
 // manipulable.
 func TestPoseidonFull_ActiveFalsifieRejete(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(405)
 	trace, output := buildPoseidonFullTrace(input)
 	var digest [poseidonDigestLen]Felt
@@ -432,6 +441,7 @@ func TestPoseidonFull_ActiveFalsifieRejete(t *testing.T) {
 // et on EXIGE le rejet. C'est la différence sémantique clé avec l'AIR réduit :
 // ici le digest est LIÉ au préimage public.
 func TestPoseidonFull_ForgerieDigestArbitraire(t *testing.T) {
+	skipShort(t)
 	input := pfRandomState(606)
 
 	// Digest cible bidon = 4 premières cellules de l'INPUT (≠ sortie réelle, sauf
@@ -487,6 +497,7 @@ func TestPoseidonFull_ForgerieDigestArbitraire(t *testing.T) {
 // croisant input/digest. Le transcript absorbe input ET digest (valeurs
 // publiques + bords) : toute substitution diverge.
 func TestPoseidonFull_RejeuAutreInstance(t *testing.T) {
+	skipShort(t)
 	inputA := pfRandomState(700)
 	inputB := pfRandomState(701)
 	digestA, proofA := ProveHashFull(inputA)
@@ -511,6 +522,7 @@ func TestPoseidonFull_RejeuAutreInstance(t *testing.T) {
 // peuvent coïncider avec P_B). Rejet attendu — la liaison FRI<->DEEP est par
 // instance via le transcript.
 func TestMC_RejeuFRIGreffee(t *testing.T) {
+	skipShort(t)
 	n := 16
 	trA := buildCoupledTrace(FromUint64(1), FromUint64(1), n)
 	lastA := trA[n-1][0]
@@ -538,6 +550,7 @@ func TestMC_RejeuFRIGreffee(t *testing.T) {
 // TestMC_VerifyNeJamaisPaniquer : preuves dégénérées / mal formées => rejet
 // propre (false), sans panique.
 func TestMC_VerifyNeJamaisPaniquer(t *testing.T) {
+	skipShort(t)
 	n := 16
 	a0, b0 := FromUint64(1), FromUint64(1)
 	trace := buildCoupledTrace(a0, b0, n)

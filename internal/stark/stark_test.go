@@ -25,6 +25,7 @@ func fibValue(n int) Felt {
 // TestStarkHonnêteVérifie : pour diverses tailles n (puissances de 2 >= 4), une
 // preuve produite avec la VRAIE sortie publique doit être acceptée.
 func TestStarkHonnêteVérifie(t *testing.T) {
+	skipShort(t)
 	for _, n := range []int{4, 8, 16, 32, 64, 128} {
 		out := fibValue(n)
 		proof := ProveFib(n, out)
@@ -39,6 +40,7 @@ func TestStarkHonnêteVérifie(t *testing.T) {
 // tiennent pas, donc la composition n'est pas un vrai polynôme et/ou le contrôle
 // hors-domaine échoue).
 func TestStarkMauvaiseSortieÉchoue(t *testing.T) {
+	skipShort(t)
 	for _, n := range []int{8, 16, 32} {
 		vraie := fibValue(n)
 		fausse := vraie.Add(One()) // off-by-one : sortie publique incorrecte
@@ -62,6 +64,7 @@ func TestStarkMauvaiseSortieÉchoue(t *testing.T) {
 // TestStarkBonneSortieMauvaisN : vérifier une preuve avec un n différent de celui
 // prouvé doit échouer (l'énoncé public n fait partie du transcript).
 func TestStarkBonneSortieMauvaisN(t *testing.T) {
+	skipShort(t)
 	n := 32
 	out := fibValue(n)
 	proof := ProveFib(n, out)
@@ -88,6 +91,7 @@ func honnête(n int) (FibProof, Felt) {
 // TestStarkRacineTraceFalsifiée : altérer l'engagement de la trace doit être
 // rejeté (authentification Merkle + défis rejoués).
 func TestStarkRacineTraceFalsifiée(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 	if !VerifyFib(proof, 32, out) {
 		t.Fatal("contrôle : preuve honnête doit passer")
@@ -102,6 +106,7 @@ func TestStarkRacineTraceFalsifiée(t *testing.T) {
 // TestStarkRacineCompFalsifiée : altérer l'engagement de la composition doit
 // être rejeté.
 func TestStarkRacineCompFalsifiée(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 	bad := cloneFibProof(proof)
 	bad.CompRoot[0] ^= 0xFF
@@ -113,6 +118,7 @@ func TestStarkRacineCompFalsifiée(t *testing.T) {
 // TestStarkOodFalsifiée : altérer une valeur hors-domaine doit casser soit le
 // contrôle algébrique en z, soit la cohérence DEEP aux positions de requête.
 func TestStarkOodFalsifiée(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 
 	bad := cloneFibProof(proof)
@@ -144,6 +150,7 @@ func TestStarkOodFalsifiée(t *testing.T) {
 // composition) sans chemin valide doit être rejeté par Merkle ou par la
 // cohérence DEEP.
 func TestStarkValeurOuverteFalsifiée(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 
 	bad := cloneFibProof(proof)
@@ -168,6 +175,7 @@ func TestStarkValeurOuverteFalsifiée(t *testing.T) {
 // TestStarkCheminFalsifié : corrompre un hash d'un chemin de Merkle d'ouverture
 // doit être rejeté.
 func TestStarkCheminFalsifié(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 
 	bad := cloneFibProof(proof)
@@ -189,6 +197,7 @@ func TestStarkCheminFalsifié(t *testing.T) {
 // TestStarkPositionFalsifiée : annoncer une position d'ouverture incohérente avec
 // celle tirée par le transcript doit être rejeté.
 func TestStarkPositionFalsifiée(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 	bad := cloneFibProof(proof)
 	bad.Openings[0].Pos = (bad.Openings[0].Pos + 1) % (starkBlowup * 32)
@@ -200,6 +209,7 @@ func TestStarkPositionFalsifiée(t *testing.T) {
 // TestStarkFriFalsifié : altérer la preuve FRI interne (racine de couche, coeff
 // final) doit être rejeté.
 func TestStarkFriFalsifié(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 
 	bad := cloneFibProof(proof)
@@ -218,6 +228,7 @@ func TestStarkFriFalsifié(t *testing.T) {
 // TestStarkNombreOuverturesFalsifié : tronquer la liste des ouvertures doit être
 // rejeté (le vérifieur exige exactement starkNumQueries ouvertures).
 func TestStarkNombreOuverturesFalsifié(t *testing.T) {
+	skipShort(t)
 	proof, out := honnête(32)
 	bad := cloneFibProof(proof)
 	bad.Openings = bad.Openings[:len(bad.Openings)-1]
@@ -229,6 +240,7 @@ func TestStarkNombreOuverturesFalsifié(t *testing.T) {
 // TestStarkDéterminisme : prouver deux fois la même instance produit une preuve
 // identique bit-à-bit (racines, valeurs hors-domaine, FRI, ouvertures).
 func TestStarkDéterminisme(t *testing.T) {
+	skipShort(t)
 	n := 64
 	out := fibValue(n)
 	p1 := ProveFib(n, out)
@@ -266,6 +278,7 @@ func TestStarkDéterminisme(t *testing.T) {
 
 // TestStarkProveEntréeInvalidePanique : ProveFib panique sur n mal formé.
 func TestStarkProveEntréeInvalidePanique(t *testing.T) {
+	skipShort(t)
 	mustPanic := func(name string, f func()) {
 		defer func() {
 			if r := recover(); r == nil {
@@ -282,6 +295,7 @@ func TestStarkProveEntréeInvalidePanique(t *testing.T) {
 // TestStarkVerifyNeJamaisPaniquer : VerifyFib ne doit jamais paniquer, même sur
 // des preuves structurellement aberrantes (preuve vide, n invalide).
 func TestStarkVerifyNeJamaisPaniquer(t *testing.T) {
+	skipShort(t)
 	// Preuve zéro-valeur : doit être rejetée proprement, sans panique.
 	if VerifyFib(FibProof{}, 32, One()) {
 		t.Fatal("preuve vide acceptée")
