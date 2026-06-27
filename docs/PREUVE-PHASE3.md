@@ -59,6 +59,12 @@ Aucune primitive cassable par un ordinateur quantique. C'est le différenciateur
   avant le tirage des positions, +16 bits de soundness, coût vérifieur = 1 hachage.
 - **Échantillonnage des requêtes SANS REMISE** (`ChallengeIndicesDistinct`).
 - **Profondeur de pliage FRI variable** (`FoldStopBits`).
+- **Soundness ≥128 bits conjecturée** : **40 requêtes** (terme FRI ≈136 b) +
+  **amplification OOD multi-points** (`mcExtraOodPoints` = 2 points hors-domaine
+  indépendants en plus du principal ⇒ erreur OOD ~2⁻¹⁴⁴ sur Goldilocks).
+- **Range-proofs** (`poseidon_spendn.go`, `snRangeBits=48`) : chaque valeur de note
+  bornée `< 2⁴⁸` par décomposition binaire dans le circuit — ferme le débordement
+  modulaire de la conservation (création de valeur).
 - **Prouveur ~77× plus rapide** (141 s → ~1,8 s) : inversion par lots (Montgomery),
   `x^n` en suite géométrique, dédup des dénominateurs de bord, parallélisation
   déterministe (`parallel.go`). Sorties bit-à-bit identiques (déterminisme préservé).
@@ -125,9 +131,17 @@ Crypto **faite-maison** : voici les points actuellement **sous revue de sécurit
 
 1. **Paramètres Poseidon maison** (matrice MDS de Cauchy + constantes dérivées par
    SHAKE256). Pas un Poseidon standardisé. Résistance collision/préimage **non établie**.
-2. **Soundness concrète** : `blowup=8`, `32 requêtes` + **grinding 16 bits** (livré).
-   La borne s'en trouve renforcée, mais une cible « 128 bits » formellement prouvée
-   reste à établir (analyse fine de la soundness FRI + paramétrage cible).
+2. **Soundness concrète** → **cible 128 bits (conjecturée) atteinte** : `blowup=8`,
+   **40 requêtes** + **grinding 16 bits** ⇒ terme de requêtes FRI ≈ 40·log₂8 + 16 =
+   **136 bits**. Le terme limitant restait l'étape **DEEP/OOD** : sur un corps de
+   64 bits (Goldilocks), un **unique** point hors-domaine `z` borne l'erreur de
+   Schwartz-Zippel à ~2⁻⁴⁸. On tire désormais **3 points hors-domaine indépendants**
+   (`mcExtraOodPoints=2` en plus du principal), chacun soumis à l'identité de
+   contrainte et à la recombinaison DEEP : l'erreur OOD passe à ~(2⁻⁴⁸)³ ≈ **2⁻¹⁴⁴**.
+   La soundness globale **conjecturée** (régime list-decoding, comme Plonky2 /
+   Winterfell sur corps 64 bits) est donc **≥128 bits**. Reste à établir : la borne
+   **prouvée** (non conjecturée, analyse Johnson) — qui demanderait un **corps
+   d'extension** pour l'aléa de pliage FRI (étape formelle documentée).
 3. ~~Échantillonnage avec remise~~ → **résolu** : échantillonnage **sans remise**
    (positions distinctes) livré.
 4. **Masquage ZK** : LDE randomisé présent et testé (montant non extractible), mais
@@ -135,6 +149,10 @@ Crypto **faite-maison** : voici les points actuellement **sous revue de sécurit
 5. **Périmètre du circuit** : profondeur d'arbre **spendDepth=12 (4096 feuilles)** —
    capacité du pool blindé portée de 16 à **4096 notes**. **Multi-entrées /
    multi-sorties** (join-split) et **profondeur de pliage FRI variable** livrés.
+   **Range-proofs livrés** : chaque valeur de note (entrée comme sortie) est bornée
+   à **< 2⁴⁸** par décomposition en bits dans le circuit, ce qui **ferme l'attaque de
+   création de valeur par débordement** (`Σ` modulo Goldilocks) ; la couche état
+   refuse en plus tout dépôt `shield ≥ 2⁴⁸` (note sinon indépensable).
    Reste : profondeur d'arbre PAR-PREUVE variable (aujourd'hui un format unique).
 6. **Anonymat ML-KEM** : la *confidentialité* des notes est garantie ; la
    *non-liaison* (key-privacy de ML-KEM) reste à établir.
@@ -154,6 +172,10 @@ de Poseidon, exploiter le grinding Fiat-Shamir. Le code vit dans `internal/stark
 - ✅ **Durcissement zk-STARK** : grinding Fiat-Shamir, échantillonnage sans remise,
   profondeur FRI variable, circuit **M-entrées / N-sorties**, prouveur ~77× plus
   rapide (~1,8 s). Livrés, testés.
+- ✅ **Range-proofs + soundness ≥128 bits (conjecturée)** : valeurs de note bornées
+  `< 2⁴⁸` (anti création de valeur), 40 requêtes FRI + **amplification OOD
+  multi-points** (3 points hors-domaine indépendants). Livrés, testés (négatifs
+  inclus : valeur hors borne et points OOD supplémentaires falsifiés → rejet).
 - ✅ **Câblage on-chain** : tx `shield`/`shielded_transfer`/`unshield` câblées en
   consensus (arbre de commitments + ensemble de nullifiers dans la racine d'état,
   vérification STARK), **activées sur testnet/devnet** (gate `PrivacyEnabled` ON).

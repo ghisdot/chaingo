@@ -190,10 +190,18 @@ func absorbDigestXOF(xof sha3.ShakeHash, d [poseidonDigestLen]Felt) {
 func spProofRevealedFelts(proof AirProof) []Felt {
 	out := make([]Felt, 0, 4096)
 
-	// OOD de chaque colonne + composition.
+	// OOD de chaque colonne + composition (point principal).
 	out = append(out, proof.OodColZ...)
 	out = append(out, proof.OodColGZ...)
 	out = append(out, proof.OodHz)
+
+	// OOD des points supplémentaires (amplification soundness) : également « en
+	// clair » dans la preuve, donc comptés dans la borne de fuite.
+	for r := range proof.OodColZExtra {
+		out = append(out, proof.OodColZExtra[r]...)
+		out = append(out, proof.OodColGZExtra[r]...)
+		out = append(out, proof.OodHzExtra[r])
+	}
 
 	// Coefficients finaux FRI (couche finale, en clair).
 	out = append(out, proof.Fri.FinalCoeffs...)

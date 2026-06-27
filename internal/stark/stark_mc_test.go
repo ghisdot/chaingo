@@ -410,6 +410,13 @@ func clonePoof(p AirProof) AirProof {
 	out.ColRoots = append([][32]byte(nil), p.ColRoots...)
 	out.OodColZ = append([]Felt(nil), p.OodColZ...)
 	out.OodColGZ = append([]Felt(nil), p.OodColGZ...)
+	out.OodColZExtra = make([][]Felt, len(p.OodColZExtra))
+	out.OodColGZExtra = make([][]Felt, len(p.OodColGZExtra))
+	for r := range p.OodColZExtra {
+		out.OodColZExtra[r] = append([]Felt(nil), p.OodColZExtra[r]...)
+		out.OodColGZExtra[r] = append([]Felt(nil), p.OodColGZExtra[r]...)
+	}
+	out.OodHzExtra = append([]Felt(nil), p.OodHzExtra...)
 	out.Openings = make([]AirOpening, len(p.Openings))
 	for i, op := range p.Openings {
 		no := op

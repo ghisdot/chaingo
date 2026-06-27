@@ -235,6 +235,45 @@ func TestShieldRejectsMalformedCommitment(t *testing.T) {
 	}
 }
 
+// TestShieldRejectsOutOfRangeAmount : un dépôt >= 2^RangeBits produirait une note
+// de valeur hors borne, INDÉPENSABLE par le circuit (range-proof insatisfaisable).
+// L'état doit le refuser AVANT toute mutation (atomicité), pour ne pas verrouiller
+// définitivement les fonds.
+func TestShieldRejectsOutOfRangeAmount(t *testing.T) {
+	st := New()
+	st.SetParams(privacyParams())
+	alice := mustKey(t)
+	// Provision largement au-dessus de la borne pour isoler le motif du refus.
+	st.Mint(alice.Address(), stark.MaxNoteValue()+1_000)
+
+	shield := &types.Transaction{
+		Type: types.TxShield, Amount: stark.MaxNoteValue(), MaxBaseFee: 1, // pile la borne (exclue)
+		ShieldCommitment: sampleCommitment(9), ShieldNote: []byte("blob"),
+	}
+	shield.SignWith(alice)
+	if _, _, _, err := st.Execute([]*types.Transaction{shield}, nil, nil, "", 1_000, true); err == nil {
+		t.Fatal("un montant de shield hors borne de range devrait être refusé")
+	}
+	// Atomicité : pas de pool, solde intact.
+	if st.GetShieldedPool() != nil {
+		t.Fatal("aucun pool ne doit être créé sur une tx refusée")
+	}
+	if st.GetAccount(alice.Address()).Balances[types.NativeToken] != stark.MaxNoteValue()+1_000 {
+		t.Fatal("le solde ne doit pas bouger sur une tx refusée")
+	}
+
+	// Juste sous la borne : accepté.
+	ok := &types.Transaction{
+		Type: types.TxShield, Amount: stark.MaxNoteValue() - 1, MaxBaseFee: 1,
+		ShieldCommitment: sampleCommitment(10), ShieldNote: []byte("blob"),
+	}
+	ok.SignWith(alice)
+	executeStateBlock(t, st, "", 1_000, ok)
+	if p := st.GetShieldedPool(); p == nil || p.Balance != stark.MaxNoteValue()-1 {
+		t.Fatal("un montant juste sous la borne doit être accepté")
+	}
+}
+
 // TestShieldNonceAdvancesAndIsAtomic : un shield valide incrémente le nonce ;
 // deux shields successifs s'enchaînent et insèrent deux notes distinctes.
 func TestShieldTwoDepositsAccumulate(t *testing.T) {

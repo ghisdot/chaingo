@@ -143,17 +143,26 @@ en cours · `[ ]` planifié.
 - [x] **Prouveur ~77× plus rapide** : 141 s → **~1,8 s** (inversion par lots façon
       Montgomery, `x^n` en suite géométrique, déduplication des dénominateurs de bord,
       parallélisation déterministe). Vérifieur ~45 ms.
+- [x] **Range-proofs** (`snRangeBits=48`) : chaque valeur de note (entrée/sortie)
+      bornée `< 2⁴⁸` par décomposition binaire dans le circuit — **ferme la création
+      de valeur par débordement modulaire** du corps de Goldilocks. La couche état
+      refuse en plus tout dépôt `shield ≥ 2⁴⁸` (note sinon indépensable).
+- [x] **Soundness ≥128 bits (conjecturée)** : **40 requêtes** FRI (terme ≈136 b) +
+      grinding 16 b, et **amplification OOD multi-points** (`mcExtraOodPoints=2` :
+      3 points hors-domaine indépendants ⇒ erreur OOD ~2⁻¹⁴⁴ sur le corps 64 bits,
+      qui n'est plus le terme limitant). Tests négatifs : valeur hors borne et OOD
+      supplémentaire falsifié → rejet.
 
 **À venir**
 - [ ] **Revue de sécurité** du circuit blindé — bloquante avant activation mainnet
-      (Poseidon non standardisé, soundness concrète à borner formellement).
-- [ ] **Soundness chiffrée** : viser et **prouver** une cible « 128 bits »
-      (calibrage blowup / requêtes / grinding).
+      (Poseidon non standardisé).
+- [ ] **Soundness 128 bits *prouvée*** (et non plus seulement conjecturée façon
+      Plonky2 / Winterfell) : nécessiterait un **corps d'extension** pour l'aléa de
+      pliage FRI (analyse Johnson). Étape formelle documentée.
 - [ ] **Zero-knowledge formel** : indistinguabilité prouvée (le masquage est testé,
       la preuve formelle reste à établir).
 - [x] **Profondeur d'arbre portée à 12** (4096 notes ; capacité du pool ×256 vs 16).
-- [ ] Profondeur d'arbre **variable par-preuve** (aujourd'hui un format unique) +
-      **range-proofs** (borner les montants, éviter tout wrap-around du corps).
+- [ ] Profondeur d'arbre **variable par-preuve** (aujourd'hui un format unique).
 
 ## Phase 4 — Smart contracts no-code
 

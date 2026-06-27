@@ -1034,6 +1034,13 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		if _, derr := cmToDigest(tx.ShieldCommitment); derr != nil {
 			return fmt.Errorf("shield: %w", derr)
 		}
+		// BORNE DE RANGE : le montant déposé devient la valeur (cachée) de la note.
+		// Au-delà de 2^RangeBits, le circuit ne pourra JAMAIS en prouver la dépense
+		// (range-proof insatisfaisable) => note définitivement indépensable. On
+		// refuse en amont plutôt que de verrouiller des fonds.
+		if tx.Amount >= stark.MaxNoteValue() {
+			return fmt.Errorf("shield: montant %d hors borne de range (max %d)", tx.Amount, stark.MaxNoteValue()-1)
+		}
 		var curCommits [][]byte
 		if s.Shielded != nil {
 			curCommits = s.Shielded.Commitments

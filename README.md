@@ -160,11 +160,14 @@ Documentation complète :
   et **prouveur ~77× plus rapide** (141 s → **1,8 s** : inversion par lots, suite
   géométrique, parallélisation). Le **format M-in/N-out est câblé on-chain** (state +
   wallet/CLI, dédup des nullifiers anti création de valeur) et la **capacité du pool
-  est passée à 4096 notes**. Le tout est **activé sur devnet + testnet** (gate
+  est passée à 4096 notes**. **Range-proofs livrés** (valeurs de note bornées
+  `< 2⁴⁸`, fermeture de la création de valeur par débordement modulaire) et
+  **soundness ≥128 bits conjecturée** (40 requêtes FRI + grinding 16 bits +
+  amplification OOD multi-points). Le tout est **activé sur devnet + testnet** (gate
   `PrivacyEnabled` ON) — utilisable dès maintenant ; **revue de sécurité en cours**
   avant le mainnet. Dossier de preuve :
   [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Reste : revue de sécurité ;
-  range-proofs + soundness 128 bits formelle.
+  soundness 128 bits *prouvée* (non conjecturée, via corps d'extension).
 
 Voir [ROADMAP.md](ROADMAP.md) pour le détail complet et honnête.
 

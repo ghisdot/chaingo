@@ -96,8 +96,17 @@ const mcDomain = "stark/air-mc/v1"
 const mcBlowup = 8
 
 // mcNumQueries est le nombre de positions interrogées (cohérence colonnes /
-// composition / DEEP). La soundness décroît exponentiellement avec ce nombre.
-const mcNumQueries = 32
+// composition / DEEP). La soundness FRI conjecturée vaut
+// mcNumQueries·log2(mcBlowup) + starkGrindBits = 40·3 + 16 = 136 bits — au-delà
+// de la cible de 128 bits. (32 ne donnait que 112 bits.)
+const mcNumQueries = 40
+
+// mcExtraOodPoints est le nombre de points hors-domaine SUPPLÉMENTAIRES (en plus
+// du point z principal) tirés pour amplifier la soundness de l'étape DEEP/OOD.
+// Avec 2 points en plus (3 au total), l'erreur OOD Schwartz-Zippel passe de
+// ~2^-48 à ~2^-144 sur le corps de Goldilocks — elle cesse d'être le terme
+// limitant face au budget de requêtes FRI. Voir AirProof.OodColZExtra.
+const mcExtraOodPoints = 2
 
 // ---------------------------------------------------------------------------
 // Description d'un AIR
@@ -170,6 +179,20 @@ type AirProof struct {
 	OodColGZ []Felt
 	// OodHz = H(z) : ouverture hors-domaine de la composition.
 	OodHz Felt
+
+	// AMPLIFICATION DE SOUNDNESS OOD (points hors-domaine SUPPLÉMENTAIRES).
+	// Sur un corps de 64 bits, le terme de Schwartz-Zippel de l'étape DEEP/OOD à
+	// UN seul point z borne la soundness à ~log2(|F|/deg) ≈ 48 bits — c'est le
+	// terme limitant, indépendamment du nombre de requêtes FRI. En tirant
+	// mcExtraOodPoints points z_r INDÉPENDANTS (Fiat-Shamir, après engagement) et
+	// en exigeant la cohérence DEEP + l'identité de contrainte à CHACUN, l'erreur
+	// passe de (deg/|F|) à (deg/|F|)^(1+mcExtraOodPoints) : ~48 bits → ~144 bits.
+	// Combiné au budget de requêtes FRI (≥128 bits conjecturés), la soundness
+	// globale conjecturée atteint ≥128 bits. Chaque entrée est [mcExtraOodPoints],
+	// la sous-entrée colonne étant de largeur w.
+	OodColZExtra  [][]Felt // [mcExtraOodPoints][w] : Tc(z_r)
+	OodColGZExtra [][]Felt // [mcExtraOodPoints][w] : Tc(g·z_r)
+	OodHzExtra    []Felt   // [mcExtraOodPoints]     : H(z_r)
 
 	// Fri est la preuve de proximité au bas degré du quotient DEEP P. Sa couche 0
 	// (Fri.LayerRoots[0]) EST l'engagement de P, réutilisé pour la liaison.
@@ -562,6 +585,27 @@ func mcDrawGammas(tr *Transcript, w int) (gammaZ, gammaGZ []Felt, gammaH Felt) {
 	return gammaZ, gammaGZ, gammaH
 }
 
+// mcDrawGammasExtra tire un JEU INDÉPENDANT de coefficients de combinaison DEEP
+// par point hors-domaine supplémentaire. Étiquettes indexées par (point, colonne)
+// => défis indépendants entre points ET entre colonnes. Ordre partagé prouveur /
+// vérifieur.
+func mcDrawGammasExtra(tr *Transcript, w, points int) (gammaZ, gammaGZ [][]Felt, gammaH []Felt) {
+	gammaZ = make([][]Felt, points)
+	gammaGZ = make([][]Felt, points)
+	gammaH = make([]Felt, points)
+	for r := 0; r < points; r++ {
+		gz := make([]Felt, w)
+		ggz := make([]Felt, w)
+		for c := 0; c < w; c++ {
+			gz[c] = tr.Challenge(mcIndexedLabel(mcIndexedLabel("mc/gamma-z-extra", r), c))
+			ggz[c] = tr.Challenge(mcIndexedLabel(mcIndexedLabel("mc/gamma-gz-extra", r), c))
+		}
+		gammaZ[r], gammaGZ[r] = gz, ggz
+		gammaH[r] = tr.Challenge(mcIndexedLabel("mc/gamma-h-extra", r))
+	}
+	return gammaZ, gammaGZ, gammaH
+}
+
 // ---------------------------------------------------------------------------
 // Prouveur
 // ---------------------------------------------------------------------------
@@ -682,12 +726,47 @@ func ProveAIR(air AIR, trace [][]Felt, public ...Felt) AirProof {
 	}
 	tr.AbsorbFelt("mc/ood-hz", oodHz)
 
-	// --- 8) Défis DEEP γ ---
-	gammaZ, gammaGZ, gammaH := mcDrawGammas(tr, w)
+	// --- 7bis) Points hors-domaine SUPPLÉMENTAIRES (amplification soundness) ---
+	// Chaque z_r est tiré APRÈS l'engagement (Fiat-Shamir), donc le prouveur ne
+	// peut pas les choisir ; ils sont indépendants entre eux (étiquettes/flux
+	// distincts) et de z. On ouvre colonnes + composition à chacun et on absorbe.
+	zExtra := make([]Felt, mcExtraOodPoints)
+	gzExtra := make([]Felt, mcExtraOodPoints)
+	oodColZExtra := make([][]Felt, mcExtraOodPoints)
+	oodColGZExtra := make([][]Felt, mcExtraOodPoints)
+	oodHzExtra := make([]Felt, mcExtraOodPoints)
+	for r := 0; r < mcExtraOodPoints; r++ {
+		zr := tr.Challenge(mcIndexedLabel("mc/ood-z-extra", r))
+		gzr := g.Mul(zr)
+		zExtra[r], gzExtra[r] = zr, gzr
+		cz := make([]Felt, w)
+		cgz := make([]Felt, w)
+		for c := 0; c < w; c++ {
+			cz[c] = evalNaïfPoly(colsCoeffs[c], zr)
+			cgz[c] = evalNaïfPoly(colsCoeffs[c], gzr)
+		}
+		hz := evalNaïfPoly(compCoeffs, zr)
+		oodColZExtra[r], oodColGZExtra[r], oodHzExtra[r] = cz, cgz, hz
+		for c := 0; c < w; c++ {
+			tr.AbsorbFelt("mc/ood-col-z", cz[c])
+			tr.AbsorbFelt("mc/ood-col-gz", cgz[c])
+		}
+		tr.AbsorbFelt("mc/ood-hz", hz)
+	}
 
-	// --- 9) Quotient DEEP P(x) ---
+	// --- 8) Défis DEEP γ (point principal + un jeu indépendant par point extra) ---
+	gammaZ, gammaGZ, gammaH := mcDrawGammas(tr, w)
+	gammaZExtra, gammaGZExtra, gammaHExtra := mcDrawGammasExtra(tr, w, mcExtraOodPoints)
+
+	// --- 9) Quotient DEEP P(x) : batch du point principal + batchs des extras. ---
 	deepCoeffs := mcBuildDeep(colsCoeffs, compCoeffs, z, gz,
 		oodColZ, oodColGZ, oodHz, gammaZ, gammaGZ, gammaH)
+	for r := 0; r < mcExtraOodPoints; r++ {
+		extra := mcBuildDeep(colsCoeffs, compCoeffs, zExtra[r], gzExtra[r],
+			oodColZExtra[r], oodColGZExtra[r], oodHzExtra[r],
+			gammaZExtra[r], gammaGZExtra[r], gammaHExtra[r])
+		deepCoeffs = polyTrim(polyAddScaled(deepCoeffs, extra, One()))
+	}
 
 	// --- 10) LDE de P et preuve FRI de bas degré ---
 	deepLDE := evalOnLDE(deepCoeffs, bigN)
@@ -720,13 +799,16 @@ func ProveAIR(air AIR, trace [][]Felt, public ...Felt) AirProof {
 	_ = logBigN // implicite via les indices LDE.
 
 	return AirProof{
-		ColRoots: colRoots,
-		CompRoot: compRoot,
-		OodColZ:  oodColZ,
-		OodColGZ: oodColGZ,
-		OodHz:    oodHz,
-		Fri:      friProof,
-		Openings: openings,
+		ColRoots:      colRoots,
+		CompRoot:      compRoot,
+		OodColZ:       oodColZ,
+		OodColGZ:      oodColGZ,
+		OodHz:         oodHz,
+		OodColZExtra:  oodColZExtra,
+		OodColGZExtra: oodColGZExtra,
+		OodHzExtra:    oodHzExtra,
+		Fri:           friProof,
+		Openings:      openings,
 	}
 }
 
@@ -798,6 +880,18 @@ func VerifyAIR(air AIR, proof AirProof, public ...Felt) bool {
 	if len(proof.OodColZ) != w || len(proof.OodColGZ) != w {
 		return false
 	}
+	// Points hors-domaine supplémentaires : dimensions EXACTES exigées (sinon la
+	// soundness OOD amplifiée n'est pas garantie — rejet d'une preuve mal formée).
+	if len(proof.OodColZExtra) != mcExtraOodPoints ||
+		len(proof.OodColGZExtra) != mcExtraOodPoints ||
+		len(proof.OodHzExtra) != mcExtraOodPoints {
+		return false
+	}
+	for r := 0; r < mcExtraOodPoints; r++ {
+		if len(proof.OodColZExtra[r]) != w || len(proof.OodColGZExtra[r]) != w {
+			return false
+		}
+	}
 
 	friParams := FriParams{Blowup: mcBlowup, NumQueries: mcNumQueries, GrindBits: starkGrindBits}
 
@@ -855,15 +949,40 @@ func VerifyAIR(air AIR, proof AirProof, public ...Felt) bool {
 	}
 	tr.AbsorbFelt("mc/ood-hz", proof.OodHz)
 
+	// Points hors-domaine supplémentaires : MÊME ordre d'absorption que le prouveur
+	// (tirage z_r, puis absorption des ouvertures). Tout écart fait diverger le
+	// transcript et rejette la preuve.
+	zExtra := make([]Felt, mcExtraOodPoints)
+	gzExtra := make([]Felt, mcExtraOodPoints)
+	for r := 0; r < mcExtraOodPoints; r++ {
+		zr := tr.Challenge(mcIndexedLabel("mc/ood-z-extra", r))
+		zExtra[r] = zr
+		gzExtra[r] = g.Mul(zr)
+		for c := 0; c < w; c++ {
+			tr.AbsorbFelt("mc/ood-col-z", proof.OodColZExtra[r][c])
+			tr.AbsorbFelt("mc/ood-col-gz", proof.OodColGZExtra[r][c])
+		}
+		tr.AbsorbFelt("mc/ood-hz", proof.OodHzExtra[r])
+	}
+
 	gammaZ, gammaGZ, gammaH := mcDrawGammas(tr, w)
+	gammaZExtra, gammaGZExtra, gammaHExtra := mcDrawGammasExtra(tr, w, mcExtraOodPoints)
 
 	absorbFriDigest(tr, proof.Fri)
 	positions := queryPositions(tr, "mc/query", mcNumQueries, bigN)
 
 	// --- Contrôle algébrique hors-domaine (cohérence des contraintes en z) ---
+	// Au point principal ET à CHAQUE point supplémentaire : un témoin trichant doit
+	// passer l'identité de contrainte à TOUS les points indépendants à la fois.
 	if !mcCheckConstraintsAtZ(air, z, g, n, alphaTrans, alphaBound,
 		proof.OodColZ, proof.OodColGZ, proof.OodHz) {
 		return false
+	}
+	for r := 0; r < mcExtraOodPoints; r++ {
+		if !mcCheckConstraintsAtZ(air, zExtra[r], g, n, alphaTrans, alphaBound,
+			proof.OodColZExtra[r], proof.OodColGZExtra[r], proof.OodHzExtra[r]) {
+			return false
+		}
 	}
 
 	// --- Requêtes : authenticité Merkle + cohérence DEEP par position ---
@@ -902,6 +1021,13 @@ func VerifyAIR(air AIR, proof AirProof, public ...Felt) bool {
 		x := omegaN.Exp(uint64(pos))
 		expected := mcDeepCombineAt(x, op.ColVals, op.CompVal, z, gz,
 			proof.OodColZ, proof.OodColGZ, proof.OodHz, gammaZ, gammaGZ, gammaH)
+		// P agrège aussi le batch DEEP de chaque point supplémentaire : on ajoute
+		// leur contribution à l'attendu (mêmes coefficients, points distincts).
+		for r := 0; r < mcExtraOodPoints; r++ {
+			expected = expected.Add(mcDeepCombineAt(x, op.ColVals, op.CompVal,
+				zExtra[r], gzExtra[r], proof.OodColZExtra[r], proof.OodColGZExtra[r],
+				proof.OodHzExtra[r], gammaZExtra[r], gammaGZExtra[r], gammaHExtra[r]))
+		}
 		if !expected.Equal(op.DeepVal) {
 			return false
 		}

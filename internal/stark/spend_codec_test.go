@@ -164,6 +164,21 @@ func scProofEqual(t *testing.T, a, b AirProof) bool {
 		t.Errorf("OodHz divergent")
 		ok = false
 	}
+	if len(a.OodHzExtra) != len(b.OodHzExtra) ||
+		len(a.OodColZExtra) != len(b.OodColZExtra) ||
+		len(a.OodColGZExtra) != len(b.OodColGZExtra) {
+		t.Errorf("dimensions OOD supplémentaires divergentes")
+		ok = false
+	} else {
+		for r := range a.OodHzExtra {
+			if !a.OodHzExtra[r].Equal(b.OodHzExtra[r]) ||
+				!scFeltsEqual(a.OodColZExtra[r], b.OodColZExtra[r]) ||
+				!scFeltsEqual(a.OodColGZExtra[r], b.OodColGZExtra[r]) {
+				t.Errorf("OOD supplémentaire %d divergent", r)
+				ok = false
+			}
+		}
+	}
 	if !scFriEqual(t, a.Fri, b.Fri) {
 		ok = false
 	}

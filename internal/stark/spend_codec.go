@@ -56,8 +56,10 @@ import (
 
 const (
 	// scMaxColumns borne le nombre de colonnes (ColRoots, OodColZ, ColVals…). Le
-	// circuit de dépense a spNumCols colonnes ; on tolère une marge.
-	scMaxColumns = spNumCols + 16 // ~77
+	// circuit de dépense 1-in/1-out a spNumCols colonnes ; le circuit M-in/N-out
+	// (range-proofs inclus) en a snNumCols (le plus large). On borne sur le plus
+	// large des deux + marge.
+	scMaxColumns = snNumCols + 16 // ~128
 
 	// scMaxFriLayers borne le nombre de couches FRI (LayerRoots / QueryStep par
 	// requête). On plie de bigN jusqu'à mcBlowup : log2(bigN) couches, soit au plus
@@ -67,6 +69,10 @@ const (
 	// scMaxQueries borne le nombre de requêtes (Openings / FriProof.Queries). Fixé
 	// à mcNumQueries par le moteur ; marge incluse.
 	scMaxQueries = mcNumQueries + 32 // 64
+
+	// scMaxOodPoints borne le nombre de points hors-domaine SUPPLÉMENTAIRES
+	// (anti-DoS). Fixé à mcExtraOodPoints par le moteur ; marge généreuse.
+	scMaxOodPoints = mcExtraOodPoints + 16
 
 	// scMaxMerklePath borne la longueur d'un chemin de Merkle (en hachages [32]byte).
 	// Un chemin a log2(domaine) niveaux ; même borne que les couches FRI.
@@ -516,6 +522,14 @@ func scWriteProof(w *scWriter, p AirProof) {
 	w.felts(p.OodColZ)
 	w.felts(p.OodColGZ)
 	w.felt(p.OodHz)
+	// Points hors-domaine supplémentaires (amplification soundness OOD). Nombre
+	// préfixé, puis chaque point : OodColZ[r], OodColGZ[r], OodHz[r].
+	w.u32(len(p.OodColZExtra))
+	for r := range p.OodColZExtra {
+		w.felts(p.OodColZExtra[r])
+		w.felts(p.OodColGZExtra[r])
+		w.felt(p.OodHzExtra[r])
+	}
 	scWriteFri(w, p.Fri)
 	w.u32(len(p.Openings))
 	for _, op := range p.Openings {
@@ -542,6 +556,25 @@ func scReadProof(r *scReader) (AirProof, error) {
 	}
 	if p.OodHz, err = r.felt(); err != nil {
 		return p, err
+	}
+	// Points hors-domaine supplémentaires : nombre borné, puis chaque triplet.
+	nExtra, err := r.boundedLen(scMaxOodPoints)
+	if err != nil {
+		return p, err
+	}
+	p.OodColZExtra = make([][]Felt, nExtra)
+	p.OodColGZExtra = make([][]Felt, nExtra)
+	p.OodHzExtra = make([]Felt, nExtra)
+	for i := 0; i < nExtra; i++ {
+		if p.OodColZExtra[i], err = r.felts(scMaxColumns); err != nil {
+			return p, err
+		}
+		if p.OodColGZExtra[i], err = r.felts(scMaxColumns); err != nil {
+			return p, err
+		}
+		if p.OodHzExtra[i], err = r.felt(); err != nil {
+			return p, err
+		}
 	}
 	if p.Fri, err = scReadFri(r); err != nil {
 		return p, err

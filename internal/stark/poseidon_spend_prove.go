@@ -103,6 +103,16 @@ type SpendPublic struct {
 // dépense. Exposé pour les appelants (taille attendue du chemin / nb de feuilles).
 func SpendDepth() int { return spendDepth }
 
+// RangeBits renvoie le nombre de bits sur lequel chaque valeur de note (et le
+// montant public d'un shield/unshield) est bornée par les range-proofs du
+// circuit M-in/N-out. Une valeur >= 2^RangeBits n'admet AUCUNE preuve valide :
+// la couche état doit donc refuser de tels montants (sinon note indépensable).
+func RangeBits() uint { return snRangeBits }
+
+// MaxNoteValue renvoie la borne stricte (exclue) des valeurs de note prouvables :
+// toute valeur honnête doit vérifier value < MaxNoteValue.
+func MaxNoteValue() uint64 { return uint64(1) << snRangeBits }
+
 // ---------------------------------------------------------------------------
 // Construction de la trace-témoin
 // ---------------------------------------------------------------------------

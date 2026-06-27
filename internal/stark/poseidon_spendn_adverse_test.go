@@ -75,6 +75,41 @@ func TestSpendN_VolNkFaux(t *testing.T) {
 	}
 }
 
+// SOUNDNESS / RANGE-PROOFS : l'attaque de CRÉATION DE VALEUR par débordement
+// (wrap-around) du corps de Goldilocks. Sans bornes sur les valeurs, un adversaire
+// peut choisir des montants de sortie ÉNORMES dont la somme re-boucle modulo p
+// jusqu'à fee, satisfaisant la conservation `Σ in = Σ out + fee` SANS la respecter
+// sur les entiers — il fabrique ainsi de la valeur. Les range-proofs (chaque
+// valeur < 2^snRangeBits) ferment cette faille : Σ < 128·2^48 = 2^55 ≪ p, donc
+// aucune somme honnête ne peut boucler. Ici on déplace un montant à travers la
+// frontière 2^48 entre deux sorties : la conservation modulo p reste exacte, mais
+// la borne de range est franchie → trace insatisfaisante, preuve rejetée.
+func TestSpendN_RangeWrapAroundRejete(t *testing.T) {
+	skipShort(t)
+	w, fee := snBuildScenario("range-attack", 1, 2)
+
+	// Déplace une valeur ÉNORME (≥ 2^snRangeBits) sur la sortie 0, compensée à
+	// l'identique sur la sortie 1 : la SOMME (donc la conservation mod p) est
+	// préservée à la valeur de champ près, seule la borne de range est violée.
+	big := FromUint64(1 << snRangeBits) // 2^48 : premier entier hors borne
+	delta := big.Sub(w.Outs[0].Value)
+	w.Outs[0].Value = big
+	w.Outs[1].Value = w.Outs[1].Value.Sub(delta)
+
+	trace, public := buildSpendNTrace(w, fee)
+	air := spendNAirOf(public)
+
+	// La conservation seule NE détecte PAS l'attaque (acc == fee tient mod p) :
+	// c'est précisément le rôle des range-proofs de la rattraper.
+	if !snTraceViolated(air, trace) {
+		t.Fatal("SOUNDNESS : valeur hors borne (wrap-around) non détectée par l'AIR")
+	}
+	_, proof := ProveSpendN(w, fee)
+	if VerifySpendN(public, proof) {
+		t.Fatal("SOUNDNESS : preuve avec création de valeur (wrap-around) acceptée")
+	}
+}
+
 // CONSTAT D'AUDIT : le CIRCUIT n'interdit pas d'utiliser DEUX FOIS la même note en
 // entrée — il produit alors DEUX nullifiers IDENTIQUES. La preuve « vérifie » (le
 // circuit ne sait pas que c'est la même note), donc la défense anti-création-de-

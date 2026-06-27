@@ -108,6 +108,64 @@ func TestMC_ColonneFantomeQuandMemeLiee(t *testing.T) {
 	}
 }
 
+// TestMC_PointsOodSupplementairesLies : les points hors-domaine SUPPLÉMENTAIRES
+// (amplification de soundness, AirProof.OodColZExtra/…) sont RÉELLEMENT vérifiés —
+// pas du poids mort. On tape successivement chaque champ extra (OodHzExtra,
+// OodColZExtra, OodColGZExtra) ainsi que leurs dimensions ; chaque corruption doit
+// être rejetée (identité de contrainte en z_r et/ou recombinaison DEEP du batch r).
+func TestMC_PointsOodSupplementairesLies(t *testing.T) {
+	skipShort(t)
+	n := 16
+	a0, b0 := FromUint64(7), FromUint64(3)
+	trace := buildCoupledTrace(a0, b0, n)
+	lastA := trace[n-1][0]
+	air := coupledAIR{n: n, a0: a0, b0: b0, lastA: lastA}
+	proof := ProveAIR(air, trace, a0, b0, lastA)
+	if !VerifyAIR(air, proof, a0, b0, lastA) {
+		t.Fatal("préparation : preuve honnête rejetée")
+	}
+
+	// La preuve DOIT porter exactement mcExtraOodPoints points supplémentaires.
+	if len(proof.OodHzExtra) != mcExtraOodPoints {
+		t.Fatalf("attendu %d points OOD supplémentaires, got %d", mcExtraOodPoints, len(proof.OodHzExtra))
+	}
+
+	// Corruption de H(z_r) au point supplémentaire 0 : l'identité de contrainte en
+	// z_0 (mcCheckConstraintsAtZ) et la recombinaison DEEP du batch 0 divergent.
+	bad := clonePoof(proof)
+	bad.OodHzExtra[0] = bad.OodHzExtra[0].Add(One())
+	if VerifyAIR(air, bad, a0, b0, lastA) {
+		t.Fatal("SOUNDNESS : H(z_r) supplémentaire falsifié accepté")
+	}
+
+	// Corruption d'une OOD de colonne en z_r.
+	bad2 := clonePoof(proof)
+	bad2.OodColZExtra[0][0] = bad2.OodColZExtra[0][0].Add(One())
+	if VerifyAIR(air, bad2, a0, b0, lastA) {
+		t.Fatal("SOUNDNESS : OodColZExtra falsifié accepté")
+	}
+
+	// Corruption d'une OOD de colonne en g·z_r (ligne suivante).
+	bad3 := clonePoof(proof)
+	bad3.OodColGZExtra[mcExtraOodPoints-1][1] = bad3.OodColGZExtra[mcExtraOodPoints-1][1].Add(One())
+	if VerifyAIR(air, bad3, a0, b0, lastA) {
+		t.Fatal("SOUNDNESS : OodColGZExtra falsifié accepté")
+	}
+
+	// Dimensions : retirer un point supplémentaire (len != mcExtraOodPoints) => rejet
+	// structurel, sans panique.
+	bad4 := clonePoof(proof)
+	bad4.OodHzExtra = bad4.OodHzExtra[:len(bad4.OodHzExtra)-1]
+	if VerifyAIR(air, bad4, a0, b0, lastA) {
+		t.Fatal("SOUNDNESS : OodHzExtra tronqué accepté")
+	}
+	bad5 := clonePoof(proof)
+	bad5.OodColZExtra = bad5.OodColZExtra[:len(bad5.OodColZExtra)-1]
+	if VerifyAIR(air, bad5, a0, b0, lastA) {
+		t.Fatal("SOUNDNESS : OodColZExtra (nb points) tronqué accepté")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // 2) OOD PARTIEL : ouverture hors-domaine tronquée ou désynchronisée.
 // ---------------------------------------------------------------------------

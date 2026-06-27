@@ -47,12 +47,23 @@ const (
 	snRegAccCol = spNumCols     // accumulateur SIGNÉ Σ inValue_i - Σ outValue_j (porté)
 	snConsCol   = spNumCols + 1 // sélecteur PUBLIC : ligne de conservation finale
 	snMPackNk   = spNumCols + 2 // mode de glue « charge-témoin » : pack(nk_{i+1})
-	snNumCols   = spNumCols + 3 // largeur totale du circuit M-in/N-out
 
-	// Résidus : 12 (état) + 4 (regNk) + 4 (regCm) + 1 (binarité bit) +
-	// 1 (accumulateur) + 1 (conservation) = 23. (regVal du circuit unitaire est
-	// remplacé par l'accumulateur signé.)
-	snNumResidues = pfStateCols + poseidonDigestLen + poseidonDigestLen + 1 + 1 + 1
+	// RANGE-PROOFS : chaque valeur de note (in/out) est bornée à < 2^snRangeBits via
+	// décomposition en bits. Cela ferme le wrap-around de la conservation dans le
+	// corps Goldilocks (p ≈ 2^64) : avec toutes les valeurs < 2^48 et jusqu'à 128
+	// notes par tx, Σ < 128·2^48 = 2^55 ≪ p — aucune somme ne peut « boucler » pour
+	// créer de la valeur. 2^48 (~281 000 CGO à 9 décimales) couvre l'usage courant ;
+	// les très grosses notes se fractionnent via le multi-sortie. Les bits vivent sur
+	// la LIGNE DE GLUE de chaque valeur (où wVal porte la valeur) ; ils sont nuls
+	// ailleurs.
+	snRangeBits = 48
+	snBitOff    = spNumCols + 3                // 1ère colonne de bits de range
+	snNumCols   = snBitOff + snRangeBits        // largeur totale
+
+	// Résidus : 12 (état) + 4 (regNk) + 4 (regCm) + 1 (binarité bit Merkle) +
+	// 1 (accumulateur conservation) + 1 (conservation finale) + snRangeBits (binarité
+	// de chaque bit de range) + 1 (reconstruction valeur = Σ bit·2^i).
+	snNumResidues = pfStateCols + poseidonDigestLen + poseidonDigestLen + 1 + 1 + 1 + snRangeBits + 1
 )
 
 // snInputBase renvoie l'indice du premier bloc de l'entrée i.
@@ -283,6 +294,27 @@ func (a spendNAIR) EvalTransition(cur, next []Felt) []Felt {
 	// Σ inValue_i - Σ outValue_j == fee.
 	cons := cur[snConsCol]
 	residues[idx] = cons.Mul(cur[snRegAccCol].Sub(cur[spFeeCol]))
+	idx++
+
+	// RANGE-PROOF de la valeur de note, gated par les lignes de glue qui PORTENT une
+	// valeur (mCommitS pour une entrée, mCommitW pour une sortie). Sur ces lignes,
+	// wVal doit être < 2^snRangeBits, décomposé en bits snBitOff..+snRangeBits-1 :
+	//   - chaque bit est BINAIRE : valSel·b·(b-1) = 0 ;
+	//   - RECONSTRUCTION : valSel·(wVal - Σ b_i·2^i) = 0.
+	// Hors lignes de glue de valeur (valSel=0), les bits sont libres (mis à 0 par la
+	// trace) et non contraints. Borner ainsi toutes les valeurs ferme le wrap-around
+	// de la conservation dans Goldilocks.
+	valSel := mCommitS.Add(mCommitW)
+	recon := Zero()
+	pow := one
+	for i := 0; i < snRangeBits; i++ {
+		b := cur[snBitOff+i]
+		residues[idx] = valSel.Mul(b).Mul(b.Sub(one)) // binarité du bit
+		idx++
+		recon = recon.Add(b.Mul(pow))
+		pow = pow.Add(pow) // 2^(i+1)
+	}
+	residues[idx] = valSel.Mul(wVal.Sub(recon)) // wVal == Σ b_i·2^i
 	idx++
 
 	return residues
@@ -600,6 +632,7 @@ func buildSpendNTrace(w SpendNWitness, fee Felt) (trace [][]Felt, public SpendNP
 	for i := 0; i < numIn; i++ {
 		// Glue mCommitS (sortie ownerTag_i) : forme inCm_i, wVal = inValue_i.
 		spSetWNote(trace[spOutputRowOf(snBlkOwnerI(i))], w.Ins[i].Rho, w.Ins[i].Value)
+		spSetRangeBits(trace[spOutputRowOf(snBlkOwnerI(i))], w.Ins[i].Value) // range-proof inValue_i
 		// Glue mReasmReg (sortie nf_i) : sibling/bit du niveau 0.
 		spSetSibBit(trace[spOutputRowOf(snBlkNfI(i))], w.Ins[i].Path.Siblings[0], w.Ins[i].Path.Bits[0])
 		// Glue mReasm (sorties mem niveaux 0..depth-2) : sibling/bit du niveau l+1.
@@ -614,10 +647,12 @@ func buildSpendNTrace(w SpendNWitness, fee Felt) (trace [][]Felt, public SpendNP
 	// Glue mCommitW : memL_{last} -> sortie 0, puis sortie j -> sortie j+1.
 	spSetWTag(trace[spOutputRowOf(snBlkMemLI(numIn-1))], w.Outs[0].OwnerTag)
 	spSetWNote(trace[spOutputRowOf(snBlkMemLI(numIn-1))], w.Outs[0].Rho, w.Outs[0].Value)
+	spSetRangeBits(trace[spOutputRowOf(snBlkMemLI(numIn-1))], w.Outs[0].Value) // range-proof outValue_0
 	for j := 0; j < numOut-1; j++ {
 		row := spOutputRowOf(snBlkOutputJ(numIn, j))
 		spSetWTag(trace[row], w.Outs[j+1].OwnerTag)
 		spSetWNote(trace[row], w.Outs[j+1].Rho, w.Outs[j+1].Value)
+		spSetRangeBits(trace[row], w.Outs[j+1].Value) // range-proof outValue_{j+1}
 	}
 
 	// Registres + accumulateur.
@@ -625,6 +660,20 @@ func buildSpendNTrace(w SpendNWitness, fee Felt) (trace [][]Felt, public SpendNP
 
 	public = SpendNPublic{MerkleRoot: merkleRoot, Nfs: nfs, OutCms: outCms, Fee: fee}
 	return trace, public
+}
+
+// spSetRangeBits pose la décomposition en bits (LSB d'abord) de `value` sur les
+// colonnes de range [snBitOff, snBitOff+snRangeBits) d'une ligne de glue de valeur.
+// La valeur honnête est < 2^snRangeBits (sinon la reconstruction la rejetterait).
+func spSetRangeBits(line []Felt, value Felt) {
+	v := value.Uint64()
+	for i := 0; i < snRangeBits; i++ {
+		if (v>>uint(i))&1 == 1 {
+			line[snBitOff+i] = One()
+		} else {
+			line[snBitOff+i] = Zero()
+		}
+	}
 }
 
 // spFillRegistersN remplit regNk/regCm par entrée et l'accumulateur signé.
