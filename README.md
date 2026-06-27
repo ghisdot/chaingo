@@ -55,6 +55,8 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
   invariants à respecter (crypto post-quantique, déterminisme).
 - [Feuille de route](ROADMAP.md) — ce qui est livré, ce qui reste.
 - [Référence API](docs/API.md) — pour développer des clients ou intégrer.
+- **[Rapport de revue de sécurité](docs/SECURITY-REVIEW.md)** — self-audit interne
+  + dossier de preuve (consensus, état, anonymat zk-STARK), reproductible.
 - Politique de sécurité : [SECURITY.md](SECURITY.md).
 
 ---

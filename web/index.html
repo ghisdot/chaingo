@@ -458,7 +458,7 @@
     <div class="head reveal">
       <div class="kicker" data-i18n="r.kicker">Feuille de route</div>
       <h2 data-i18n="r.h2">Où en est ChainGO</h2>
-      <p class="lead" data-i18n="r.lead">Transparente — y compris sur ce qui n'existe pas encore. Le testnet est en ligne ; le mainnet ouvre après l'audit externe et des validateurs indépendants.</p>
+      <p class="lead" data-i18n="r.lead">Transparente — y compris sur ce qui n'existe pas encore. Le testnet est en ligne ; le mainnet ouvre après le durcissement communautaire et des validateurs indépendants. Lisez notre <a href="https://github.com/ghisdot/chaingo/blob/main/docs/SECURITY-REVIEW.md" rel="noopener">rapport de revue de sécurité</a> et le <a href="https://github.com/ghisdot/chaingo/blob/main/docs/PREUVE-PHASE3.md" rel="noopener">dossier de preuve zk-STARK</a>.</p>
     </div>
     <div class="timeline reveal">
       <div class="phase done">
@@ -474,7 +474,7 @@
           <h3>Phase 2 — Consensus BFT &amp; slashing <span class="tag prog">En cours · ~94 %</span></h3>
           <p>Finalité multi-validateurs (2f+1), set de validateurs figé par hauteur, verrouillage POL,
           slashing complet (double-signature + inactivité), fork-choice + reorg testé en partition,
-          codec binaire, fuzzing. Reste : audit externe et des validateurs indépendants.</p>
+          codec binaire, fuzzing. Reste : des validateurs indépendants (le vrai jalon de décentralisation).</p>
         </div>
       </div>
       <div class="phase done">
@@ -483,7 +483,7 @@
           <p>Vesting, escrow, multisig et <b>DAO</b> déployables depuis le studio. Moteur
           <b>WASM</b> (contrats arbitraires) <b>câblé en consensus sur le testnet</b> : on déploie du
           bytecode et on l'appelle depuis le studio, la CLI ou l'API. Déterminisme garanti
-          (gas instrumenté, opcodes restreints, interpréteur). <b>Activé sur mainnet après audit.</b></p>
+          (gas instrumenté, opcodes restreints, interpréteur). <b>Activé sur mainnet après durcissement communautaire.</b></p>
         </div>
       </div>
       <div class="phase prog">
@@ -544,8 +544,8 @@
     <div class="warn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
       <span data-i18n="ft.warn">Le testnet public est en ligne — explorez-le librement, obtenez des CGO de test
-      via le faucet, rejoignez le réseau. Le <b>mainnet</b> ouvrira après l'audit de sécurité externe et la finalisation
-      de la Phase 2 (consensus BFT durci). L'anonymat fort (zk-STARK) arrive en Phase 3.</span>
+      via le faucet, rejoignez le réseau. Le <b>mainnet</b> ouvrira avec des validateurs indépendants et le durcissement
+      communautaire, à la finalisation de la Phase 2 (consensus BFT durci). L'anonymat fort (zk-STARK) arrive en Phase 3.</span>
     </div>
     <div class="info" data-i18n="ft.info">ChainGO — blockchain post-quantique open source (Apache 2.0) écrite en Go.
     Signatures ML-DSA-65 (NIST FIPS 204) · SHA3-256 · <a href="/api/">Référence API</a> ·
@@ -613,10 +613,10 @@ const EN = {
   't.r9': `<td>Unbonding</td><td>21 days on mainnet, 24 h on testnet</td><td class="muted">funds leaving the stake remain seizable (slashing)</td>`,
   'r.kicker': `Roadmap`,
   'r.h2': `Where ChainGO stands`,
-  'r.lead': `Transparent — including about what doesn't exist yet. The testnet is live; mainnet opens after the external audit and independent validators.`,
+  'r.lead': `Transparent — including about what doesn't exist yet. The testnet is live; mainnet opens after community hardening and independent validators. Read our <a href="https://github.com/ghisdot/chaingo/blob/main/docs/SECURITY-REVIEW.md" rel="noopener">security review report</a> and <a href="https://github.com/ghisdot/chaingo/blob/main/docs/PREUVE-PHASE3.md" rel="noopener">zk-STARK proof dossier</a>.`,
   'r.p1': `<h3>Phase 1 — Foundations <span class="tag live">Shipped</span></h3><p>Complete post-quantum chain: Aurora PoS consensus with fallback rounds, burned EIP-1559 fees, staking + delegation + unbonding, no-code tokens, first smart contracts, wallets, P2P, REST API, 31,000 TPS benchmarked.</p>`,
-  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag prog">In progress · ~94%</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec, fuzzing. Remaining: external audit and independent validators.</p>`,
-  'r.p4': `<h3>Phase 4 — Smart contracts <span class="tag live">Shipped · testnet</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> deployable from the studio. A <b>WASM</b> engine (arbitrary contracts) <b>wired into consensus on the testnet</b>: deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after audit.</b></p>`,
+  'r.p2': `<h3>Phase 2 — BFT consensus &amp; slashing <span class="tag prog">In progress · ~94%</span></h3><p>Multi-validator finality (2f+1), height-frozen validator set, POL locking, full slashing (double-sign + downtime), fork-choice + reorg with a partition test, binary codec, fuzzing. Remaining: independent validators (the real decentralization milestone).</p>`,
+  'r.p4': `<h3>Phase 4 — Smart contracts <span class="tag live">Shipped · testnet</span></h3><p>Vesting, escrow, multisig and <b>DAO</b> deployable from the studio. A <b>WASM</b> engine (arbitrary contracts) <b>wired into consensus on the testnet</b>: deploy bytecode and call it from the studio, CLI or API. Determinism enforced (instrumented gas, restricted opcodes, interpreter). <b>Enabled on mainnet after community hardening.</b></p>`,
   'r.p5': `<h3>Phase 5 — Ecosystem &amp; tooling <span class="tag prog">In progress</span></h3><p>Online: explorer, no-code studio, validator dashboard, load tester, web wallet. The <b><a href="https://github.com/ghisdot/chaingo-sdk-js" rel="noopener">JavaScript</a></b> &amp; <b><a href="https://github.com/ghisdot/chaingo-sdk-py" rel="noopener">Python</a></b> SDKs have their own repos (ML-DSA-65 signing identical to the node); npm/PyPI packages coming. Next: full documentation and community presence.</p>`,
   'r.p3': `<h3>Phase 3 — Strong anonymity <span class="tag prog">Live on testnet · security review</span></h3><p>A <b>homemade post-quantum zk-STARK stack</b> + a <b>working shielded-transaction circuit</b>: proves a valid spend in zero-knowledge, <b>amounts and recipient hidden</b>, hash-only security (no curve). Hardened: <b>Fiat-Shamir grinding</b>, sampling without replacement, variable FRI depth, <b>multi-input / multi-output transactions</b> (join-split), and a <b>~77× faster prover</b> (≈1.8 s). <b>Live on testnet</b> (try it); security review under way before mainnet activation.</p>`,
   'd.kicker': `Get started`,
@@ -636,7 +636,7 @@ const EN = {
 <span class="c"># Create YOUR token, no code — or delegate from 1 CGO</span>
 <span class="k">chaingo</span> token create --from alice --symbol MYTOK --name "My Token" --supply 1000000
 <span class="k">chaingo</span> delegate --from alice --to cg… --amount 50`,
-  'ft.warn': `Public testnet is live — explore it, request test CGO from the faucet, run your own node. <b>Mainnet</b> opens once the external security audit lands and Phase 2 (hardened BFT consensus) ships. Strong anonymity (zk-STARK) follows in Phase 3.`,
+  'ft.warn': `Public testnet is live — explore it, request test CGO from the faucet, run your own node. <b>Mainnet</b> opens once Phase 2 (hardened BFT consensus) ships with independent validators and community hardening. Strong anonymity (zk-STARK) follows in Phase 3.`,
   'ft.info': `ChainGO — open source (Apache 2.0) post-quantum blockchain written in Go. ML-DSA-65 signatures (NIST FIPS 204) · SHA3-256 · <a href="/api/">API reference</a> · <a href="/explorer/">Explorer</a> · <a href="https://github.com/ghisdot/chaingo" rel="noopener">Source code</a>`,
 };
 

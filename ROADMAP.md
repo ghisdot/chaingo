@@ -16,8 +16,9 @@ en cours · `[ ]` planifié.
 - **Performance** : **31 078 TPS** mesurés bout-en-bout (objectif 1 500 dépassé ×20).
 - **Confidentialité** (transactions blindées zk-STARK post-quantiques) et
   **smart contracts WASM** : **actifs sur testnet/devnet**, prêts à l'essai.
-- **Revue de sécurité** en cours sur les composants avancés (zk-STARK, VM WASM)
-  avant leur activation sur le **mainnet**, qui est en préparation.
+- **Revue de sécurité interne (self-audit) + durcissement communautaire** sur les
+  composants avancés (zk-STARK, VM WASM) avant leur activation sur le **mainnet**.
+  Voir le [rapport de revue de sécurité](docs/SECURITY-REVIEW.md).
 - **Décentralisation** : prochain jalon = des **validateurs indépendants** (entités
   tierces) avant le lancement mainnet.
 
@@ -97,7 +98,8 @@ en cours · `[ ]` planifié.
 - [x] **Testnet public en ligne 24/24** (chaingo.org) : finalité continue.
 - [ ] **Validateurs INDÉPENDANTS** (≥ 4 entités distinctes) — jalon de décentralisation
       avant mainnet ([#12](https://github.com/ghisdot/chaingo/issues/12)).
-- [ ] **Revue de sécurité externe** du cœur consensus avant mainnet.
+- [ ] **Durcissement communautaire** du cœur consensus avant mainnet (self-audit
+      livré, cf. [SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) ; bug bounty ouvert).
 
 ## Phase 3 — Anonymat fort (transactions blindées zk-STARK)
 

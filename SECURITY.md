@@ -3,10 +3,15 @@
 ## Statut
 
 ChainGO opère actuellement un **testnet public** (`chaingo-testnet-1`).
-Aucun réseau de valeur réelle (mainnet) n'est encore en service. Les
-protections de niveau production — finalité BFT durcie, slashing complet,
-audit externe — sont en cours de livraison dans le cadre de la **Phase 2**
-de la roadmap (voir [ROADMAP.md](ROADMAP.md)).
+Aucun réseau de valeur réelle (mainnet) n'est encore en service.
+
+La sécurité repose sur une **revue interne (self-audit) + un durcissement
+communautaire** (bug bounty ouvert), et non sur un audit par un cabinet tiers.
+Le détail des surfaces couvertes, des limites assumées et de la méthode est dans
+le **[Rapport de revue de sécurité](docs/SECURITY-REVIEW.md)** (reproductible).
+Les surfaces « maison » non encore durcies par la communauté — anonymat
+zk-STARK (`PrivacyEnabled`), VM WASM (`WasmEnabled`) — restent **désactivées sur
+mainnet** par un gate.
 
 Le testnet sert précisément à éprouver le code en conditions publiques
 avant le mainnet. Toute découverte de vulnérabilité est précieuse — merci
