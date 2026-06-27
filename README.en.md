@@ -37,9 +37,9 @@ No install needed. Everything runs in the browser:
 
 ### 🛡️ You want to run a node or become a validator
 
-- [Node operator guide](docs/TESTNET-DEPLOY.md) — join the public testnet in
+- [Node operator guide](docs/TESTNET-DEPLOY.en.md) — join the public testnet in
   15 minutes, or bootstrap your own chain.
-- [Validator & delegator guide](docs/VALIDATOR.md) — staking, delegation,
+- [Validator & delegator guide](docs/VALIDATOR.en.md) — staking, delegation,
   slashing, yield.
 
 ### 💻 You want to contribute to the code
@@ -47,8 +47,8 @@ No install needed. Everything runs in the browser:
 - [Contributing guide](CONTRIBUTING.md) — project rules, process, invariants
   to respect (post-quantum crypto, determinism).
 - [Roadmap](ROADMAP.md) — what's shipped, what's left.
-- [API reference](docs/API.md) — for building clients or integrating.
-- **[Security review report](docs/SECURITY-REVIEW.md)** — internal self-audit +
+- [API reference](docs/API.en.md) — for building clients or integrating.
+- **[Security review report](docs/SECURITY-REVIEW.en.md)** — internal self-audit +
   reproducible proof dossier (consensus, state, zk-STARK anonymity).
 - **[Bug bounty](BUG-BOUNTY.md)** — attack the code, get rewarded (CGO + credit).
 - Security policy: [SECURITY.md](SECURITY.md).
@@ -110,11 +110,11 @@ Joining an existing network:
 
 Full documentation:
 
-- [API reference](docs/API.md) — every endpoint + how to sign a transaction
-- [Node operator guide](docs/TESTNET-DEPLOY.md) — install, HTTPS, backups
-- [24/7 hosting](docs/DEPLOYMENT.md) — express deployment, Docker, systemd
-- [Validator & delegator guide](docs/VALIDATOR.md)
-- [Mainnet preparation](docs/MAINNET.md) — distribution, on-chain vesting, genesis ceremony
+- [API reference](docs/API.en.md) — every endpoint + how to sign a transaction
+- [Node operator guide](docs/TESTNET-DEPLOY.en.md) — install, HTTPS, backups
+- [24/7 hosting](docs/DEPLOYMENT.en.md) — express deployment, Docker, systemd
+- [Validator & delegator guide](docs/VALIDATOR.en.md)
+- [Mainnet preparation](docs/MAINNET.en.md) — distribution, on-chain vesting, genesis ceremony
 - [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## Project status
@@ -132,9 +132,9 @@ Full documentation:
   deterministic gas (instrumentation, fuzzed 5.3M execs), a restricted opcode set, and the wazero
   interpreter; verified by a multi-validator test (4 nodes, identical state root).
   **Disabled on mainnet (`WasmEnabled=false`) until community hardening** — see
-  [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
+  [docs/design/wasm-vm.md](docs/design/wasm-vm.en.md).
 - **Phase 5 — Ecosystem**: 🟢 web wallet, explorer, studio, validator dashboard, load tester.
-  **Remaining**: JS/Python SDKs, full EN docs.
+  **Remaining**: JS/Python SDKs (English docs now available — see `*.en.md`).
 - **Phase 3 — Strong anonymity (zk-STARK)**: 🟢 **live on testnet**. A **homemade
   post-quantum zk-STARK stack** (Goldilocks field, FRI, multi-column AIR, Poseidon
   hash) + a **working shielded-transaction circuit**: proves a valid spend in
@@ -148,7 +148,7 @@ Full documentation:
   The **M-in/N-out format is wired on-chain** (state + wallet/CLI, intra-tx nullifier dedup) and
   the pool capacity is now 4096 notes. **Enabled on devnet + testnet** (`PrivacyEnabled` ON) —
   usable today; **security review under way** before mainnet. Evidence dossier:
-  [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.md). Remaining: security review; *proven* (not
+  [docs/PREUVE-PHASE3.md](docs/PREUVE-PHASE3.en.md). Remaining: security review; *proven* (not
   conjectured) 128-bit soundness via a field extension.
 
 See [ROADMAP.md](ROADMAP.md) for the full, honest breakdown.

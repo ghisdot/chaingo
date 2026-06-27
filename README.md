@@ -151,7 +151,7 @@ Documentation complète :
   **Désactivé sur mainnet (`WasmEnabled=false`) jusqu'au durcissement communautaire** — voir
   [docs/design/wasm-vm.md](docs/design/wasm-vm.md).
 - **Phase 5 — Écosystème** : 🟢 wallet web, explorateur, studio, dashboard validateur, banc d'essai.
-  **Reste** : SDK JS/Python, doc EN complète.
+  **Reste** : SDK JS/Python (doc EN désormais disponible — fichiers `*.en.md`).
 - **Phase 3 — Anonymat fort (zk-STARK)** : 🟢 **actif sur testnet**. Pile **zk-STARK
   maison post-quantique** (corps Goldilocks, FRI, AIR multi-colonnes, hachage
   Poseidon) + **circuit de transaction blindée fonctionnel** : prouve en
