@@ -115,8 +115,34 @@ type Contract struct {
 	Signers   []string            `json:"signers,omitempty"`
 	Threshold uint64              `json:"threshold,omitempty"`
 	Proposals []*MultisigProposal `json:"proposals,omitempty"`
-	Status    string              `json:"status"` // active | completed | refunded
+	Status    string              `json:"status"` // active | completed | refunded | cancelled
 	CreatedAt uint64              `json:"created_at_height"`
+	// presale : prix en ucgo par unité de base du token vendu.
+	Price uint64 `json:"price,omitempty"`
+	// airdrop : destinataires ayant déjà réclamé leur part.
+	Claimed []string `json:"claimed,omitempty"`
+}
+
+// streamingVested : montant acquis à blockTime pour un flux linéaire entre
+// StartMs et EndMs (identique au vesting linéaire).
+func streamingVested(c *Contract, blockTime int64) uint64 {
+	switch {
+	case blockTime <= c.StartMs:
+		return 0
+	case blockTime >= c.EndMs:
+		return c.Amount
+	default:
+		return types.MulDiv(c.Amount, uint64(blockTime-c.StartMs), uint64(c.EndMs-c.StartMs))
+	}
+}
+
+func (c *Contract) hasClaimed(addr string) bool {
+	for _, a := range c.Claimed {
+		if a == addr {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Contract) isSigner(addr string) bool {
@@ -730,6 +756,11 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	if tx.Type == types.TxContractCreate && tx.Contract.TokenID == types.NativeToken {
 		needNative += tx.Contract.Amount
 	}
+	// presale : l'acheteur engage tx.Amount CGO (le coût réel ≤ ce montant est
+	// débité dans le handler ; on s'assure ici qu'il en dispose).
+	if tx.Type == types.TxContractExec && tx.Action == types.ActionBuy {
+		needNative += tx.Amount
+	}
 	if tx.Type == types.TxWasmCall {
 		needNative += tx.Amount // value (CGO) envoyée au contrat
 	}
@@ -932,6 +963,7 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			Arbiter:     c.Arbiter,
 			Signers:     c.Signers,
 			Threshold:   c.Threshold,
+			Price:       c.Price,
 			Status:      "active",
 			CreatedAt:   s.Height + 1,
 		}
@@ -1039,6 +1071,88 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 				p.Against = append(p.Against, tx.From)
 			}
 			s.maybeResolveDAO(c, p)
+		case c.Template == types.TemplateTimelock && tx.Action == types.ActionClaim:
+			if tx.From != c.Beneficiary {
+				return errors.New("timelock: only the beneficiary can claim")
+			}
+			if blockTime < c.EndMs {
+				return errors.New("timelock: funds are still locked")
+			}
+			s.acct(c.Beneficiary).Balances[c.TokenID] += c.Amount - c.Released
+			c.Released = c.Amount
+			c.Status = "completed"
+		case c.Template == types.TemplateStreaming && tx.Action == types.ActionClaim:
+			if tx.From != c.Beneficiary {
+				return errors.New("streaming: only the beneficiary can claim")
+			}
+			claimable := streamingVested(c, blockTime) - c.Released
+			if claimable == 0 {
+				return errors.New("streaming: nothing streamed yet")
+			}
+			s.acct(c.Beneficiary).Balances[c.TokenID] += claimable
+			c.Released += claimable
+			if c.Released == c.Amount {
+				c.Status = "completed"
+			}
+		case c.Template == types.TemplateStreaming && tx.Action == types.ActionCancel:
+			if tx.From != c.Creator {
+				return errors.New("streaming: only the creator can cancel")
+			}
+			// Le bénéficiaire reçoit l'acquis non encore réclamé ; le créateur
+			// récupère le reste non acquis.
+			vested := streamingVested(c, blockTime)
+			s.acct(c.Beneficiary).Balances[c.TokenID] += vested - c.Released
+			s.acct(c.Creator).Balances[c.TokenID] += c.Amount - vested
+			c.Released = c.Amount
+			c.Status = "cancelled"
+		case c.Template == types.TemplateAirdrop && tx.Action == types.ActionClaim:
+			if !c.isSigner(tx.From) {
+				return errors.New("airdrop: caller is not a recipient")
+			}
+			if c.hasClaimed(tx.From) {
+				return errors.New("airdrop: already claimed")
+			}
+			share := c.Amount / uint64(len(c.Signers))
+			s.acct(tx.From).Balances[c.TokenID] += share
+			c.Released += share
+			c.Claimed = append(c.Claimed, tx.From)
+			if len(c.Claimed) == len(c.Signers) {
+				// Tous ont réclamé : la poussière (Amount - N·share) revient au créateur.
+				if dust := c.Amount - c.Released; dust > 0 {
+					s.acct(c.Creator).Balances[c.TokenID] += dust
+					c.Released = c.Amount
+				}
+				c.Status = "completed"
+			}
+		case c.Template == types.TemplatePresale && tx.Action == types.ActionBuy:
+			// L'acheteur envoie tx.Amount CGO ; il reçoit floor(montant/prix) unités
+			// de base du token, et ne paie QUE le coût exact (le reste lui reste).
+			tokensOut := tx.Amount / c.Price
+			if tokensOut == 0 {
+				return errors.New("presale: amount too small to buy 1 token unit")
+			}
+			if tokensOut > c.Amount-c.Released {
+				return errors.New("presale: not enough inventory left")
+			}
+			cost := tokensOut * c.Price
+			if from.Balances[types.NativeToken] < cost {
+				return errors.New("presale: insufficient CGO balance")
+			}
+			from.Balances[types.NativeToken] -= cost          // l'acheteur paie en CGO
+			s.acct(c.Creator).Balances[types.NativeToken] += cost // le créateur encaisse
+			s.acct(tx.From).Balances[c.TokenID] += tokensOut   // l'acheteur reçoit le token
+			c.Released += tokensOut
+			if c.Released == c.Amount {
+				c.Status = "completed"
+			}
+		case c.Template == types.TemplatePresale && tx.Action == types.ActionCancel:
+			if tx.From != c.Creator {
+				return errors.New("presale: only the creator can close")
+			}
+			// Le créateur clôt la vente et récupère l'inventaire invendu.
+			s.acct(c.Creator).Balances[c.TokenID] += c.Amount - c.Released
+			c.Released = c.Amount
+			c.Status = "cancelled"
 		default:
 			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
 		}

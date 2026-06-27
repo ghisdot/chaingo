@@ -62,6 +62,11 @@ const (
 	TemplateEscrow   = "escrow"   // séquestre acheteur/vendeur, arbitre optionnel
 	TemplateMultisig = "multisig" // coffre M-of-N : N signataires, M approbations pour dépenser
 	TemplateDAO      = "dao"      // gouvernance : membres, trésorerie, propositions votées POUR/CONTRE
+	// Nouveaux templates :
+	TemplatePresale   = "presale"   // vente d'un token à prix fixe contre CGO
+	TemplateTimelock  = "timelock"  // fonds verrouillés jusqu'à une date, puis réclamables en totalité
+	TemplateAirdrop   = "airdrop"   // distribution d'un token, part égale réclamable par destinataire
+	TemplateStreaming = "streaming" // flux linéaire vers un bénéficiaire, annulable par le créateur
 )
 
 // Actions exécutables sur un contrat.
@@ -72,6 +77,8 @@ const (
 	ActionPropose = "propose" // multisig/dao : proposer un paiement depuis la trésorerie (To, Amount)
 	ActionApprove = "approve" // multisig/dao : approuver / voter POUR la proposition (Proposal)
 	ActionReject  = "reject"  // dao : voter CONTRE la proposition (Proposal)
+	ActionBuy     = "buy"     // presale : acheter des tokens en envoyant des CGO (Amount)
+	ActionCancel  = "cancel"  // streaming/presale : le créateur clôt et récupère le reste
 )
 
 type ContractParams struct {
@@ -83,8 +90,10 @@ type ContractParams struct {
 	EndMs       int64    `json:"end_ms,omitempty"`      // vesting : 100 % débloqué
 	Seller      string   `json:"seller,omitempty"`      // escrow
 	Arbiter     string   `json:"arbiter,omitempty"`     // escrow (optionnel)
-	Signers     []string `json:"signers,omitempty"`     // multisig
+	Signers     []string `json:"signers,omitempty"`     // multisig/dao : signataires/membres ; airdrop : destinataires
 	Threshold   uint64   `json:"threshold,omitempty"`   // multisig : nb d'approbations requis
+	// Ajouté EN FIN (l'ordre EST le format de signature) :
+	Price uint64 `json:"price,omitempty"` // presale : prix en ucgo par unité de base du token vendu
 }
 
 const (
@@ -351,15 +360,57 @@ func (tx *Transaction) ValidateBasic() error {
 			if c.Threshold < 1 || c.Threshold > uint64(len(c.Signers)) {
 				return errors.New("dao: threshold (quorum) must be between 1 and the number of members")
 			}
+		case TemplateTimelock:
+			if !crypto.ValidAddress(c.Beneficiary) {
+				return errors.New("timelock: invalid beneficiary address")
+			}
+			if c.EndMs <= 0 {
+				return errors.New("timelock: end_ms (unlock time) must be > 0")
+			}
+		case TemplateStreaming:
+			if !crypto.ValidAddress(c.Beneficiary) {
+				return errors.New("streaming: invalid beneficiary address")
+			}
+			if c.StartMs <= 0 || c.EndMs <= c.StartMs {
+				return errors.New("streaming: end_ms must be after start_ms (> 0)")
+			}
+		case TemplateAirdrop:
+			if len(c.Signers) < 1 {
+				return errors.New("airdrop: at least one recipient required")
+			}
+			seen := map[string]bool{}
+			for _, r := range c.Signers {
+				if !crypto.ValidAddress(r) {
+					return errors.New("airdrop: invalid recipient address")
+				}
+				if seen[r] {
+					return errors.New("airdrop: duplicate recipient")
+				}
+				seen[r] = true
+			}
+			if c.Amount < uint64(len(c.Signers)) {
+				return errors.New("airdrop: amount must cover at least 1 base unit per recipient")
+			}
+		case TemplatePresale:
+			if c.TokenID == NativeToken {
+				return errors.New("presale: token_id must be a non-native token (the one being sold)")
+			}
+			if c.Price == 0 {
+				return errors.New("presale: price (ucgo per token base unit) must be > 0")
+			}
 		default:
-			return fmt.Errorf("unknown contract template %q (vesting|escrow|multisig|dao)", c.Template)
+			return fmt.Errorf("unknown contract template %q", c.Template)
 		}
 	case TxContractExec:
 		if tx.ContractID == "" {
 			return errors.New("contract_id required")
 		}
 		switch tx.Action {
-		case ActionClaim, ActionRelease, ActionRefund, ActionApprove, ActionReject:
+		case ActionClaim, ActionRelease, ActionRefund, ActionApprove, ActionReject, ActionCancel:
+		case ActionBuy:
+			if tx.Amount == 0 {
+				return errors.New("buy: amount (CGO to spend) must be > 0")
+			}
 		case ActionPropose:
 			if !crypto.ValidAddress(tx.To) {
 				return errors.New("propose: invalid recipient address")

@@ -109,6 +109,10 @@
       <div class="tab" data-t="escrow" onclick="switchTab('escrow')">Séquestre</div>
       <div class="tab" data-t="multisig" onclick="switchTab('multisig')">Multisig</div>
       <div class="tab" data-t="dao" onclick="switchTab('dao')">DAO</div>
+      <div class="tab" data-t="presale" onclick="switchTab('presale')">Vente</div>
+      <div class="tab" data-t="timelock" onclick="switchTab('timelock')">Timelock</div>
+      <div class="tab" data-t="airdrop" onclick="switchTab('airdrop')">Airdrop</div>
+      <div class="tab" data-t="streaming" onclick="switchTab('streaming')">Streaming</div>
       <div class="tab" data-t="manage" onclick="switchTab('manage')">⚙ Gérer</div>
       <div class="tab" data-t="wasm" onclick="switchTab('wasm')">Contrats WASM</div>
       <div class="tab" data-t="mine" onclick="switchTab('mine')">Mes créations</div>
@@ -250,6 +254,72 @@
       <button class="primary" onclick="createDAO()">Déployer la DAO</button>
     </div>
 
+    <!-- PRESALE -->
+    <div id="tab-presale" class="card hidden">
+      <h2>Vente de token (presale)</h2>
+      <p class="hint">Vendez un de <b>vos tokens</b> à <b>prix fixe</b> contre des CGO. Vous verrouillez un inventaire ; les acheteurs paient en CGO et reçoivent les tokens au prix fixé. <b>Gérez la vente (achats, clôture) dans « ⚙ Gérer ».</b></p>
+      <div class="row">
+        <div><label>Token vendu (symbole)</label><input id="psToken" placeholder="MONTOK"></div>
+        <div><label>Inventaire à mettre en vente</label><input id="psAmount" type="number" min="0" step="any" value="1000"></div>
+      </div>
+      <div class="row">
+        <div><label>Prix (CGO par 1 token)</label><input id="psPrice" type="number" min="0" step="any" value="0.5"></div>
+      </div>
+      <div class="info" id="psHint">…</div>
+      <div class="fee" id="feePresale">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createPresale()">Lancer la vente</button>
+    </div>
+
+    <!-- TIMELOCK -->
+    <div id="tab-timelock" class="card hidden">
+      <h2>Timelock</h2>
+      <p class="hint">Verrouille un montant jusqu'à une <b>date</b> ; après cette date, le bénéficiaire réclame la <b>totalité</b> d'un coup. Brique de confiance simple (vesting d'équipe, blocage de liquidité…). <b>Réclamation dans « ⚙ Gérer ».</b></p>
+      <div class="row">
+        <div><label>Bénéficiaire (cg…)</label><input id="tlBenef" placeholder="cg…"></div>
+        <div><label>Token</label><input id="tlToken" value="CGO"></div>
+      </div>
+      <div class="row">
+        <div><label>Montant à verrouiller</label><input id="tlAmount" type="number" min="0" step="any" value="1000"></div>
+        <div><label>Date de déblocage</label><input id="tlUnlock" type="datetime-local"></div>
+      </div>
+      <div class="fee" id="feeTimelock">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createTimelock()">Déployer le timelock</button>
+    </div>
+
+    <!-- AIRDROP -->
+    <div id="tab-airdrop" class="card hidden">
+      <h2>Airdrop / distribution</h2>
+      <p class="hint">Distribue un token en <b>parts égales</b> à une liste de destinataires. Chaque destinataire <b>réclame sa part une fois</b> (depuis « ⚙ Gérer »). La poussière éventuelle revient au créateur quand tout est réclamé.</p>
+      <div class="row">
+        <div><label>Token</label><input id="adToken" value="CGO"></div>
+        <div><label>Montant TOTAL à distribuer</label><input id="adAmount" type="number" min="0" step="any" value="1000"></div>
+      </div>
+      <label>Destinataires (une adresse cg… par ligne)</label>
+      <textarea id="adRecipients" placeholder="cg…&#10;cg…&#10;cg…"></textarea>
+      <div class="info" id="adHint">…</div>
+      <div class="fee" id="feeAirdrop">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createAirdrop()">Lancer l'airdrop</button>
+    </div>
+
+    <!-- STREAMING -->
+    <div id="tab-streaming" class="card hidden">
+      <h2>Streaming de paiement</h2>
+      <p class="hint">Un flux <b>linéaire par seconde</b> vers un bénéficiaire entre deux dates (salaires, grants…). Le bénéficiaire réclame l'acquis au fil de l'eau ; le créateur peut <b>annuler</b> et récupérer le non-acquis. <b>Tout se gère dans « ⚙ Gérer ».</b></p>
+      <div class="row">
+        <div><label>Bénéficiaire (cg…)</label><input id="smBenef" placeholder="cg…"></div>
+        <div><label>Token</label><input id="smToken" value="CGO"></div>
+      </div>
+      <div class="row">
+        <div><label>Montant total du flux</label><input id="smAmount" type="number" min="0" step="any" value="1000"></div>
+      </div>
+      <div class="row">
+        <div><label>Début</label><input id="smStart" type="datetime-local"></div>
+        <div><label>Fin</label><input id="smEnd" type="datetime-local"></div>
+      </div>
+      <div class="fee" id="feeStreaming">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createStreaming()">Démarrer le flux</button>
+    </div>
+
     <!-- MANAGE / OPERATE -->
     <div id="tab-manage" class="card hidden">
       <h2>Gérer un contrat</h2>
@@ -353,7 +423,7 @@ function txToJSON(tx){
 
 function switchTab(t){
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
-  ["token","vesting","escrow","multisig","dao","manage","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
+  ["token","vesting","escrow","multisig","dao","presale","timelock","airdrop","streaming","manage","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
   if (t === "mine") loadMine();
   if (t === "wasm") loadWasmList();
   if (t === "token") renderTokenSummary();
@@ -412,7 +482,7 @@ function renderFees(){
   const ct = `${fmt(fees.contract_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(ctrTotal)} CGO</b>`;
   $("feeToken").innerHTML = "Coût de déploiement : " + tk;
   if ($("tkRuleBurn")) $("tkRuleBurn").textContent = fmt(fees.token_create_fee||0) + " CGO brûlés";
-  ["feeVesting","feeEscrow","feeMultisig","feeDAO"].forEach(id => $(id).innerHTML = "Coût de déploiement : " + ct);
+  ["feeVesting","feeEscrow","feeMultisig","feeDAO","feePresale","feeTimelock","feeAirdrop","feeStreaming"].forEach(id => { if ($(id)) $(id).innerHTML = "Coût de déploiement : " + ct; });
   if ($("feeWasm")){
     if (fees.wasm_enabled){
       const wt = (fees.wasm_deploy_fee || 0) + base + tip;
@@ -598,6 +668,72 @@ async function createDAO(){
   }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
 }
 
+// presale : prix en ucgo par unité de base du token. Le token vendu a ses propres
+// décimales ; le prix est saisi en CGO/token, converti en ucgo/base-unit.
+async function createPresale(){
+  try{
+    const token = ($("psToken").value.trim() || "").toUpperCase();
+    if (!SYM_RE.test(token)) throw new Error("token vendu : symbole 3–8 (vous devez le posséder)");
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("psAmount").value, dec);
+    if (amount <= 0n) throw new Error("inventaire doit être > 0");
+    // prix CGO/token -> ucgo / unité de base du token = prixCGO * 1e9 / 10^dec.
+    const priceUcgoPerToken = toBase($("psPrice").value, 9); // CGO en ucgo
+    const price = priceUcgoPerToken / (10n ** BigInt(dec));
+    if (price <= 0n) throw new Error("prix trop faible pour ces décimales (≥ 1 ucgo/unité de base)");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "presale", token_id: token, amount: amount, price: price };
+    await signAndSend(tx, "Vente de token");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function createTimelock(){
+  try{
+    const benef = $("tlBenef").value.trim();
+    if (!benef.startsWith("cg")) throw new Error("bénéficiaire invalide");
+    const token = ($("tlToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("tlAmount").value, dec);
+    if (amount <= 0n) throw new Error("montant doit être > 0");
+    const unlock = Date.parse($("tlUnlock").value);
+    if (isNaN(unlock)) throw new Error("date de déblocage invalide");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "timelock", token_id: token, amount: amount, beneficiary: benef, end_ms: unlock };
+    await signAndSend(tx, "Timelock");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function createAirdrop(){
+  try{
+    const token = ($("adToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("adAmount").value, dec);
+    const recipients = $("adRecipients").value.split(/\s+/).map(s=>s.trim()).filter(Boolean);
+    if (recipients.length < 1) throw new Error("au moins 1 destinataire");
+    if (!recipients.every(s=>s.startsWith("cg"))) throw new Error("toutes les adresses doivent commencer par cg");
+    if (amount < BigInt(recipients.length)) throw new Error("montant trop faible pour 1 unité de base par destinataire");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "airdrop", token_id: token, amount: amount, signers: recipients };
+    await signAndSend(tx, "Airdrop");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
+async function createStreaming(){
+  try{
+    const benef = $("smBenef").value.trim();
+    if (!benef.startsWith("cg")) throw new Error("bénéficiaire invalide");
+    const token = ($("smToken").value.trim() || "CGO").toUpperCase();
+    const dec = await tokenDecimals(token);
+    const amount = toBase($("smAmount").value, dec);
+    if (amount <= 0n) throw new Error("montant doit être > 0");
+    const start = Date.parse($("smStart").value), end = Date.parse($("smEnd").value);
+    if (isNaN(start) || isNaN(end) || end <= start) throw new Error("dates invalides (fin > début)");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template: "streaming", token_id: token, amount: amount, beneficiary: benef, start_ms: start, end_ms: end };
+    await signAndSend(tx, "Streaming");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
 // ---------------- gérer / opérer un contrat ----------------
 let mgContract = null, mgDec = 9;
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -686,7 +822,75 @@ function renderContract(){
       <h3 style="font-size:.95rem;margin:16px 0 4px">Propositions</h3>
       ${rows? `<table><tr><th>#</th><th>Vers</th><th>Montant</th><th>Votes</th><th>État</th><th></th></tr>${rows}</table>` : '<p class="hint">Aucune proposition pour l\'instant.</p>'}`;
   }
+  else if (c.template === "timelock"){
+    const now = Date.now(), unlocked = now >= c.end_ms;
+    body = `<p class="hint">Bénéficiaire : <span class="mono">${short(c.beneficiary)}</span>${me(c.beneficiary)?' <span class="ok">(vous)</span>':''} · déblocage le <b>${new Date(c.end_ms).toLocaleString("fr-FR")}</b></p>
+      <div class="info">${unlocked?'<span class="ok">Débloqué — réclamable.</span>':'🔒 Encore verrouillé.'}</div>
+      <button class="primary" onclick="ctExec('claim','Réclamation timelock')" ${(!me(c.beneficiary)||!unlocked||c.status!=='active')?'disabled':''}>Tout réclamer</button>
+      ${!me(c.beneficiary)?'<p class="hint">Seul le bénéficiaire peut réclamer.</p>':''}`;
+  }
+  else if (c.template === "streaming"){
+    const now = Date.now();
+    let vested = 0n, A = BigInt(c.amount||0);
+    if (now >= c.end_ms) vested = A;
+    else if (now > c.start_ms) vested = A * BigInt(now - c.start_ms) / BigInt(c.end_ms - c.start_ms);
+    const claimable = vested - BigInt(c.released||0);
+    const pct = A>0n ? Number(vested*10000n/A)/100 : 0;
+    body = `<p class="hint">Bénéficiaire : <span class="mono">${short(c.beneficiary)}</span>${me(c.beneficiary)?' <span class="ok">(vous)</span>':''} · flux du ${new Date(c.start_ms).toLocaleString("fr-FR")} au ${new Date(c.end_ms).toLocaleString("fr-FR")}</p>
+      <div class="info">Acquis : <b>${pct.toFixed(2)} %</b> · réclamable : <b>${fmtAmt(claimable,mgDec)} ${esc(c.token_id)}</b></div>
+      <div class="btnrow">
+        <button class="primary" onclick="ctExec('claim','Réclamation streaming')" ${(!me(c.beneficiary)||claimable<=0n||c.status!=='active')?'disabled':''}>Réclamer l'acquis</button>
+        <button class="danger" onclick="ctExec('cancel','Annulation du flux')" ${(!me(c.creator)||c.status!=='active')?'disabled':''}>Annuler (créateur)</button>
+      </div>`;
+  }
+  else if (c.template === "airdrop"){
+    const N = (c.signers||[]).length, share = N? BigInt(c.amount||0)/BigInt(N) : 0n;
+    const claimed = c.claimed||[];
+    const iAm = (c.signers||[]).some(me), iClaimed = claimed.some(me);
+    body = `<p class="hint"><b>${N}</b> destinataires · part égale <b>${fmtAmt(share,mgDec)} ${esc(c.token_id)}</b> · réclamées : <b>${claimed.length}/${N}</b>${iAm?(iClaimed?' · <span class="ok">vous avez réclamé</span>':' · <span class="ok">vous êtes éligible</span>'):' · <span class="muted">vous n\'êtes pas destinataire</span>'}</p>
+      <button class="primary" onclick="ctExec('claim','Réclamation airdrop')" ${(!iAm||iClaimed||c.status!=='active')?'disabled':''}>Réclamer ma part</button>`;
+  }
+  else if (c.template === "presale"){
+    const remaining = BigInt(c.amount||0) - BigInt(c.released||0);
+    const price = BigInt(c.price||0); // ucgo / unité de base
+    const perTokenCgo = price * (10n ** BigInt(mgDec)); // ucgo / token entier
+    body = `<p class="hint">Prix : <b>${fmtAmt(perTokenCgo,9)} CGO</b> / ${esc(c.token_id)} · vendus <b>${fmtAmt(c.released,mgDec)}</b> · restants <b>${fmtAmt(remaining,mgDec)}</b></p>
+      <h3 style="font-size:.95rem;margin:14px 0 4px">Acheter</h3>
+      <div class="row">
+        <div><label>CGO à dépenser</label><input id="psBuyCgo" type="number" min="0" step="any" value="1" oninput="psPreview()"></div>
+        <div style="display:flex;align-items:flex-end"><button class="primary" style="margin:0;width:100%" onclick="ctBuy()" ${c.status!=='active'?'disabled':''}>Acheter</button></div>
+      </div>
+      <div class="hint" id="psBuyPrev">—</div>
+      ${me(c.creator)?`<button class="danger" onclick="ctExec('cancel','Clôture de la vente')" ${c.status!=='active'?'disabled':''}>Clôturer et récupérer l'invendu</button>`:''}`;
+  }
   v.innerHTML = head + locked + body;
+  if (c.template === "presale") psPreview();
+}
+
+// Aperçu de l'achat presale : combien de tokens pour le CGO saisi.
+function psPreview(){
+  if (!mgContract || mgContract.template !== "presale") return;
+  const el = $("psBuyPrev"); if (!el) return;
+  try{
+    const cgo = toBase($("psBuyCgo").value || "0", 9);
+    const price = BigInt(mgContract.price||0);
+    const out = price>0n ? cgo / price : 0n;
+    const cost = out * price;
+    el.innerHTML = out>0n
+      ? `≈ <b>${fmtAmt(out,mgDec)} ${esc(mgContract.token_id)}</b> pour ${fmtAmt(cost,9)} CGO (le surplus éventuel vous reste).`
+      : "Montant trop faible pour acheter 1 unité.";
+  }catch{ el.textContent = "—"; }
+}
+
+// Achat presale : envoie des CGO, reçoit des tokens.
+async function ctBuy(){
+  try{
+    const cgo = toBase($("psBuyCgo").value || "0", 9);
+    if (cgo <= 0n) throw new Error("montant CGO > 0 attendu");
+    const tx = await buildBase("contract_exec");
+    tx.contract_id = mgContract.id; tx.action = "buy"; tx.amount = cgo;
+    await signAndSend(tx, "Achat presale"); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
 }
 
 // contract_exec sans paramètre (claim/release/refund).

@@ -275,6 +275,7 @@ func writeContractParams(e *codec.Encoder, c *ContractParams) {
 		e.WriteString(s)
 	}
 	e.WriteUvarint(c.Threshold)
+	e.WriteUvarint(c.Price) // ajouté en fin (ordre figé)
 }
 
 func readContractParams(d *codec.Decoder, c *ContractParams) error {
@@ -316,6 +317,9 @@ func readContractParams(d *codec.Decoder, c *ContractParams) error {
 		}
 	}
 	if c.Threshold, err = d.ReadUvarint(); err != nil {
+		return err
+	}
+	if c.Price, err = d.ReadUvarint(); err != nil {
 		return err
 	}
 	return nil

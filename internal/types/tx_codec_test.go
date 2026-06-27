@@ -106,6 +106,21 @@ func TestTxBinaryWithTokenAndContract(t *testing.T) {
 				Beneficiary: "cgbene", StartMs: 1_700_000_000_000, EndMs: 1_800_000_000_000,
 			},
 		},
+		{
+			ChainID: "c", Type: TxContractCreate, Amount: 0, Nonce: 3,
+			MaxBaseFee: 200_000, Tip: 50_000, Timestamp: 4,
+			Contract: &ContractParams{
+				Template: TemplatePresale, TokenID: "AAA", Amount: 1000, Price: 2 * Unit,
+			},
+		},
+		{
+			ChainID: "c", Type: TxContractCreate, Amount: 0, Nonce: 4,
+			MaxBaseFee: 200_000, Tip: 50_000, Timestamp: 5,
+			Contract: &ContractParams{
+				Template: TemplateAirdrop, TokenID: "AAA", Amount: 900,
+				Signers: []string{"cg1", "cg2", "cg3"},
+			},
+		},
 	}
 	for i, tx := range cases {
 		tx.SignWith(kp)
