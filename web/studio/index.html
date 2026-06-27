@@ -66,7 +66,7 @@
 
 <div class="wrap">
   <h1>Studio no-code</h1>
-  <p class="muted">Créez un token ou déployez un contrat (vesting, séquestre, multisig) en quelques clics. Signature post-quantique ML-DSA-65 dans votre navigateur — la clé ne quitte jamais votre machine.</p>
+  <p class="muted">Créez un token, déployez un contrat (vesting, séquestre, multisig, DAO) <b>et opérez-le</b> (réclamer, libérer, proposer, voter) — en quelques clics. Signature post-quantique ML-DSA-65 dans votre navigateur — la clé ne quitte jamais votre machine.</p>
 
   <div class="warn" id="wasmWarn">Chargement du moteur cryptographique post-quantique…</div>
 
@@ -109,6 +109,7 @@
       <div class="tab" data-t="escrow" onclick="switchTab('escrow')">Séquestre</div>
       <div class="tab" data-t="multisig" onclick="switchTab('multisig')">Multisig</div>
       <div class="tab" data-t="dao" onclick="switchTab('dao')">DAO</div>
+      <div class="tab" data-t="manage" onclick="switchTab('manage')">⚙ Gérer</div>
       <div class="tab" data-t="wasm" onclick="switchTab('wasm')">Contrats WASM</div>
       <div class="tab" data-t="mine" onclick="switchTab('mine')">Mes créations</div>
     </div>
@@ -116,26 +117,58 @@
     <!-- TOKEN -->
     <div id="tab-token" class="card">
       <h2>Créer un token</h2>
-      <p class="hint">Un token fongible dont vous êtes le créateur. La totalité du supply initial est créditée sur votre compte.</p>
+      <p class="hint">Un token <b>fongible</b> (comme CGO) dont vous êtes le créateur. La totalité du supply initial est créditée sur votre compte au déploiement.</p>
+
+      <div class="info" style="margin-top:6px">
+        <b>L'identité du token, c'est son symbole.</b> Sur ChainGO un token n'a pas d'adresse-hash : son <b>symbole</b> EST son identifiant on-chain (ex. <code>CGO</code>, <code>DOGE</code>). Il est <b>unique sur tout le réseau</b> et <b>définitif</b> — impossible de le renommer ou de le reprendre ensuite.
+      </div>
+
       <div class="row">
-        <div><label>Symbole (ex : DOGE)</label><input id="tkSym" maxlength="12" placeholder="DOGE"></div>
-        <div><label>Nom</label><input id="tkName" placeholder="Doge Token"></div>
+        <div>
+          <label>Symbole — identifiant on-chain (2–12, A–Z 0–9)</label>
+          <input id="tkSym" maxlength="12" placeholder="DOGE" spellcheck="false" autocomplete="off" oninput="onSymInput()">
+          <div class="hint" id="tkSymState">Le symbole sera mis en MAJUSCULES.</div>
+        </div>
+        <div><label>Nom affiché (libre)</label><input id="tkName" placeholder="Doge Token" oninput="renderTokenSummary()"></div>
       </div>
       <div class="row">
-        <div><label>Décimales (0–18)</label><input id="tkDec" type="number" min="0" max="18" value="9"></div>
-        <div><label>Supply initial</label><input id="tkSupply" type="number" min="1" value="1000000"></div>
+        <div><label>Décimales (0–12)</label><input id="tkDec" type="number" min="0" max="12" value="9" oninput="renderTokenSummary()"><div class="hint">9 = comme CGO. 0 = jeton indivisible (NFT-like, 1 = 1 unité).</div></div>
+        <div><label>Supply initial (en unités entières)</label><input id="tkSupply" type="number" min="1" value="1000000" oninput="renderTokenSummary()"></div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px">
-        <input type="checkbox" id="tkMintable" style="width:auto"> <span>Mintable (vous pourrez émettre plus de jetons plus tard)</span>
-      </label>
+
+      <label style="margin-top:16px">Émission — qui peut créer de nouveaux jetons après coup ?</label>
+      <div class="row" style="gap:10px">
+        <label class="choice" id="tkArchFixed" onclick="setMintable(false)" style="flex:1;display:block;cursor:pointer;border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin:0">
+          <b>🔒 Supply fixe</b>
+          <div class="hint" style="margin-top:4px">Le supply est <b>définitif</b>. Personne — pas même vous — ne pourra jamais en émettre davantage. Rareté garantie, idéal pour une monnaie ou un actif à offre plafonnée.</div>
+        </label>
+        <label class="choice" id="tkArchMint" onclick="setMintable(true)" style="flex:1;display:block;cursor:pointer;border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin:0">
+          <b>🪙 Mintable</b>
+          <div class="hint" style="margin-top:4px"><b>Vous gardez l'autorité d'émission</b> : votre compte créateur pourra émettre (<code>mint</code>) de nouveaux jetons quand il veut. Supply élastique — utile pour récompenses, jeux, stablecoins gérés. (L'autorité reste sur votre compte ; sa révocation n'est pas encore disponible.)</div>
+        </label>
+      </div>
+      <input type="checkbox" id="tkMintable" class="hidden">
+
+      <details style="margin-top:14px">
+        <summary class="muted" style="cursor:pointer;font-size:.85rem">Règles appliquées par la chaîne</summary>
+        <ul class="hint" style="margin:8px 0 0 18px;line-height:1.7">
+          <li><b id="tkRuleBurn">10 CGO brûlés</b> à la création (anti-spam), + les frais réseau habituels.</li>
+          <li>Symbole <b>unique et permanent</b> ; <code>CGO</code> est réservé.</li>
+          <li>Tout le <b>supply initial est crédité au créateur</b> (vous) — à vous de le distribuer ensuite (transfert, vesting, séquestre…).</li>
+          <li>Décimales <b>≤ 12</b>. Le supply est stocké en entier <code>uint64</code> (max ~1,8×10¹⁹ unités de base).</li>
+          <li><b>Pas encore disponibles</b> (prévus, voir roadmap) : freeze/pause, burn par le détenteur, plafond max-supply, métadonnées (logo/URL).</li>
+        </ul>
+      </details>
+
+      <div class="info" id="tokenSummary" style="margin-top:14px">…</div>
       <div class="fee" id="feeToken">Frais de déploiement : <b>…</b></div>
-      <button class="primary" onclick="createToken()">Déployer le token</button>
+      <button class="primary" id="tkDeployBtn" onclick="createToken()">Déployer le token</button>
     </div>
 
     <!-- VESTING -->
     <div id="tab-vesting" class="card hidden">
       <h2>Contrat de vesting</h2>
-      <p class="hint">Verrouille un montant et le débloque LINÉAIREMENT vers un bénéficiaire entre deux dates. Le bénéficiaire réclame la part acquise au fil du temps.</p>
+      <p class="hint">Verrouille un montant et le débloque LINÉAIREMENT vers un bénéficiaire entre deux dates. Le bénéficiaire réclame la part acquise au fil du temps <b>depuis l'onglet « ⚙ Gérer »</b>.</p>
       <div class="row">
         <div><label>Bénéficiaire (adresse cg…)</label><input id="vsBenef" placeholder="cg…"></div>
         <div><label>Token</label><input id="vsToken" value="CGO"></div>
@@ -154,7 +187,7 @@
     <!-- ESCROW -->
     <div id="tab-escrow" class="card hidden">
       <h2>Séquestre (escrow)</h2>
-      <p class="hint">Verrouille un montant entre acheteur (vous) et vendeur. Vous libérez les fonds (release) à réception, ou demandez un remboursement (refund). Un arbitre optionnel peut trancher.</p>
+      <p class="hint">Verrouille un montant entre acheteur (vous) et vendeur. Vous libérez les fonds (release) à réception, ou demandez un remboursement (refund) — <b>depuis l'onglet « ⚙ Gérer »</b>. Un arbitre optionnel peut trancher.</p>
       <div class="row">
         <div><label>Vendeur (adresse cg…)</label><input id="esSeller" placeholder="cg…"></div>
         <div><label>Arbitre (optionnel)</label><input id="esArbiter" placeholder="cg… (laisser vide si aucun)"></div>
@@ -170,7 +203,7 @@
     <!-- MULTISIG -->
     <div id="tab-multisig" class="card hidden">
       <h2>Coffre multisig M-of-N</h2>
-      <p class="hint">Un coffre à plusieurs signataires : il faut M approbations sur N pour dépenser. Idéal pour une trésorerie partagée.</p>
+      <p class="hint">Un coffre à plusieurs signataires : il faut M approbations sur N pour dépenser. Idéal pour une trésorerie partagée. <b>Une fois déployé, gérez-le dans l'onglet « ⚙ Gérer »</b> (proposer un paiement, approuver).</p>
       <label>Signataires (une adresse cg… par ligne)</label>
       <textarea id="msSigners" placeholder="cg…&#10;cg…&#10;cg…"></textarea>
       <div class="row">
@@ -185,7 +218,7 @@
     <!-- DAO -->
     <div id="tab-dao" class="card hidden">
       <h2>DAO (gouvernance)</h2>
-      <p class="hint">Une trésorerie partagée gouvernée par des membres. Un membre propose un paiement ; les membres votent POUR ou CONTRE ; au quorum de POUR, le paiement s'exécute. Le vote/la gestion se font ensuite à la commande (<code>chaingo contract propose|approve|reject</code>).</p>
+      <p class="hint">Une trésorerie partagée gouvernée par des membres. Un membre propose un paiement ; les membres votent POUR ou CONTRE ; au quorum de POUR, le paiement s'exécute. <b>Une fois déployée, gérez-la dans l'onglet « ⚙ Gérer »</b> (proposer, voter) — ou en CLI (<code>chaingo contract propose|approve|reject</code>).</p>
       <label>Membres (une adresse cg… par ligne)</label>
       <textarea id="daoMembers" placeholder="cg…&#10;cg…&#10;cg…"></textarea>
       <div class="row">
@@ -195,6 +228,17 @@
       </div>
       <div class="fee" id="feeDAO">Frais de déploiement : <b>…</b></div>
       <button class="primary" onclick="createDAO()">Déployer la DAO</button>
+    </div>
+
+    <!-- MANAGE / OPERATE -->
+    <div id="tab-manage" class="card hidden">
+      <h2>Gérer un contrat</h2>
+      <p class="hint">Déployer un contrat ne suffit pas : ici vous l'<b>opérez</b> réellement — réclamer un vesting, libérer/rembourser un séquestre, proposer un paiement et voter dans un multisig ou une DAO. Tout passe par une transaction signée localement (ML-DSA-65).</p>
+      <div class="row">
+        <div style="flex:3"><label>Adresse du contrat (ID)</label><input id="mgId" placeholder="hash de la création — ou choisissez dans « Mes créations »" spellcheck="false"></div>
+        <div style="flex:1;display:flex;align-items:flex-end"><button class="primary" style="margin:0;width:100%" onclick="loadContract()">Charger</button></div>
+      </div>
+      <div id="mgView"><p class="hint" style="margin-top:14px">Aucun contrat chargé. Collez un ID ci-dessus, ou ouvrez l'onglet « Mes créations » et cliquez sur « Gérer ».</p></div>
     </div>
 
     <!-- WASM -->
@@ -289,9 +333,10 @@ function txToJSON(tx){
 
 function switchTab(t){
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
-  ["token","vesting","escrow","multisig","dao","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
+  ["token","vesting","escrow","multisig","dao","manage","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
   if (t === "mine") loadMine();
   if (t === "wasm") loadWasmList();
+  if (t === "token") renderTokenSummary();
 }
 
 function loadSeed(){
@@ -323,7 +368,7 @@ function forgetSeed(){
 }
 function showStudio(){
   $("connect").classList.add("hidden"); $("studio").classList.remove("hidden");
-  $("myAddr").textContent = myAddress; refreshAll();
+  $("myAddr").textContent = myAddress; setMintable(false); renderTokenSummary(); refreshAll();
 }
 
 async function refreshAll(){
@@ -346,6 +391,7 @@ function renderFees(){
   const tk = `${fmt(fees.token_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(tokenTotal)} CGO</b>`;
   const ct = `${fmt(fees.contract_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(ctrTotal)} CGO</b>`;
   $("feeToken").innerHTML = "Coût de déploiement : " + tk;
+  if ($("tkRuleBurn")) $("tkRuleBurn").textContent = fmt(fees.token_create_fee||0) + " CGO brûlés";
   ["feeVesting","feeEscrow","feeMultisig","feeDAO"].forEach(id => $(id).innerHTML = "Coût de déploiement : " + ct);
   if ($("feeWasm")){
     if (fees.wasm_enabled){
@@ -379,12 +425,56 @@ async function signAndSend(tx, label){
   st.innerHTML += " — en attente"; refreshAll(); return res.hash;
 }
 
+// --- Token : choix de l'archétype d'émission (supply fixe vs mintable) ---
+function setMintable(on){
+  $("tkMintable").checked = on;
+  $("tkArchFixed").style.borderColor = on ? "var(--border)" : "var(--cyan)";
+  $("tkArchMint").style.borderColor  = on ? "var(--cyan)"  : "var(--border)";
+  renderTokenSummary();
+}
+
+// --- Token : disponibilité du symbole en direct (debounced) ---
+let symTimer = null;
+function onSymInput(){
+  const el = $("tkSym"); el.value = el.value.toUpperCase();
+  renderTokenSummary();
+  clearTimeout(symTimer);
+  symTimer = setTimeout(checkSymAvailable, 350);
+}
+async function checkSymAvailable(){
+  const sym = $("tkSym").value.trim(); const st = $("tkSymState");
+  if (!sym){ st.innerHTML = "Le symbole sera mis en MAJUSCULES."; return; }
+  if (!/^[A-Z0-9]{2,12}$/.test(sym)){ st.innerHTML = '<span class="ko">2–12 lettres/chiffres uniquement.</span>'; return; }
+  if (sym === "CGO"){ st.innerHTML = '<span class="ko">CGO est réservé (token natif).</span>'; return; }
+  try{
+    await api("/v1/tokens/" + sym);            // 200 => existe déjà
+    st.innerHTML = `<span class="ko">✗ « ${sym} » est déjà pris sur ce réseau.</span>`;
+  }catch{
+    st.innerHTML = `<span class="ok">✓ « ${sym} » est disponible.</span>`;
+  }
+}
+
+function renderTokenSummary(){
+  const box = $("tokenSummary"); if (!box) return;
+  const sym = ($("tkSym").value.trim().toUpperCase()) || "—";
+  const name = $("tkName").value.trim() || sym;
+  const dec = parseInt($("tkDec").value, 10);
+  const supplyRaw = $("tkSupply").value.trim() || "0";
+  const mint = $("tkMintable").checked;
+  const decTxt = isNaN(dec) ? "?" : dec;
+  box.innerHTML =
+    `<b>Ce que vous créez :</b> token <b>${sym}</b> « ${name} », ` +
+    `<b>${supplyRaw}</b> unités à la création (créditées sur votre compte), ` +
+    `${decTxt} décimale(s), émission <b>${mint ? "mintable (vous gardez l'autorité)" : "fixe (définitive)"}</b>.`;
+}
+
 async function createToken(){
   try{
     const sym = $("tkSym").value.trim().toUpperCase();
     if (!/^[A-Z0-9]{2,12}$/.test(sym)) throw new Error("symbole : 2–12 lettres/chiffres majuscules");
+    if (sym === "CGO") throw new Error("CGO est réservé (token natif)");
     const dec = parseInt($("tkDec").value, 10);
-    if (!(dec>=0 && dec<=18)) throw new Error("décimales entre 0 et 18");
+    if (!(dec>=0 && dec<=12)) throw new Error("décimales entre 0 et 12");
     const supply = toBase($("tkSupply").value, dec);
     if (supply <= 0n) throw new Error("supply doit être > 0");
     const tx = await buildBase("create_token");
@@ -465,6 +555,122 @@ async function createDAO(){
   }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
 }
 
+// ---------------- gérer / opérer un contrat ----------------
+let mgContract = null, mgDec = 9;
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const short = a => a ? a.slice(0,10)+"…"+a.slice(-4) : "—";
+const me = a => myAddress && a === myAddress;
+
+// Affiche un montant base-unit dans les décimales du token.
+function fmtAmt(raw, dec){
+  const s = BigInt(raw||0).toString().padStart(dec+1,"0");
+  const w = s.slice(0,-dec||s.length), f = dec? s.slice(-dec).replace(/0+$/,"") : "";
+  return (BigInt(w).toLocaleString("fr-FR")) + (f? "."+f : "");
+}
+
+function manageContract(id){ $("mgId").value = id; switchTab("manage"); loadContract(); }
+
+async function loadContract(){
+  const id = $("mgId").value.trim();
+  const view = $("mgView");
+  if (!id){ view.innerHTML = '<p class="hint" style="margin-top:14px">Renseignez un ID de contrat.</p>'; return; }
+  view.innerHTML = '<p class="hint" style="margin-top:14px">Chargement…</p>';
+  try{
+    mgContract = await api("/v1/contracts/" + id);
+    mgDec = await tokenDecimals(mgContract.token_id || "CGO");
+    renderContract();
+  }catch(e){ view.innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
+}
+
+function badge(status){
+  const m = {active:["ok","actif"], completed:["ok","terminé"], refunded:["", "remboursé"]};
+  const [cls,txt] = m[status] || ["", status||"—"];
+  return `<span class="pill ${cls}">${esc(txt)}</span>`;
+}
+
+function renderContract(){
+  const c = mgContract, v = $("mgView");
+  const head = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
+      <div><b style="text-transform:capitalize">${esc(c.template)}</b> · <span class="addr" style="display:inline-block;padding:3px 8px">${esc(c.id)}</span></div>
+      <div>${badge(c.status)}</div></div>`;
+  const locked = `<div class="fee"><span>Verrouillé : <b>${fmtAmt(c.amount,mgDec)} ${esc(c.token_id)}</b></span><span>Déjà libéré : <b>${fmtAmt(c.released,mgDec)}</b></span></div>`;
+  let body = "";
+
+  if (c.template === "vesting"){
+    const now = Date.now();
+    let vested = 0n, A = BigInt(c.amount||0);
+    if (now >= c.end_ms) vested = A;
+    else if (now > c.start_ms) vested = A * BigInt(now - c.start_ms) / BigInt(c.end_ms - c.start_ms);
+    const claimable = vested - BigInt(c.released||0);
+    const pct = A>0n ? Number(vested*10000n/A)/100 : 0;
+    body = `<p class="hint">Bénéficiaire : <span class="mono">${short(c.beneficiary)}</span>${me(c.beneficiary)?' <span class="ok">(vous)</span>':''} · déblocage du ${new Date(c.start_ms).toLocaleString("fr-FR")} au ${new Date(c.end_ms).toLocaleString("fr-FR")}.</p>
+      <div class="info">Acquis à présent : <b>${pct.toFixed(2)} %</b> · réclamable maintenant : <b>${fmtAmt(claimable,mgDec)} ${esc(c.token_id)}</b></div>
+      <button class="primary" onclick="ctExec('claim','Réclamation vesting')" ${(!me(c.beneficiary)||claimable<=0n||c.status!=='active')?'disabled':''}>Réclamer ma part</button>
+      ${!me(c.beneficiary)?'<p class="hint">Seul le bénéficiaire peut réclamer.</p>':''}`;
+  }
+  else if (c.template === "escrow"){
+    body = `<p class="hint">Acheteur : <span class="mono">${short(c.creator)}</span>${me(c.creator)?' <span class="ok">(vous)</span>':''} · Vendeur : <span class="mono">${short(c.seller)}</span>${me(c.seller)?' <span class="ok">(vous)</span>':''} · Arbitre : <span class="mono">${c.arbiter?short(c.arbiter):'aucun'}</span>${me(c.arbiter)?' <span class="ok">(vous)</span>':''}</p>
+      <div class="btnrow">
+        <button class="primary" onclick="ctExec('release','Libération au vendeur')" ${(!(me(c.creator)||me(c.arbiter))||c.status!=='active')?'disabled':''}>Libérer au vendeur</button>
+        <button class="danger" onclick="ctExec('refund','Remboursement acheteur')" ${(!(me(c.seller)||me(c.arbiter))||c.status!=='active')?'disabled':''}>Rembourser l'acheteur</button>
+      </div>
+      <p class="hint">Libérer = l'acheteur (ou l'arbitre) confirme la réception → fonds au vendeur. Rembourser = le vendeur (ou l'arbitre) rend les fonds à l'acheteur.</p>`;
+  }
+  else if (c.template === "multisig" || c.template === "dao"){
+    const dao = c.template === "dao";
+    const who = dao ? "membre" : "signataire";
+    const amSigner = (c.signers||[]).some(me);
+    const avail = BigInt(c.amount||0) - BigInt(c.released||0);
+    const rows = (c.proposals||[]).map((p,i)=>{
+      const forN = (p.approvals||[]).length, agN = (p.against||[]).length;
+      const iVotedFor = (p.approvals||[]).some(me), iVotedAg = (p.against||[]).some(me);
+      const state = p.executed?'<span class="ok">exécutée</span>':p.rejected?'<span class="ko">rejetée</span>':'en cours';
+      const open = !p.executed && !p.rejected;
+      let act = "";
+      if (open && amSigner){
+        act = `<button onclick="ctVote(${i},'approve')" ${iVotedFor?'disabled':''} style="margin:0;padding:6px 10px">${dao?'Voter POUR':'Approuver'}</button>`;
+        if (dao) act += ` <button class="danger" onclick="ctVote(${i},'reject')" ${iVotedAg?'disabled':''} style="margin:0;padding:6px 10px">Voter CONTRE</button>`;
+      }
+      return `<tr><td>#${i}</td><td class="mono">${short(p.to)}</td><td>${fmtAmt(p.amount,mgDec)}</td><td>${forN}/${c.threshold} POUR${dao?` · ${agN} CONTRE`:''}</td><td>${state}</td><td>${act}</td></tr>`;
+    }).join("");
+    body = `<p class="hint">${dao?'Membres':'Signataires'} : <b>${(c.signers||[]).length}</b> · quorum <b>${c.threshold} POUR</b> · trésorerie disponible <b>${fmtAmt(avail,mgDec)} ${esc(c.token_id)}</b>${amSigner?' · <span class="ok">vous êtes '+who+'</span>':' · <span class="muted">vous n\'êtes pas '+who+'</span>'}</p>
+      <h3 style="font-size:.95rem;margin:14px 0 4px">Proposer un paiement</h3>
+      <div class="row">
+        <div><label>Destinataire (cg…)</label><input id="mgPropTo" placeholder="cg…"></div>
+        <div><label>Montant (${esc(c.token_id)})</label><input id="mgPropAmt" type="number" min="0" step="any" value="0"></div>
+        <div style="display:flex;align-items:flex-end"><button class="primary" style="margin:0;width:100%" onclick="ctPropose()" ${amSigner?'':'disabled'}>Proposer</button></div>
+      </div>
+      <h3 style="font-size:.95rem;margin:16px 0 4px">Propositions</h3>
+      ${rows? `<table><tr><th>#</th><th>Vers</th><th>Montant</th><th>Votes</th><th>État</th><th></th></tr>${rows}</table>` : '<p class="hint">Aucune proposition pour l\'instant.</p>'}`;
+  }
+  v.innerHTML = head + locked + body;
+}
+
+// contract_exec sans paramètre (claim/release/refund).
+async function ctExec(action, label){
+  try{ const tx = await buildBase("contract_exec"); tx.contract_id = mgContract.id; tx.action = action;
+    await signAndSend(tx, label); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
+}
+// vote sur une proposition (approve/reject).
+async function ctVote(idx, action){
+  try{ const tx = await buildBase("contract_exec"); tx.contract_id = mgContract.id; tx.action = action; tx.proposal = idx;
+    await signAndSend(tx, (action==='reject'?'Vote CONTRE':'Approbation')+` #${idx}`); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
+}
+// nouvelle proposition de paiement (propose).
+async function ctPropose(){
+  try{
+    const to = $("mgPropTo").value.trim();
+    if (!to.startsWith("cg")) throw new Error("destinataire invalide (cg…)");
+    const amt = toBase($("mgPropAmt").value || "0", mgDec);
+    if (amt <= 0n) throw new Error("montant doit être > 0");
+    const tx = await buildBase("contract_exec");
+    tx.contract_id = mgContract.id; tx.action = "propose"; tx.to = to; tx.amount = amt;
+    await signAndSend(tx, "Proposition de paiement"); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
+}
+
 // ---------------- contrats WASM ----------------
 // base64 d'un Uint8Array (le champ Go []byte attend du base64 dans le JSON).
 function bytesToB64(bytes){
@@ -529,9 +735,9 @@ async function loadMine(){
         myT.map(t=>`<tr><td><b>${t.symbol}</b></td><td>${t.name||""}</td><td>${t.decimals}</td><td>${t.total_supply}</td><td>${t.mintable?"oui":"non"}</td></tr>`).join("") + "</table>"
       : "<p class='muted' style='font-size:.85rem'>Aucun token créé.</p>");
     $("myContracts").innerHTML = "<h2 style='font-size:.95rem;margin:18px 0 6px'>Contrats ("+myC.length+")</h2>" + (myC.length
-      ? "<table><tr><th>Type</th><th>ID</th><th>Token</th><th>Verrouillé</th><th>État</th></tr>" +
-        myC.map(c=>`<tr><td>${c.template}</td><td class="mono">${c.id.slice(0,14)}…</td><td>${c.token_id}</td><td>${c.amount}</td><td>${c.status}</td></tr>`).join("") + "</table>"
-      : "<p class='muted' style='font-size:.85rem'>Aucun contrat déployé.</p>");
+      ? "<table><tr><th>Type</th><th>ID</th><th>Token</th><th>Verrouillé</th><th>État</th><th></th></tr>" +
+        myC.map(c=>`<tr><td style="text-transform:capitalize">${esc(c.template)}</td><td class="mono">${esc(c.id.slice(0,14))}…</td><td>${esc(c.token_id)}</td><td>${esc(String(c.amount))}</td><td>${esc(c.status)}</td><td><button style="margin:0;padding:5px 11px" onclick="manageContract('${esc(c.id)}')">⚙ Gérer</button></td></tr>`).join("") + "</table>"
+      : "<p class='muted' style='font-size:.85rem'>Aucun contrat déployé. Déployez-en un dans les onglets ci-dessus.</p>");
   }catch(e){ $("myTokens").innerHTML = '<span class="ko">'+e.message+'</span>'; }
 }
 
