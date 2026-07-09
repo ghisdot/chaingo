@@ -15,7 +15,7 @@ quantiques. Hachage SHA3-256.
 communautaire, validateurs indépendants et finalisation du consensus BFT (Phase 2).
 
 - 🔐 **Sécurité post-quantique** native, partout dans la chaîne.
-- ⚡ **~31 000 TPS** mesurés bout-en-bout (vérification PQ parallèle + exécution).
+- ⚡ **~31 000 TPS** mesurés **en local** au bench (vérification PQ parallèle + exécution ; hors réseau P2P et vote de consensus). Le débit d'une chaîne en production est plafonné par les paramètres de bloc (500 ms × 2000 tx = ~4 000 TPS par défaut) : les ~31 000 sont la **marge de calcul**, preuve que les signatures post-quantiques ne sont pas le goulot.
 - 🔥 **Économie déflationniste** : frais EIP-1559 brûlés, supply élastique.
 - 🪙 **No-code** : tokens (mintable/plafonné/burnable) et 8 templates de contrats (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) — déployables **et opérables depuis le navigateur** (studio), sans écrire de smart contract.
 - 🌐 **P2P** pair-à-pair, rejoignable par n'importe qui, avec gouvernance des mises à jour (version de protocole).

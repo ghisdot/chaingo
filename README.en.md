@@ -14,7 +14,7 @@ quantum-resistant signature standard. SHA3-256 hashing.
 validators, and finalization of the BFT consensus (Phase 2).
 
 - 🔐 **Native post-quantum security**, end-to-end.
-- ⚡ **~31,000 TPS** end-to-end (parallel PQ verification + execution).
+- ⚡ **~31,000 TPS** measured **locally** at the bench (parallel PQ verification + execution; excludes P2P networking and consensus voting). A production chain's throughput is capped by block params (500 ms × 2000 tx = ~4,000 TPS by default): the ~31,000 is **compute headroom**, proof that post-quantum signatures are not the bottleneck.
 - 🔥 **Deflationary economics**: burned EIP-1559 base fees, elastic supply.
 - 🪙 **No-code**: tokens (mintable/capped/burnable) and 8 contract templates (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) — deploy **and operate** them **from the browser** (studio), without writing a smart contract.
 - 🌐 **P2P** network, anyone can join.
