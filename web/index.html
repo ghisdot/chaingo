@@ -6,6 +6,20 @@
 <title>ChainGO — La blockchain post-quantique</title>
 <meta name="description" content="ChainGO : blockchain résistante au quantique (ML-DSA-65), ~4000 TPS (blocs 500 ms, finalité BFT), burn automatique, tokens no-code. Décentralisée, simple, rapide.">
 <meta name="theme-color" content="#070b12">
+<link rel="canonical" href="https://chaingo.org/">
+<!-- Open Graph / cartes de partage social -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ChainGO">
+<meta property="og:url" content="https://chaingo.org/">
+<meta property="og:title" content="ChainGO — La blockchain post-quantique">
+<meta property="og:description" content="Signatures ML-DSA-65 partout · ~4 000 TPS · tokens & contrats no-code · anonymat zk-STARK. Testnet public en ligne.">
+<meta property="og:image" content="https://chaingo.org/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ChainGO — La blockchain post-quantique">
+<meta name="twitter:description" content="Signatures ML-DSA-65 partout · ~4 000 TPS · tokens & contrats no-code · anonymat zk-STARK. Testnet public en ligne.">
+<meta name="twitter:image" content="https://chaingo.org/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -246,6 +260,12 @@
     header { padding: 70px 0 60px; }
     .step { gap: 14px; }
   }
+  #faq details { border: 1px solid var(--line, #1f2a40); border-radius: 12px; margin: 10px 0; background: rgba(255,255,255,.02); overflow: hidden; }
+  #faq summary { cursor: pointer; padding: 16px 20px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  #faq summary::-webkit-details-marker { display: none; }
+  #faq summary::after { content: "+"; color: #22d3ee; font-size: 1.4rem; font-weight: 400; line-height: 1; }
+  #faq details[open] summary::after { content: "−"; }
+  #faq details p { padding: 0 20px 18px; margin: 0; color: #8b9bb4; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -268,6 +288,7 @@
       <a class="link opt" href="#tokenomics" data-i18n="nav4">Tokenomics</a>
       <a class="link" href="#roadmap" data-i18n="nav5">Feuille de route</a>
       <a class="link opt" href="#securite" data-i18n="nav6">Sécurité</a>
+      <a class="link opt" href="#faq" data-i18n="nav7">FAQ</a>
       <a class="link opt" href="/wallet/" data-i18n="navwallet">Wallet</a>
       <a class="link opt" href="/explorer/" data-i18n="navexplorer">Explorateur</a>
       <a class="link opt" href="/studio/" data-i18n="navstudio">Studio</a>
@@ -323,7 +344,7 @@
       <div class="card reveal">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg></span>
         <h3 data-i18n="p.c2">Vitesse <span class="tag live">Actif</span></h3>
-        <p data-i18n="p.c2d">31 000 transactions/seconde mesurées (vérification + exécution) grâce à la vérification parallèle sur tous les cœurs. Blocs toutes les 500 ms, confirmation en ~1 seconde. Option <b>tip</b> pour passer en priorité.</p>
+        <p data-i18n="p.c2d">~4 000 TPS soutenus avec les paramètres par défaut (blocs 500 ms × 2000 tx), et ~31 000 tx/s <b>vérifiées</b> au bench local grâce à la vérification parallèle sur tous les cœurs — les signatures post-quantiques ne sont pas le goulot. Confirmation en ~1 seconde. Option <b>tip</b> pour passer en priorité.</p>
       </div>
       <div class="card reveal">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3 5 4.5 5 9a5 5 0 0 1-10 0c0-1.5.5-2.8 1.3-3.8C9 10 9.5 11 11 11c0-3 0-5 1-8Z"/></svg></span>
@@ -344,6 +365,30 @@
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.6-3.8-9S9.5 5.5 12 3Z"/></svg></span>
         <h3 data-i18n="p.c6">Décentralisation <span class="tag live">Actif</span></h3>
         <p data-i18n="p.c6d">Réseau pair-à-pair : chaque nœud se synchronise et relaie. Validez avec 10 000 CGO ou <b>déléguez dès 1 CGO</b> — le tirage des blocs est pondéré par le stake, et des rounds de secours garantissent que la chaîne avance même si des validateurs tombent.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pourquoi">
+  <div class="wrap">
+    <div class="head reveal">
+      <div class="kicker" data-i18n="q.kicker">Pourquoi post-quantique</div>
+      <h2 data-i18n="q.h2">Le jour où un quantique casse ECDSA, presque toutes les chaînes deviennent forgeables</h2>
+      <p class="lead" data-i18n="q.lead">Bitcoin, Ethereum, Solana… signent avec des courbes elliptiques (ECDSA, Ed25519). Un ordinateur quantique assez puissant les casse — et là, n'importe qui peut <b>forger des signatures et vider des comptes</b>. Ce n'est pas de la science-fiction lointaine : les clés publiques sont déjà exposées on-chain (« récolter maintenant, déchiffrer plus tard »). ChainGO signe en <b>ML-DSA-65</b> (standard NIST FIPS 204) partout, <b>dès le premier bloc</b> — pas une rustine future, l'ADN du projet.</p>
+    </div>
+    <div class="grid c3">
+      <div class="card reveal">
+        <h3 data-i18n="q.c1">🎯 La menace</h3>
+        <p data-i18n="q.c1d">Un quantique cryptographiquement pertinent (algorithme de Shor) rend l'ECDSA/Ed25519 forgeable. La quasi-totalité des blockchains — et leurs fonds — deviennent vulnérables du jour au lendemain.</p>
+      </div>
+      <div class="card reveal">
+        <h3 data-i18n="q.c2">📐 Le standard</h3>
+        <p data-i18n="q.c2d">ML-DSA-65 (Dilithium) est le standard de signature post-quantique du NIST (FIPS 204, niveau 3), fondé sur les réseaux euclidiens — hors de portée de Shor. Pas de crypto exotique : la référence.</p>
+      </div>
+      <div class="card reveal">
+        <h3 data-i18n="q.c3">🧬 Le choix ChainGO</h3>
+        <p data-i18n="q.c3d">Résistance quantique = exigence n°1. Toutes les signatures (tx, blocs, votes) passent par ML-DSA-65 ; zéro courbe elliptique nulle part. Migrer une chaîne existante après coup est quasi impossible — ici c'est natif.</p>
       </div>
     </div>
   </div>
@@ -530,6 +575,26 @@
   </div>
 </section>
 
+<section id="faq">
+  <div class="wrap">
+    <div class="head reveal">
+      <div class="kicker" data-i18n="faq.kicker">FAQ</div>
+      <h2 data-i18n="faq.h2">Questions fréquentes</h2>
+    </div>
+    <div class="reveal" data-i18n="faq.body" style="max-width:840px;margin:0 auto">
+      <details><summary>Est-ce un fork de Bitcoin ou d'Ethereum ?</summary><p>Non. ChainGO est écrite <b>de zéro en Go</b>, sans emprunter le code d'une chaîne existante. C'était nécessaire pour mettre la cryptographie post-quantique au cœur du protocole, pas en surcouche.</p></details>
+      <details><summary>Y a-t-il un premine ou une distribution cachée ?</summary><p>Non. Les règles économiques vivent dans le <b>document de genèse public</b> (pas cachées dans le code). Distribution mainnet prévue « communauté d'abord » : 50 % communauté, 20 % trésorerie, 15 % équipe (vesting 4 ans on-chain), 10 % écosystème, 5 % genèse/liquidité.</p></details>
+      <details><summary>En quoi est-ce vraiment « post-quantique » ?</summary><p>Toutes les signatures (transactions, blocs, votes de consensus) utilisent <b>ML-DSA-65</b> (FIPS 204, niveau NIST 3), fondé sur les réseaux euclidiens — résistant à l'algorithme de Shor. Hachage SHA3-256. <b>Aucune courbe elliptique</b> (ECDSA/Ed25519) nulle part.</p></details>
+      <details><summary>Est-ce audité ?</summary><p>Il y a une <b>revue de sécurité interne</b> + ~390 tests dont des tests adverses de forgerie, un <a href="https://github.com/ghisdot/chaingo/blob/main/docs/SECURITY-REVIEW.md" rel="noopener">rapport public</a> et un <a href="https://github.com/ghisdot/chaingo/blob/main/BUG-BOUNTY.md" rel="noopener">bug bounty</a>. Il n'y a <b>pas d'audit par un cabinet tiers</b> (choix assumé : durcissement communautaire). Les surfaces « maison » (anonymat zk-STARK, VM WASM) restent <b>désactivées sur mainnet</b> jusque-là.</p></details>
+      <details><summary>Mes fonds sont-ils en sécurité ?</summary><p>Nous sommes en <b>testnet</b> : le CGO n'a pas de valeur réelle, c'est fait pour éprouver le code sans risque. Vos clés sont générées et conservées <b>dans votre navigateur</b> (jamais envoyées à un serveur). Le mainnet n'ouvrira qu'après validateurs indépendants et durcissement communautaire.</p></details>
+      <details><summary>Puis-je faire tourner un nœud ou devenir validateur ?</summary><p>Oui, n'importe qui. Un binaire, zéro dépendance (Windows/Linux/macOS). Validez avec <b>10 000 CGO</b> de stake, ou <b>déléguez dès 1 CGO</b> à un validateur et touchez votre part des récompenses. Voir le <a href="https://github.com/ghisdot/chaingo/blob/main/docs/VALIDATOR.md" rel="noopener">guide validateur</a>.</p></details>
+      <details><summary>À quoi sert le token CGO ?</summary><p>À payer les <b>frais</b> (base fee brûlé, déflationniste), à <b>staker/déléguer</b> pour sécuriser le réseau et gagner ~3 %/an, et à <b>créer des tokens et des contrats</b> no-code. Son utilité est structurelle, pas spéculative.</p></details>
+      <details><summary>Comment obtenir des CGO de test ?</summary><p>Via le <b>faucet</b> depuis le <a href="/wallet/">wallet web</a>, ou voir <a href="https://github.com/ghisdot/chaingo/blob/main/docs/GET-CGO.md" rel="noopener">docs/GET-CGO</a>. Gratuit, instantané.</p></details>
+      <details><summary>C'est open-source ?</summary><p>Oui, entièrement — licence <b>Apache 2.0</b>. Code, tests, rapport de sécurité et dossier de preuve sont ouverts et reproductibles sur <a href="https://github.com/ghisdot/chaingo" rel="noopener">GitHub</a>.</p></details>
+    </div>
+  </div>
+</section>
+
 <section id="demarrer">
   <div class="wrap">
     <div class="head reveal">
@@ -580,7 +645,7 @@ const FR = {};
 document.querySelectorAll('[data-i18n]').forEach(el => { FR[el.dataset.i18n] = el.innerHTML; });
 
 const EN = {
-  nav1: `Pillars`, nav2: `How it works`, nav3: `Live chain`, nav4: `Tokenomics`, nav5: `Roadmap`, nav6: `Security`,
+  nav1: `Pillars`, nav2: `How it works`, nav3: `Live chain`, nav4: `Tokenomics`, nav5: `Roadmap`, nav6: `Security`, nav7: `FAQ`,
   navwallet: `Wallet`, navexplorer: `Explorer`, navstudio: `Studio`, navpill: `testnet · v0.1`,
   cta0: `Create my wallet`,
   'hero.eyebrow': `<b>● Public testnet live</b> · Mainnet in preparation`,
@@ -595,7 +660,7 @@ const EN = {
   'p.c1': `Post-quantum security <span class="tag live">Live</span>`,
   'p.c1d': `Every wallet, transaction and block is signed with ML-DSA-65 (FIPS 204, NIST level 3). SHA3-256 hashing. No quantum-vulnerable elliptic curves, anywhere.`,
   'p.c2': `Speed <span class="tag live">Live</span>`,
-  'p.c2d': `31,000 transactions/second measured (verification + execution) thanks to parallel verification across all cores. Blocks every 500 ms, confirmation in ~1 second. Optional <b>tip</b> to jump the queue.`,
+  'p.c2d': `~4,000 sustained TPS with default params (500 ms × 2000 tx blocks), and ~31,000 tx/s <b>verified</b> in the local bench thanks to parallel verification across all cores — post-quantum signatures are not the bottleneck. Confirmation in ~1 second. Optional <b>tip</b> to jump the queue.`,
   'p.c3': `Deflationary economics <span class="tag live">Live</span>`,
   'p.c3d': `Base fees are <b>destroyed</b> (burned) on every transaction, automatically adjusted to congestion (EIP-1559 model). The more the network is used, the scarcer CGO becomes.`,
   'p.c4': `No-code tokens &amp; contracts <span class="tag live">Live</span>`,
@@ -644,6 +709,26 @@ const EN = {
   'sec.b1': `Security review report`,
   'sec.b2': `zk-STARK proof dossier`,
   'sec.b3': `Bug bounty — attack the code`,
+  'q.kicker': `Why post-quantum`,
+  'q.h2': `The day a quantum computer breaks ECDSA, almost every chain becomes forgeable`,
+  'q.lead': `Bitcoin, Ethereum, Solana… sign with elliptic curves (ECDSA, Ed25519). A powerful enough quantum computer breaks them — and then anyone can <b>forge signatures and drain accounts</b>. This isn't distant sci-fi: public keys are already exposed on-chain ("harvest now, decrypt later"). ChainGO signs with <b>ML-DSA-65</b> (NIST FIPS 204 standard) everywhere, <b>from the first block</b> — not a future patch, the project's DNA.`,
+  'q.c1': `🎯 The threat`,
+  'q.c1d': `A cryptographically relevant quantum computer (Shor's algorithm) makes ECDSA/Ed25519 forgeable. Almost every blockchain — and its funds — becomes vulnerable overnight.`,
+  'q.c2': `📐 The standard`,
+  'q.c2d': `ML-DSA-65 (Dilithium) is NIST's post-quantum signature standard (FIPS 204, level 3), based on lattices — beyond Shor's reach. No exotic crypto: the reference.`,
+  'q.c3': `🧬 The ChainGO choice`,
+  'q.c3d': `Quantum resistance = requirement #1. Every signature (tx, blocks, votes) goes through ML-DSA-65; zero elliptic curves anywhere. Retrofitting an existing chain later is nearly impossible — here it's native.`,
+  'faq.kicker': `FAQ`,
+  'faq.h2': `Frequently asked questions`,
+  'faq.body': `<details><summary>Is this a fork of Bitcoin or Ethereum?</summary><p>No. ChainGO is written <b>from scratch in Go</b>, without borrowing an existing chain's code. That was necessary to put post-quantum cryptography at the core of the protocol, not as an afterthought.</p></details>
+      <details><summary>Is there a premine or hidden distribution?</summary><p>No. Economic rules live in the <b>public genesis document</b> (not hidden in code). Planned mainnet distribution is "community first": 50% community, 20% treasury, 15% team (4-year on-chain vesting), 10% ecosystem, 5% genesis/liquidity.</p></details>
+      <details><summary>How is it really "post-quantum"?</summary><p>Every signature (transactions, blocks, consensus votes) uses <b>ML-DSA-65</b> (FIPS 204, NIST level 3), lattice-based — resistant to Shor's algorithm. SHA3-256 hashing. <b>No elliptic curves</b> (ECDSA/Ed25519) anywhere.</p></details>
+      <details><summary>Is it audited?</summary><p>There's an <b>internal security review</b> + ~390 tests including adversarial forgery tests, a <a href="https://github.com/ghisdot/chaingo/blob/main/docs/SECURITY-REVIEW.en.md" rel="noopener">public report</a> and a <a href="https://github.com/ghisdot/chaingo/blob/main/BUG-BOUNTY.md" rel="noopener">bug bounty</a>. There is <b>no third-party firm audit</b> (a deliberate choice: community hardening). The "homemade" surfaces (zk-STARK anonymity, WASM VM) stay <b>disabled on mainnet</b> until then.</p></details>
+      <details><summary>Are my funds safe?</summary><p>We're on <b>testnet</b>: CGO has no real value, it's meant to battle-test the code risk-free. Your keys are generated and kept <b>in your browser</b> (never sent to a server). Mainnet only opens after independent validators and community hardening.</p></details>
+      <details><summary>Can I run a node or become a validator?</summary><p>Yes, anyone. One binary, zero dependencies (Windows/Linux/macOS). Validate with <b>10,000 CGO</b> of stake, or <b>delegate from 1 CGO</b> to a validator and earn your share of the rewards. See the <a href="https://github.com/ghisdot/chaingo/blob/main/docs/VALIDATOR.en.md" rel="noopener">validator guide</a>.</p></details>
+      <details><summary>What is the CGO token for?</summary><p>To pay <b>fees</b> (burned base fee, deflationary), to <b>stake/delegate</b> and secure the network for ~3%/year, and to <b>create no-code tokens and contracts</b>. Its utility is structural, not speculative.</p></details>
+      <details><summary>How do I get test CGO?</summary><p>Via the <b>faucet</b> from the <a href="/wallet/">web wallet</a>, or see <a href="https://github.com/ghisdot/chaingo/blob/main/docs/GET-CGO.en.md" rel="noopener">docs/GET-CGO</a>. Free, instant.</p></details>
+      <details><summary>Is it open-source?</summary><p>Yes, fully — <b>Apache 2.0</b> license. Code, tests, security report and proof dossier are open and reproducible on <a href="https://github.com/ghisdot/chaingo" rel="noopener">GitHub</a>.</p></details>`,
   'd.kicker': `Get started`,
   'd.h2': `Get started in 60 seconds`,
   'd.lead': `One binary, zero dependencies — Windows, Linux, macOS (and Docker for servers).`,
