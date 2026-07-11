@@ -83,8 +83,8 @@
   <div id="connect" class="card">
     <h2>Votre compte</h2>
     <p class="muted" style="font-size:.86rem;margin-bottom:8px">Chargez votre wallet pour signer les déploiements. La seed reste dans ce navigateur.</p>
-    <label>Seed (hex, 64 caractères)</label>
-    <input id="seedInput" placeholder="ex : 1271a825…" spellcheck="false" autocomplete="off">
+    <label>Phrase de récupération (24 mots) — ou seed hex</label>
+    <input id="seedInput" placeholder="mot1 mot2 … (24 mots)  —  ou  1271a825…" spellcheck="false" autocomplete="off">
     <div class="btnrow">
       <button class="primary" onclick="loadSeed()">Charger</button>
       <button onclick="loadFromWallet()">Utiliser mon wallet ChainGO</button>
@@ -430,12 +430,21 @@ function switchTab(t){
 }
 
 function loadSeed(){
-  const s = $("seedInput").value.trim().toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(s)) return alert("Seed invalide : 64 caractères hex attendus.");
   if (!wasmReady) return alert("Module WASM pas encore prêt.");
-  const r = chaingoAddressFromSeed(s);
-  if (r.error) return alert("Seed invalide.");
-  seedHex = s; myAddress = r.address; localStorage.setItem(KEY_SEED, s);
+  const raw = $("seedInput").value.trim();
+  let s, addr;
+  if (/\s/.test(raw)){                       // phrase mnémonique (24 mots)
+    const m = chaingoSeedFromMnemonic(raw);
+    if (m.error) return alert("Phrase invalide : " + m.error);
+    s = m.seedHex; addr = m.address;
+  } else {                                   // seed hex
+    s = raw.toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(s)) return alert("Entrez une phrase de 24 mots, ou une seed hex de 64 caractères.");
+    const r = chaingoAddressFromSeed(s);
+    if (r.error) return alert("Seed invalide.");
+    addr = r.address;
+  }
+  seedHex = s; myAddress = addr; localStorage.setItem(KEY_SEED, s);
   $("seedInput").value = ""; showStudio();
 }
 async function loadFromWallet(){

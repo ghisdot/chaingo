@@ -86,12 +86,12 @@
       <button class="primary" onclick="createWallet()" data-i18n="create.btn">Générer mon wallet</button>
     </div>
     <div class="card">
-      <h2 data-i18n="import.h">Importer depuis une seed</h2>
-      <label data-i18n="import.seed">Seed (hex)</label>
-      <input id="impSeed" placeholder="ex : 9f3a…">
+      <h2 data-i18n="import.h">Restaurer un wallet</h2>
+      <label data-i18n="import.seed">Phrase de récupération (24 mots) — ou seed hex</label>
+      <textarea id="impSeed" rows="3" placeholder="mot1 mot2 mot3 … (24 mots)  —  ou  9f3a…" style="width:100%;font-family:ui-monospace,monospace;font-size:.82rem"></textarea>
       <label data-i18n="pwd">Mot de passe</label>
       <input id="impPass" type="password" autocomplete="new-password">
-      <button onclick="importWallet()" data-i18n="import.btn">Importer</button>
+      <button onclick="importWallet()" data-i18n="import.btn">Restaurer</button>
     </div>
   </div>
 
@@ -161,12 +161,12 @@ const I18N = {
     subtitle:"Clés post-quantiques ML-DSA-65 générées et conservées dans votre navigateur. Rien n'est envoyé à un serveur.",
     loading:"Chargement du moteur cryptographique post-quantique…",ready:"Moteur post-quantique prêt ✓",
     nodelabel:"Nœud :",save:"OK",
-    "create.h":"Créer un nouveau wallet","create.p":"Un mot de passe chiffre votre clé (AES-256-GCM) dans ce navigateur. Il ne peut pas être récupéré : notez-le.",
+    "create.h":"Créer un nouveau wallet","create.p":"Un mot de passe chiffre votre clé (AES-256-GCM) dans ce navigateur. À la création, vous recevrez une phrase de récupération de 24 mots : notez-la sur papier, c'est elle qui restaure vos fonds.",
     "create.btn":"Générer mon wallet",pwd:"Mot de passe",pwd2:"Confirmer le mot de passe",
-    "import.h":"Importer depuis une seed","import.seed":"Seed (hex)","import.btn":"Importer",
+    "import.h":"Restaurer un wallet","import.seed":"Phrase de récupération (24 mots) — ou seed hex","import.btn":"Restaurer",
     "unlock.h":"Déverrouiller","unlock.btn":"Déverrouiller",forget:"Oublier ce wallet",
-    account:"Compte",lock:"Verrouiller",refresh:"Rafraîchir",backup:"Sauvegarder la seed",
-    seedwarn:"⚠️ Quiconque détient cette seed contrôle vos fonds. Ne la partagez jamais, conservez-la hors ligne.",
+    account:"Compte",lock:"Verrouiller",refresh:"Rafraîchir",backup:"Voir la phrase de récupération",
+    seedwarn:"⚠️ Quiconque détient cette phrase (ou cette seed) contrôle vos fonds. Ne la partagez jamais, conservez-la sur papier, hors ligne.",
     "send.h":"Envoyer","send.to":"Adresse destinataire","send.amount":"Montant","send.token":"Token",
     "send.memo":"Mémo (optionnel)","send.fast":"Rapide (tip ×4)","send.priv":"Privé","send.btn":"Signer & envoyer",
     footer:"ChainGO Wallet — open source (Apache 2.0). Clés post-quantiques ML-DSA-65, signature 100 % côté navigateur."},
@@ -174,12 +174,12 @@ const I18N = {
     subtitle:"Post-quantum ML-DSA-65 keys generated and kept in your browser. Nothing is sent to a server.",
     loading:"Loading the post-quantum crypto engine…",ready:"Post-quantum engine ready ✓",
     nodelabel:"Node:",save:"OK",
-    "create.h":"Create a new wallet","create.p":"A password encrypts your key (AES-256-GCM) in this browser. It cannot be recovered: write it down.",
+    "create.h":"Create a new wallet","create.p":"A password encrypts your key (AES-256-GCM) in this browser. On creation you'll get a 24-word recovery phrase: write it down on paper — it's what restores your funds.",
     "create.btn":"Generate my wallet",pwd:"Password",pwd2:"Confirm password",
-    "import.h":"Import from a seed","import.seed":"Seed (hex)","import.btn":"Import",
+    "import.h":"Restore a wallet","import.seed":"Recovery phrase (24 words) — or hex seed","import.btn":"Restore",
     "unlock.h":"Unlock","unlock.btn":"Unlock",forget:"Forget this wallet",
-    account:"Account",lock:"Lock",refresh:"Refresh",backup:"Back up the seed",
-    seedwarn:"⚠️ Anyone holding this seed controls your funds. Never share it, keep it offline.",
+    account:"Account",lock:"Lock",refresh:"Refresh",backup:"Show recovery phrase",
+    seedwarn:"⚠️ Anyone holding this phrase (or seed) controls your funds. Never share it, keep it on paper, offline.",
     "send.h":"Send","send.to":"Recipient address","send.amount":"Amount","send.token":"Token",
     "send.memo":"Memo (optional)","send.fast":"Fast (tip ×4)","send.priv":"Private","send.btn":"Sign & send",
     footer:"ChainGO Wallet — open source (Apache 2.0). Post-quantum ML-DSA-65 keys, 100% in-browser signing."}
@@ -260,16 +260,32 @@ async function createWallet(){
   const blob=await encryptSeed(res.seedHex,p1);
   localStorage.setItem(KEY,JSON.stringify({address:res.address,...blob}));
   seedHex=res.seedHex; myAddress=res.address;
-  alert(lang==="fr"?"Wallet créé. Pensez à sauvegarder votre seed (bouton dans le compte).":"Wallet created. Remember to back up your seed (button in the account).");
+  // Affiche la phrase de récupération et exige que l'utilisateur confirme l'avoir notée.
+  if(res.mnemonic){
+    const msg=lang==="fr"
+      ? "PHRASE DE RÉCUPÉRATION (24 mots)\n\nNotez-la sur PAPIER, dans l'ordre. Elle restaure votre wallet et vos fonds. Ne la partagez JAMAIS.\n\n"
+      : "RECOVERY PHRASE (24 words)\n\nWrite it down on PAPER, in order. It restores your wallet and funds. NEVER share it.\n\n";
+    alert(msg+res.mnemonic);
+  }
   openWallet();
 }
 async function importWallet(){
   const s=$("impSeed").value.trim(),p=$("impPass").value;
   if(p.length<6) return alert(lang==="fr"?"Mot de passe trop court (min 6).":"Password too short (min 6).");
-  const res=chaingoAddressFromSeed(s); if(res.error) return alert(lang==="fr"?"Seed invalide.":"Invalid seed.");
-  const blob=await encryptSeed(s,p);
-  localStorage.setItem(KEY,JSON.stringify({address:res.address,...blob}));
-  seedHex=s; myAddress=res.address; openWallet();
+  // Auto-détection : espaces → phrase mnémonique ; sinon seed hex.
+  let seed=s, addr;
+  if(/\s/.test(s)){
+    const m=chaingoSeedFromMnemonic(s);
+    if(m.error) return alert(lang==="fr"?"Phrase invalide : "+m.error:"Invalid phrase: "+m.error);
+    seed=m.seedHex; addr=m.address;
+  }else{
+    const res=chaingoAddressFromSeed(s);
+    if(res.error) return alert(lang==="fr"?"Seed invalide.":"Invalid seed.");
+    addr=res.address;
+  }
+  const blob=await encryptSeed(seed,p);
+  localStorage.setItem(KEY,JSON.stringify({address:addr,...blob}));
+  seedHex=seed; myAddress=addr; openWallet();
 }
 async function unlock(){
   const w=stored(); if(!w) return route();
@@ -289,7 +305,14 @@ function copyAddr(){navigator.clipboard.writeText(myAddress);$("netState").textC
 function showSeed(){
   if(!seedHex)return;
   const box=$("seedReveal");box.classList.toggle("hidden");
-  $("seedText").textContent=seedHex;
+  // Affiche la PHRASE (24 mots) en priorité, avec la seed hex en repli technique.
+  const m=(typeof chaingoMnemonicFromSeed==="function")?chaingoMnemonicFromSeed(seedHex):null;
+  if(m&&!m.error){
+    $("seedText").innerHTML="<b>"+(lang==="fr"?"Phrase de récupération (24 mots) :":"Recovery phrase (24 words):")+"</b><br>"+m.mnemonic
+      +"<br><br><span style='opacity:.6'>Seed (hex) : "+seedHex+"</span>";
+  }else{
+    $("seedText").textContent=seedHex;
+  }
 }
 
 function fmt(u){return (u/UNIT).toLocaleString(lang==="fr"?"fr-FR":"en-US",{maximumFractionDigits:9});}

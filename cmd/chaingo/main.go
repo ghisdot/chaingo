@@ -17,6 +17,7 @@ import (
 
 	"chaingo/internal/crypto"
 	"chaingo/internal/genesis"
+	"chaingo/internal/mnemonic"
 	"chaingo/internal/node"
 	"chaingo/internal/state"
 	"chaingo/internal/types"
@@ -30,8 +31,8 @@ Usage :
   chaingo node start [--dev | --testnet] [--api :8545] [--p2p :9000] [--peers host:port,...]
                      [--datadir DIR] [--genesis FILE | --genesis-url URL]
                      [--validator-seed FILE]
-  chaingo wallet new <name> [--pass MDP]
-  chaingo wallet import <name> --seed <fichier-seed> [--pass MDP]
+  chaingo wallet new <name> [--pass MDP]                 (affiche la phrase de récupération 24 mots)
+  chaingo wallet import <name> --mnemonic "..." | --seed <fichier> | --seed-hex HEX [--pass MDP]
   chaingo wallet list
   chaingo wallet show <name>
   chaingo balance <adresse|wallet> [--api URL]
@@ -189,13 +190,16 @@ func cmdWallet(args []string) error {
 		pass := fs.String("pass", "", "mot de passe du keystore")
 		seedFile := fs.String("seed", "", "fichier contenant la seed hex (ex : /var/lib/chaingo/validator.seed)")
 		seedHex := fs.String("seed-hex", "", "seed hex passée directement (préférer --seed pour ne pas la laisser dans l'historique shell)")
+		mnem := fs.String("mnemonic", "", "phrase mnémonique de 24 mots (entre guillemets)")
 		fs.Parse(args[1:])
 		if fs.NArg() < 1 {
-			return fmt.Errorf("usage : chaingo wallet import <name> --seed FILE  (ou --seed-hex HEX)")
+			return fmt.Errorf("usage : chaingo wallet import <name> --mnemonic \"...\"  (ou --seed FILE / --seed-hex HEX)")
 		}
 		name := fs.Arg(0)
 		var seedRaw string
 		switch {
+		case *mnem != "":
+			seedRaw = *mnem
 		case *seedFile != "":
 			b, err := os.ReadFile(*seedFile)
 			if err != nil {
@@ -205,7 +209,7 @@ func cmdWallet(args []string) error {
 		case *seedHex != "":
 			seedRaw = *seedHex
 		default:
-			return fmt.Errorf("--seed FILE ou --seed-hex HEX est requis")
+			return fmt.Errorf("--mnemonic \"...\", --seed FILE ou --seed-hex HEX est requis")
 		}
 		kp, path, err := wallet.Import(name, *pass, seedRaw)
 		if err != nil {
@@ -233,6 +237,12 @@ func cmdWallet(args []string) error {
 		fmt.Printf("Wallet %q créé (signatures post-quantiques %s)\n", name, crypto.Scheme.Name())
 		fmt.Printf("  Adresse : %s\n", kp.Address())
 		fmt.Printf("  Fichier : %s\n", path)
+		if phrase, err := mnemonic.FromSeed(kp.Seed); err == nil {
+			fmt.Println("\n  ── PHRASE DE RÉCUPÉRATION (24 mots) ──")
+			fmt.Println("  Notez-la sur PAPIER et gardez-la hors ligne. Elle restaure ce")
+			fmt.Print("  wallet et tous ses fonds. Ne la partagez JAMAIS.\n\n")
+			fmt.Printf("  %s\n\n", phrase)
+		}
 		if *pass == "" {
 			fmt.Println("  ⚠ keystore chiffré avec un mot de passe VIDE — ok en devnet seulement")
 		}
@@ -583,7 +593,8 @@ func cmdUnjail(args []string) error {
 }
 
 // cmdValidator : opérations validateur. Pour l'instant : profil public on-chain.
-//   chaingo validator profile --from <wallet> --info "Nom — https://site — description"
+//
+//	chaingo validator profile --from <wallet> --info "Nom — https://site — description"
 func cmdValidator(args []string) error {
 	if len(args) < 1 || args[0] != "profile" {
 		return fmt.Errorf("usage : chaingo validator profile --from <wallet> --info \"texte\"")
@@ -1131,10 +1142,11 @@ func formatAmount(v uint64, d uint8) string {
 }
 
 // cmdWasm : moteur WASM. Quatre sous-commandes :
-//   run    : exécute en SANDBOX locale (preview, hors-chaîne)
-//   deploy : déploie un .wasm ON-CHAIN (tx wasm_deploy)
-//   call   : appelle une fonction d'un contrat déployé (tx wasm_call)
-//   list   : liste les contrats WASM déployés
+//
+//	run    : exécute en SANDBOX locale (preview, hors-chaîne)
+//	deploy : déploie un .wasm ON-CHAIN (tx wasm_deploy)
+//	call   : appelle une fonction d'un contrat déployé (tx wasm_call)
+//	list   : liste les contrats WASM déployés
 func cmdWasm(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage : chaingo wasm run|deploy|call|list ...")
@@ -1155,7 +1167,8 @@ func cmdWasm(args []string) error {
 
 // cmdWasmRun : PREVIEW expérimentale (hors-consensus). Exécute une fonction d'un
 // fichier .wasm en SANDBOX locale — PAS sur la chaîne.
-//   chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]
+//
+//	chaingo wasm run [--gas N] <fichier.wasm> <fonction> [arg_u64 ...]
 func cmdWasmRun(args []string) error {
 	fs := flag.NewFlagSet("wasm run", flag.ExitOnError)
 	gas := fs.Int64("gas", 0, "limite de gas DÉTERMINISTE (0 = sandbox wall-clock simple)")
@@ -1199,7 +1212,8 @@ func cmdWasmRun(args []string) error {
 // cmdWasmDeploy déploie un contrat WASM ON-CHAIN (tx wasm_deploy). Le bytecode
 // est validé par le nœud (instrumentable) avant d'être stocké à l'adresse
 // déterministe = hash de la tx.
-//   chaingo wasm deploy --from <wallet> [--pass p] [--api url] <fichier.wasm>
+//
+//	chaingo wasm deploy --from <wallet> [--pass p] [--api url] <fichier.wasm>
 func cmdWasmDeploy(args []string) error {
 	fs := flag.NewFlagSet("wasm deploy", flag.ExitOnError)
 	from := fs.String("from", "", "wallet déployeur")
@@ -1228,7 +1242,8 @@ func cmdWasmDeploy(args []string) error {
 }
 
 // cmdWasmCall appelle une fonction d'un contrat WASM déployé (tx wasm_call).
-//   chaingo wasm call --from <wallet> [--gas N] [--value CGO] <adresse> <fonction> [arg_u64 ...]
+//
+//	chaingo wasm call --from <wallet> [--gas N] [--value CGO] <adresse> <fonction> [arg_u64 ...]
 func cmdWasmCall(args []string) error {
 	fs := flag.NewFlagSet("wasm call", flag.ExitOnError)
 	from := fs.String("from", "", "wallet appelant")

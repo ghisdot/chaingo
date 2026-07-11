@@ -12,22 +12,58 @@ import (
 	"syscall/js"
 
 	"chaingo/internal/crypto"
+	"chaingo/internal/mnemonic"
 	"chaingo/internal/types"
 )
 
 func result(m map[string]any) any { return js.ValueOf(m) }
 func fail(msg string) any         { return js.ValueOf(map[string]any{"error": msg}) }
 
-// chaingoNewWallet() -> {address, seedHex}
+// chaingoNewWallet() -> {address, seedHex, mnemonic}
 func newWallet(this js.Value, args []js.Value) any {
 	kp, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return fail(err.Error())
 	}
+	phrase, _ := mnemonic.FromSeed(kp.Seed)
 	return result(map[string]any{
-		"address": kp.Address(),
-		"seedHex": hex.EncodeToString(kp.Seed),
+		"address":  kp.Address(),
+		"seedHex":  hex.EncodeToString(kp.Seed),
+		"mnemonic": phrase,
 	})
+}
+
+// chaingoSeedFromMnemonic(mnemonic) -> {seedHex, address}
+// Décode une phrase de 24 mots en son seed (checksum vérifié).
+func seedFromMnemonic(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return fail("mnemonic required")
+	}
+	seed, err := mnemonic.ToSeed(args[0].String())
+	if err != nil {
+		return fail(err.Error())
+	}
+	return result(map[string]any{
+		"seedHex": hex.EncodeToString(seed),
+		"address": crypto.FromSeed(seed).Address(),
+	})
+}
+
+// chaingoMnemonicFromSeed(seedHex) -> {mnemonic}
+// Affiche la phrase de récupération d'un seed existant.
+func mnemonicFromSeed(this js.Value, args []js.Value) any {
+	if len(args) < 1 {
+		return fail("seed required")
+	}
+	seed, err := hex.DecodeString(args[0].String())
+	if err != nil {
+		return fail("invalid seed")
+	}
+	phrase, err := mnemonic.FromSeed(seed)
+	if err != nil {
+		return fail(err.Error())
+	}
+	return result(map[string]any{"mnemonic": phrase})
 }
 
 // chaingoAddressFromSeed(seedHex) -> {address}
@@ -69,6 +105,8 @@ func signTransaction(this js.Value, args []js.Value) any {
 func main() {
 	js.Global().Set("chaingoNewWallet", js.FuncOf(newWallet))
 	js.Global().Set("chaingoAddressFromSeed", js.FuncOf(addressFromSeed))
+	js.Global().Set("chaingoSeedFromMnemonic", js.FuncOf(seedFromMnemonic))
+	js.Global().Set("chaingoMnemonicFromSeed", js.FuncOf(mnemonicFromSeed))
 	js.Global().Set("chaingoSignTransaction", js.FuncOf(signTransaction))
 	js.Global().Set("chaingoWasmReady", js.ValueOf(true))
 	select {} // garder le module vivant

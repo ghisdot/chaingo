@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/scrypt"
 
 	"chaingo/internal/crypto"
+	"chaingo/internal/mnemonic"
 )
 
 type StoredKey struct {
@@ -54,15 +55,26 @@ func Create(name, pass string) (*crypto.KeyPair, string, error) {
 	return saveEncrypted(name, pass, kp)
 }
 
-// Import enregistre un wallet à partir d'une seed hex existante (ex : seed
-// d'un validateur générée via `chaingo keygen`, qu'on veut piloter depuis le
-// CLI pour staker / déléguer / signer des tx). Le wallet est chiffré avec
-// `pass` puis stocké comme un wallet créé.
-func Import(name, pass, seedHex string) (*crypto.KeyPair, string, error) {
-	seedHex = strings.TrimSpace(seedHex)
-	seed, err := hex.DecodeString(seedHex)
-	if err != nil {
-		return nil, "", fmt.Errorf("seed hex invalide : %w", err)
+// Import enregistre un wallet à partir d'une seed existante, fournie SOIT en
+// hexadécimal (64 caractères), SOIT sous forme de phrase mnémonique BIP39 (24
+// mots) — le format est auto-détecté. Sert à piloter un wallet existant depuis
+// le CLI (staking, délégation, signature). Chiffré avec `pass` puis stocké.
+func Import(name, pass, secret string) (*crypto.KeyPair, string, error) {
+	secret = strings.TrimSpace(secret)
+	var seed []byte
+	if strings.ContainsAny(secret, " \t\n") {
+		// Contient des espaces → phrase mnémonique.
+		s, err := mnemonic.ToSeed(secret)
+		if err != nil {
+			return nil, "", fmt.Errorf("phrase mnémonique invalide : %w", err)
+		}
+		seed = s
+	} else {
+		s, err := hex.DecodeString(secret)
+		if err != nil {
+			return nil, "", fmt.Errorf("seed hex invalide : %w", err)
+		}
+		seed = s
 	}
 	if len(seed) != crypto.Scheme.SeedSize() {
 		return nil, "", fmt.Errorf("seed doit faire %d octets (got %d)", crypto.Scheme.SeedSize(), len(seed))
