@@ -94,9 +94,21 @@ réseau ChainGO choisit les siennes. Valeurs par défaut :
 - **Slashing** : 5 % en cas de double-signature, 0,1 % et jail en cas
   d'inactivité prolongée. Brûlé sur stake **et** délégations.
 
-## Démarrage rapide (développement local)
+## Démarrage rapide
 
-Compile et lance un nœud de développement local en une commande :
+**Le plus simple — sans rien installer.** Lancez un nœud avec Docker, ou
+téléchargez un binaire pré-compilé :
+
+```bash
+# Docker : un nœud testnet public en une ligne (aucune dépendance)
+docker run -d -p 8545:8545 -p 9000:9000 -v chaingo-data:/data \
+  ghcr.io/ghisdot/chaingo:latest
+
+# …ou téléchargez le binaire de votre OS (Windows/Linux/macOS, amd64/arm64) :
+#   https://github.com/ghisdot/chaingo/releases
+```
+
+**Développement local (depuis les sources) :**
 
 ```bash
 git clone https://github.com/ghisdot/chaingo

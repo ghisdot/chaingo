@@ -84,7 +84,20 @@ picks its own. Defaults:
 - **Slashing**: 5 % on double-signing, 0.1 % and jail on extended downtime.
   Applied to stake **and** delegations.
 
-## Quickstart (local development)
+## Quickstart
+
+**Easiest — nothing to install.** Run a node with Docker, or grab a prebuilt binary:
+
+```bash
+# Docker: a public testnet node in one line (no dependencies)
+docker run -d -p 8545:8545 -p 9000:9000 -v chaingo-data:/data \
+  ghcr.io/ghisdot/chaingo:latest
+
+# …or download the binary for your OS (Windows/Linux/macOS, amd64/arm64):
+#   https://github.com/ghisdot/chaingo/releases
+```
+
+**Local development (from source):**
 
 ```bash
 git clone https://github.com/ghisdot/chaingo
