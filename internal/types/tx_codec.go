@@ -276,6 +276,8 @@ func writeContractParams(e *codec.Encoder, c *ContractParams) {
 	}
 	e.WriteUvarint(c.Threshold)
 	e.WriteUvarint(c.Price) // ajouté en fin (ordre figé)
+	e.WriteString(c.TokenB)
+	e.WriteUvarint(c.AmountB)
 }
 
 func readContractParams(d *codec.Decoder, c *ContractParams) error {
@@ -320,6 +322,12 @@ func readContractParams(d *codec.Decoder, c *ContractParams) error {
 		return err
 	}
 	if c.Price, err = d.ReadUvarint(); err != nil {
+		return err
+	}
+	if c.TokenB, err = d.ReadString(); err != nil {
+		return err
+	}
+	if c.AmountB, err = d.ReadUvarint(); err != nil {
 		return err
 	}
 	return nil

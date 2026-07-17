@@ -17,7 +17,7 @@ communautaire, validateurs indépendants et finalisation du consensus BFT (Phase
 - 🔐 **Sécurité post-quantique** native, partout dans la chaîne.
 - ⚡ **~31 000 TPS** mesurés **en local** au bench (vérification PQ parallèle + exécution ; hors réseau P2P et vote de consensus). Le débit d'une chaîne en production est plafonné par les paramètres de bloc (500 ms × 2000 tx = ~4 000 TPS par défaut) : les ~31 000 sont la **marge de calcul**, preuve que les signatures post-quantiques ne sont pas le goulot.
 - 🔥 **Économie déflationniste** : frais EIP-1559 brûlés, supply élastique.
-- 🪙 **No-code** : tokens (mintable/plafonné/burnable) et 8 templates de contrats (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) — déployables **et opérables depuis le navigateur** (studio), sans écrire de smart contract.
+- 🪙 **No-code** : tokens (mintable/plafonné/burnable) et 9 templates de contrats (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming, amm) — déployables **et opérables depuis le navigateur** (studio), sans écrire de smart contract.
 - 🌐 **P2P** pair-à-pair, rejoignable par n'importe qui, avec gouvernance des mises à jour (version de protocole).
 
 ---
@@ -35,7 +35,7 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
 - **Obtenir des CGO de test** : voir [docs/GET-CGO.md](docs/GET-CGO.md).
 - **Studio no-code** : <https://chaingo.org/studio/>
   Créer un token (plafond, burnable, métadonnées) ou déployer **et opérer** un
-  contrat (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming)
+  contrat (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming, amm)
   en quelques clics, signature post-quantique dans le navigateur.
 - **Explorateur de blocs** : <https://chaingo.org/explorer/>
   Parcourir les blocs, transactions, comptes, validateurs et tokens en direct.
@@ -78,7 +78,7 @@ réseau ChainGO choisit les siennes. Valeurs par défaut :
 | Émission | **~3 %/an sur le stake total** | mintée au proposeur de chaque bloc, pondéré par le stake |
 | Frais | **EIP-1559 dynamiques** | base fee ajusté à la congestion et **brûlé** ; tip libre au validateur |
 | Création de token | 10 CGO brûlés | anti-spam ; plafond max-supply, burnable, métadonnées en option |
-| Smart contracts no-code | vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming | 8 templates natifs paramétrés, 1 CGO brûlé à la création |
+| Smart contracts no-code | vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming, amm | 9 templates natifs paramétrés, 1 CGO brûlé à la création |
 | Stake validateur | **minimum 10 000 CGO** | en dessous : transaction rejetée |
 | Délégation | dès **1 CGO**, commission 10 % | les petits holders délèguent à un validateur et touchent leur part au pro-rata |
 | Unbonding | **21 jours** (mainnet), 24 h (testnet) | s'applique au stake et aux délégations retirées |
@@ -155,8 +155,8 @@ Documentation complète :
   codec binaire, fuzzing, gouvernance des mises à jour. **Reste** : surtout des **validateurs
   indépendants** (aujourd'hui sur les machines du mainteneur — c'est le vrai jalon de
   décentralisation avant mainnet).
-- **Phase 4 — Smart contracts no-code** : 🟢 **8 templates** (vesting, escrow, multisig, **DAO**,
-  presale, timelock, airdrop, streaming) livrés, déployables **et opérables** depuis le studio ;
+- **Phase 4 — Smart contracts no-code** : 🟢 **9 templates** (vesting, escrow, multisig, **DAO**,
+  presale, timelock, airdrop, streaming, amm) livrés, déployables **et opérables** depuis le studio ;
   tokens enrichis (plafond max-supply, burn, métadonnées). Moteur **WASM** (contrats arbitraires) :
   **câblé en consensus sur testnet/devnet** — on déploie du bytecode (`wasm_deploy`) et on
   l'appelle (`wasm_call`) via le studio, la CLI ou l'API. Déterminisme tenu par le gas

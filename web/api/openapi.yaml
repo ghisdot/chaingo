@@ -548,7 +548,7 @@ components:
         contract_id: { type: string }
         action:
           type: string
-          enum: [claim, release, refund, propose, approve, reject, buy, cancel]
+          enum: [claim, release, refund, propose, approve, reject, buy, cancel, swap, add, remove]
           description: "contract_exec : action selon le template (claim/release/refund/propose/approve/reject/buy/cancel)"
         proposal: { type: integer, description: index pour multisig/dao approve|reject }
         timestamp: { type: integer, description: ms epoch }
@@ -668,7 +668,7 @@ components:
       properties:
         template:
           type: string
-          enum: [vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming]
+          enum: [vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming, amm]
         token_id: { type: string }
         amount: { type: integer }
         beneficiary: { type: string, description: "vesting/timelock/streaming" }
@@ -682,12 +682,14 @@ components:
           items: { type: string }
         threshold: { type: integer, description: "multisig/dao : quorum" }
         price: { type: integer, description: "presale : prix en ucgo par unité de base du token vendu" }
+        token_b: { type: string, description: "amm : second jeton du pool" }
+        amount_b: { type: integer, description: "amm : liquidité initiale du jeton B" }
 
     Contract:
       type: object
       properties:
         id: { type: string }
-        template: { type: string, enum: [vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming] }
+        template: { type: string, enum: [vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming, amm] }
         creator: { type: string }
         token_id: { type: string }
         amount: { type: integer }
@@ -702,6 +704,13 @@ components:
           items: { type: string }
         threshold: { type: integer }
         price: { type: integer, description: "presale : ucgo par unité de base" }
+        token_b: { type: string, description: "amm : second jeton" }
+        reserve_b: { type: integer, description: "amm : réserve du jeton B (réserve A = amount)" }
+        total_shares: { type: integer, description: "amm : total des parts de liquidité" }
+        shares:
+          type: object
+          additionalProperties: { type: integer }
+          description: "amm : parts LP par adresse"
         claimed:
           type: array
           description: "airdrop : destinataires ayant déjà réclamé"

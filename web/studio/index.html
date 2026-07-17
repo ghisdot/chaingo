@@ -113,6 +113,7 @@
       <div class="tab" data-t="timelock" onclick="switchTab('timelock')">Timelock</div>
       <div class="tab" data-t="airdrop" onclick="switchTab('airdrop')">Airdrop</div>
       <div class="tab" data-t="streaming" onclick="switchTab('streaming')">Streaming</div>
+      <div class="tab" data-t="amm" onclick="switchTab('amm')">Pool / Swap</div>
       <div class="tab" data-t="manage" onclick="switchTab('manage')">⚙ Gérer</div>
       <div class="tab" data-t="wasm" onclick="switchTab('wasm')">Contrats WASM</div>
       <div class="tab" data-t="mine" onclick="switchTab('mine')">Mes créations</div>
@@ -320,6 +321,23 @@
       <button class="primary" onclick="createStreaming()">Démarrer le flux</button>
     </div>
 
+    <!-- AMM / POOL -->
+    <div id="tab-amm" class="card hidden">
+      <h2>Pool de liquidité / Swap</h2>
+      <p class="hint">Créez un <b>pool à produit constant (x·y=k)</b> entre deux jetons : il permet à quiconque de les <b>échanger</b> à un prix fixé par l'offre et la demande (frais 0,3 % aux fournisseurs de liquidité). C'est ce qui <b>donne un marché et un prix</b> à vos tokens. Vous déposez une liquidité initiale des deux jetons ; <b>swap, ajout et retrait se gèrent dans « ⚙ Gérer »</b>.</p>
+      <div class="row">
+        <div><label>Jeton A (symbole)</label><input id="amTokenA" value="CGO"></div>
+        <div><label>Liquidité initiale A</label><input id="amAmountA" type="number" min="0" step="any" value="1000"></div>
+      </div>
+      <div class="row">
+        <div><label>Jeton B (symbole)</label><input id="amTokenB" placeholder="MONTOK"></div>
+        <div><label>Liquidité initiale B</label><input id="amAmountB" type="number" min="0" step="any" value="1000"></div>
+      </div>
+      <div class="info" id="amHint">Le ratio A:B fixe le prix de départ. Vous devez posséder les deux jetons.</div>
+      <div class="fee" id="feeAMM">Frais de déploiement : <b>…</b></div>
+      <button class="primary" onclick="createAMM()">Créer le pool</button>
+    </div>
+
     <!-- MANAGE / OPERATE -->
     <div id="tab-manage" class="card hidden">
       <h2>Gérer un contrat</h2>
@@ -423,7 +441,7 @@ function txToJSON(tx){
 
 function switchTab(t){
   document.querySelectorAll(".tab").forEach(el => el.classList.toggle("on", el.dataset.t === t));
-  ["token","vesting","escrow","multisig","dao","presale","timelock","airdrop","streaming","manage","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
+  ["token","vesting","escrow","multisig","dao","presale","timelock","airdrop","streaming","amm","manage","wasm","mine"].forEach(x => $("tab-"+x).classList.toggle("hidden", x !== t));
   if (t === "mine") loadMine();
   if (t === "wasm") loadWasmList();
   if (t === "token") renderTokenSummary();
@@ -491,7 +509,7 @@ function renderFees(){
   const ct = `${fmt(fees.contract_create_fee||0)} CGO brûlés + ${fmt(base+tip)} CGO frais réseau = <b>${fmt(ctrTotal)} CGO</b>`;
   $("feeToken").innerHTML = "Coût de déploiement : " + tk;
   if ($("tkRuleBurn")) $("tkRuleBurn").textContent = fmt(fees.token_create_fee||0) + " CGO brûlés";
-  ["feeVesting","feeEscrow","feeMultisig","feeDAO","feePresale","feeTimelock","feeAirdrop","feeStreaming"].forEach(id => { if ($(id)) $(id).innerHTML = "Coût de déploiement : " + ct; });
+  ["feeVesting","feeEscrow","feeMultisig","feeDAO","feePresale","feeTimelock","feeAirdrop","feeStreaming","feeAMM"].forEach(id => { if ($(id)) $(id).innerHTML = "Coût de déploiement : " + ct; });
   if ($("feeWasm")){
     if (fees.wasm_enabled){
       const wt = (fees.wasm_deploy_fee || 0) + base + tip;
@@ -743,8 +761,22 @@ async function createStreaming(){
   }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
 }
 
+async function createAMM(){
+  try{
+    const tokA = ($("amTokenA").value.trim()||"CGO").toUpperCase();
+    const tokB = ($("amTokenB").value.trim()||"").toUpperCase();
+    if (!tokB || tokA === tokB) throw new Error("deux jetons distincts requis");
+    const decA = await tokenDecimals(tokA), decB = await tokenDecimals(tokB);
+    const amtA = toBase($("amAmountA").value, decA), amtB = toBase($("amAmountB").value, decB);
+    if (amtA <= 0n || amtB <= 0n) throw new Error("liquidité initiale > 0 pour les deux jetons");
+    const tx = await buildBase("contract_create");
+    tx.contract = { template:"amm", token_id:tokA, amount:amtA, token_b:tokB, amount_b:amtB };
+    await signAndSend(tx, "Pool AMM");
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+e.message+'</span>'; }
+}
+
 // ---------------- gérer / opérer un contrat ----------------
-let mgContract = null, mgDec = 9;
+let mgContract = null, mgDec = 9, mgDecB = 9;
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const short = a => a ? a.slice(0,10)+"…"+a.slice(-4) : "—";
 const me = a => myAddress && a === myAddress;
@@ -766,6 +798,7 @@ async function loadContract(){
   try{
     mgContract = await api("/v1/contracts/" + id);
     mgDec = await tokenDecimals(mgContract.token_id || "CGO");
+    mgDecB = mgContract.token_b ? await tokenDecimals(mgContract.token_b) : 9;
     renderContract();
   }catch(e){ view.innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
 }
@@ -872,8 +905,85 @@ function renderContract(){
       <div class="hint" id="psBuyPrev">—</div>
       ${me(c.creator)?`<button class="danger" onclick="ctExec('cancel','Clôture de la vente')" ${c.status!=='active'?'disabled':''}>Clôturer et récupérer l'invendu</button>`:''}`;
   }
+  else if (c.template === "amm"){
+    const rA = BigInt(c.amount||0), rB = BigInt(c.reserve_b||0);
+    const myShares = BigInt((c.shares||{})[myAddress]||0), total = BigInt(c.total_shares||0);
+    const pct = total>0n ? Number(myShares*10000n/total)/100 : 0;
+    // Prix : combien de B pour 1 A (approx à la réserve).
+    body = `<p class="hint">Pool <b>${esc(c.token_id)}↔${esc(c.token_b)}</b> · réserves <b>${fmtAmt(rA,mgDec)} ${esc(c.token_id)}</b> / <b>${fmtAmt(rB,mgDecB)} ${esc(c.token_b)}</b> · vos parts LP <b>${pct.toFixed(2)} %</b></p>
+      <h3 style="font-size:.95rem;margin:14px 0 4px">Échanger (swap)</h3>
+      <div class="row">
+        <div><label>J'envoie</label><select id="amDir">
+          <option value="A">${esc(c.token_id)} → ${esc(c.token_b)}</option>
+          <option value="B">${esc(c.token_b)} → ${esc(c.token_id)}</option>
+        </select></div>
+        <div><label>Montant</label><input id="amSwapIn" type="number" min="0" step="any" value="1" oninput="amPreview()"></div>
+        <div style="display:flex;align-items:flex-end"><button class="primary" style="margin:0;width:100%" onclick="amSwap()" ${c.status!=='active'?'disabled':''}>Swap</button></div>
+      </div>
+      <div class="hint" id="amPrev">—</div>
+      <h3 style="font-size:.95rem;margin:16px 0 4px">Liquidité</h3>
+      <div class="row">
+        <div><label>Ajouter (montant ${esc(c.token_id)}, ${esc(c.token_b)} au pro-rata)</label><input id="amAddIn" type="number" min="0" step="any" value="0"></div>
+        <div style="display:flex;align-items:flex-end"><button style="margin:0;width:100%" onclick="amAdd()">Ajouter</button></div>
+      </div>
+      <div class="row">
+        <div><label>Retirer (parts LP à brûler)</label><input id="amRemIn" type="number" min="0" value="0"></div>
+        <div style="display:flex;align-items:flex-end"><button class="danger" style="margin:0;width:100%" onclick="amRemove()" ${myShares<=0n?'disabled':''}>Retirer</button></div>
+      </div>
+      <p class="hint">Vos parts : ${esc(String(myShares))} / ${esc(String(total))}. Frais de swap 0,3 % → aux fournisseurs de liquidité.</p>`;
+  }
   v.innerHTML = head + locked + body;
   if (c.template === "presale") psPreview();
+  if (c.template === "amm") amPreview();
+}
+
+// Aperçu de swap (même formule que la chaîne : produit constant, frais 0,3 %).
+function amPreview(){
+  if (!mgContract || mgContract.template !== "amm") return;
+  const el = $("amPrev"); if (!el) return;
+  try{
+    const dir = $("amDir").value, c = mgContract;
+    const inDec = dir==="A"?mgDec:mgDecB, outDec = dir==="A"?mgDecB:mgDec;
+    const inTok = dir==="A"?c.token_id:c.token_b, outTok = dir==="A"?c.token_b:c.token_id;
+    const rIn = dir==="A"?BigInt(c.amount||0):BigInt(c.reserve_b||0);
+    const rOut = dir==="A"?BigInt(c.reserve_b||0):BigInt(c.amount||0);
+    const amtIn = toBase($("amSwapIn").value||"0", inDec);
+    if (amtIn<=0n){ el.textContent="—"; return; }
+    const feeIn = amtIn*997n;
+    const out = (rOut*feeIn)/(rIn*1000n+feeIn);
+    el.innerHTML = out>0n
+      ? `≈ vous recevez <b>${fmtAmt(out,outDec)} ${esc(outTok)}</b> (frais 0,3 %).`
+      : "Montant trop faible.";
+  }catch{ el.textContent="—"; }
+}
+async function amSwap(){
+  try{
+    const c = mgContract, dir = $("amDir").value;
+    const inTok = dir==="A"?c.token_id:c.token_b, inDec = dir==="A"?mgDec:mgDecB;
+    const amtIn = toBase($("amSwapIn").value||"0", inDec);
+    if (amtIn<=0n) throw new Error("montant > 0 attendu");
+    const tx = await buildBase("contract_exec");
+    tx.contract_id = c.id; tx.action = "swap"; tx.token_id = inTok; tx.amount = amtIn;
+    await signAndSend(tx, "Swap"); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
+}
+async function amAdd(){
+  try{
+    const amt = toBase($("amAddIn").value||"0", mgDec);
+    if (amt<=0n) throw new Error("montant > 0 attendu");
+    const tx = await buildBase("contract_exec");
+    tx.contract_id = mgContract.id; tx.action = "add"; tx.amount = amt;
+    await signAndSend(tx, "Ajout de liquidité"); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
+}
+async function amRemove(){
+  try{
+    const sh = BigInt($("amRemIn").value||"0");
+    if (sh<=0n) throw new Error("parts > 0 attendues");
+    const tx = await buildBase("contract_exec");
+    tx.contract_id = mgContract.id; tx.action = "remove"; tx.amount = sh;
+    await signAndSend(tx, "Retrait de liquidité"); await loadContract();
+  }catch(e){ $("status").innerHTML = '<span class="ko">'+esc(e.message)+'</span>'; }
 }
 
 // Aperçu de l'achat presale : combien de tokens pour le CGO saisi.

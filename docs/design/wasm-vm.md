@@ -118,6 +118,6 @@ post-quantique). Il est **livré et câblé** sur testnet/devnet — c'est là q
 l'éprouve avec de vrais contrats et du trafic. Il reste **désactivé sur mainnet
 (`WasmEnabled=false`)** jusqu'au **durcissement communautaire** : il exécute du
 code potentiellement hostile, et l'invariant du projet est de ne jamais faire
-tourner ça en consensus mainnet sans cette revue. Les **8 templates no-code**
-(vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) restent
+tourner ça en consensus mainnet sans cette revue. Les **9 templates no-code**
+(vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming, amm) restent
 l'option recommandée pour la majorité des usages, sans surface d'attaque de VM.

@@ -67,6 +67,7 @@ const (
 	TemplateTimelock  = "timelock"  // fonds verrouillés jusqu'à une date, puis réclamables en totalité
 	TemplateAirdrop   = "airdrop"   // distribution d'un token, part égale réclamable par destinataire
 	TemplateStreaming = "streaming" // flux linéaire vers un bénéficiaire, annulable par le créateur
+	TemplateAMM       = "amm"       // pool de swap à produit constant (x·y=k) entre deux tokens
 )
 
 // Actions exécutables sur un contrat.
@@ -79,6 +80,9 @@ const (
 	ActionReject  = "reject"  // dao : voter CONTRE la proposition (Proposal)
 	ActionBuy     = "buy"     // presale : acheter des tokens en envoyant des CGO (Amount)
 	ActionCancel  = "cancel"  // streaming/presale : le créateur clôt et récupère le reste
+	ActionSwap    = "swap"    // amm : échange TokenID(=jeton envoyé) → l'autre jeton du pool (Amount)
+	ActionAdd     = "add"     // amm : ajoute de la liquidité (Amount = quantité de token A ; B au pro-rata)
+	ActionRemove  = "remove"  // amm : retire de la liquidité (Amount = parts LP à brûler)
 )
 
 type ContractParams struct {
@@ -93,7 +97,9 @@ type ContractParams struct {
 	Signers     []string `json:"signers,omitempty"`     // multisig/dao : signataires/membres ; airdrop : destinataires
 	Threshold   uint64   `json:"threshold,omitempty"`   // multisig : nb d'approbations requis
 	// Ajouté EN FIN (l'ordre EST le format de signature) :
-	Price uint64 `json:"price,omitempty"` // presale : prix en ucgo par unité de base du token vendu
+	Price   uint64 `json:"price,omitempty"`    // presale : prix en ucgo par unité de base du token vendu
+	TokenB  string `json:"token_b,omitempty"`  // amm : second jeton du pool (TokenID = jeton A)
+	AmountB uint64 `json:"amount_b,omitempty"` // amm : liquidité initiale du jeton B
 }
 
 const (
@@ -398,6 +404,13 @@ func (tx *Transaction) ValidateBasic() error {
 			if c.Price == 0 {
 				return errors.New("presale: price (ucgo per token base unit) must be > 0")
 			}
+		case TemplateAMM:
+			if c.TokenB == "" || c.TokenID == c.TokenB {
+				return errors.New("amm: token_id and token_b must be two distinct tokens")
+			}
+			if c.Amount == 0 || c.AmountB == 0 {
+				return errors.New("amm: initial liquidity (amount and amount_b) must be > 0")
+			}
 		default:
 			return fmt.Errorf("unknown contract template %q", c.Template)
 		}
@@ -410,6 +423,17 @@ func (tx *Transaction) ValidateBasic() error {
 		case ActionBuy:
 			if tx.Amount == 0 {
 				return errors.New("buy: amount (CGO to spend) must be > 0")
+			}
+		case ActionSwap:
+			if tx.Amount == 0 {
+				return errors.New("swap: amount (tokens to swap in) must be > 0")
+			}
+			if tx.TokenID == "" {
+				return errors.New("swap: token_id (the token you send in) required")
+			}
+		case ActionAdd, ActionRemove:
+			if tx.Amount == 0 {
+				return errors.New("amm: amount must be > 0")
 			}
 		case ActionPropose:
 			if !crypto.ValidAddress(tx.To) {

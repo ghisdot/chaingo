@@ -119,5 +119,5 @@ battle-test it with real contracts and traffic. It remains **disabled on mainnet
 (`WasmEnabled=false`)** until **community hardening**: it executes potentially
 hostile code, and the project's invariant is to never run that in mainnet
 consensus without this review. The **8 no-code templates** (vesting, escrow,
-multisig, DAO, presale, timelock, airdrop, streaming) remain the recommended
+multisig, DAO, presale, timelock, airdrop, streaming, amm) remain the recommended
 option for the majority of uses, with no VM attack surface.

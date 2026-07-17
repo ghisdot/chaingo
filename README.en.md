@@ -16,7 +16,7 @@ validators, and finalization of the BFT consensus (Phase 2).
 - 🔐 **Native post-quantum security**, end-to-end.
 - ⚡ **~31,000 TPS** measured **locally** at the bench (parallel PQ verification + execution; excludes P2P networking and consensus voting). A production chain's throughput is capped by block params (500 ms × 2000 tx = ~4,000 TPS by default): the ~31,000 is **compute headroom**, proof that post-quantum signatures are not the bottleneck.
 - 🔥 **Deflationary economics**: burned EIP-1559 base fees, elastic supply.
-- 🪙 **No-code**: tokens (mintable/capped/burnable) and 8 contract templates (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming) — deploy **and operate** them **from the browser** (studio), without writing a smart contract.
+- 🪙 **No-code**: tokens (mintable/capped/burnable) and 9 contract templates (vesting, escrow, multisig, DAO, presale, timelock, airdrop, streaming, amm) — deploy **and operate** them **from the browser** (studio), without writing a smart contract.
 - 🌐 **P2P** network, anyone can join.
 
 ---
@@ -139,7 +139,7 @@ Full documentation:
   locking, full slashing, fork-choice + reorg with a partition test), binary codec, fuzzing,
   network-upgrade governance. **Remaining**: **independent validators** (today on the maintainer's
   machines; this is the real decentralization milestone before mainnet).
-- **Phase 4 — No-code smart contracts**: 🟢 **8 templates** — vesting, escrow, multisig, **DAO**,
+- **Phase 4 — No-code smart contracts**: 🟢 **9 templates** — vesting, escrow, multisig, **DAO**,
   **presale**, **timelock**, **airdrop**, **streaming** — deployable **and operable** from the
   studio. Tokens gained **max-supply caps**, **burn** and display metadata. A **WASM** engine
   (arbitrary contracts): **wired into consensus on testnet/devnet** — deploy bytecode

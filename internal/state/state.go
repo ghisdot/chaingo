@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strconv"
 	"sync"
@@ -121,6 +122,12 @@ type Contract struct {
 	Price uint64 `json:"price,omitempty"`
 	// airdrop : destinataires ayant déjà réclamé leur part.
 	Claimed []string `json:"claimed,omitempty"`
+	// amm : pool de swap à produit constant. TokenID/Amount = jeton A / réserve A ;
+	// TokenB/ReserveB = jeton B / réserve B ; parts de liquidité (LP) par adresse.
+	TokenB      string            `json:"token_b,omitempty"`
+	ReserveB    uint64            `json:"reserve_b,omitempty"`
+	Shares      map[string]uint64 `json:"shares,omitempty"`
+	TotalShares uint64            `json:"total_shares,omitempty"`
 }
 
 // streamingVested : montant acquis à blockTime pour un flux linéaire entre
@@ -134,6 +141,72 @@ func streamingVested(c *Contract, blockTime int64) uint64 {
 	default:
 		return types.MulDiv(c.Amount, uint64(blockTime-c.StartMs), uint64(c.EndMs-c.StartMs))
 	}
+}
+
+// assertTokenBalance vérifie l'existence du jeton (si non natif) et que `acct`
+// en détient au moins `amount`.
+func (s *State) assertTokenBalance(acct *Account, token string, amount uint64) error {
+	if token != types.NativeToken {
+		if _, ok := s.Tokens[token]; !ok {
+			return fmt.Errorf("unknown token %q", token)
+		}
+	}
+	if acct.Balances[token] < amount {
+		return fmt.Errorf("insufficient %s balance", token)
+	}
+	return nil
+}
+
+// ammSwapOut : sortie d'un swap à produit constant avec frais de 0,3 % conservés
+// dans le pool (au bénéfice des LP) :
+//
+//	amtOut = rOut·(amtIn·997) / (rIn·1000 + amtIn·997)
+//
+// Calcul en big.Int pour éviter tout débordement uint64.
+func ammSwapOut(rIn, rOut, amtIn uint64) uint64 {
+	feeIn := new(big.Int).Mul(new(big.Int).SetUint64(amtIn), big.NewInt(997))
+	num := new(big.Int).Mul(new(big.Int).SetUint64(rOut), feeIn)
+	den := new(big.Int).Add(new(big.Int).Mul(new(big.Int).SetUint64(rIn), big.NewInt(1000)), feeIn)
+	if den.Sign() == 0 {
+		return 0
+	}
+	return new(big.Int).Quo(num, den).Uint64()
+}
+
+// ammCeilDiv : plafond de a·b/c (big.Int), utilisé pour la jambe B d'un ajout de
+// liquidité (arrondi en défaveur de l'apporteur, jamais des LP existants).
+func ammCeilDiv(a, b, c uint64) uint64 {
+	if c == 0 {
+		return 0
+	}
+	num := new(big.Int).Mul(new(big.Int).SetUint64(a), new(big.Int).SetUint64(b))
+	q, r := new(big.Int).QuoRem(num, new(big.Int).SetUint64(c), new(big.Int))
+	if r.Sign() != 0 {
+		q.Add(q, big.NewInt(1))
+	}
+	return q.Uint64()
+}
+
+// ammCGOInput : quantité de CGO que l'appelant envoie en entrée d'un swap/add
+// (0 si aucune jambe n'est en CGO) — sert à réserver le solde avant le débit des
+// frais. Pour `add`, réserve A = c.Amount, réserve B = c.ReserveB.
+func ammCGOInput(c *Contract, tx *types.Transaction) uint64 {
+	switch tx.Action {
+	case types.ActionSwap:
+		if tx.TokenID == types.NativeToken {
+			return tx.Amount
+		}
+	case types.ActionAdd:
+		var sum uint64
+		if c.TokenID == types.NativeToken {
+			sum += tx.Amount
+		}
+		if c.TokenB == types.NativeToken {
+			sum += ammCeilDiv(tx.Amount, c.ReserveB, c.Amount)
+		}
+		return sum
+	}
+	return 0
 }
 
 func (c *Contract) hasClaimed(addr string) bool {
@@ -756,10 +829,21 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 	if tx.Type == types.TxContractCreate && tx.Contract.TokenID == types.NativeToken {
 		needNative += tx.Contract.Amount
 	}
+	// amm : la 2e jambe verrouillée à la création, si c'est du CGO.
+	if tx.Type == types.TxContractCreate && tx.Contract.Template == types.TemplateAMM && tx.Contract.TokenB == types.NativeToken {
+		needNative += tx.Contract.AmountB
+	}
 	// presale : l'acheteur engage tx.Amount CGO (le coût réel ≤ ce montant est
 	// débité dans le handler ; on s'assure ici qu'il en dispose).
 	if tx.Type == types.TxContractExec && tx.Action == types.ActionBuy {
 		needNative += tx.Amount
+	}
+	// amm swap/add : réserve le CGO envoyé en entrée (pour que le débit de frais
+	// ultérieur ne puisse pas sous-flow le solde CGO).
+	if tx.Type == types.TxContractExec && (tx.Action == types.ActionSwap || tx.Action == types.ActionAdd) {
+		if c, ok := s.Contracts[tx.ContractID]; ok && c.Template == types.TemplateAMM {
+			needNative += ammCGOInput(c, tx)
+		}
 	}
 	if tx.Type == types.TxWasmCall {
 		needNative += tx.Amount // value (CGO) envoyée au contrat
@@ -939,18 +1023,18 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 		}
 	case types.TxContractCreate:
 		c := tx.Contract
-		if c.TokenID != types.NativeToken {
-			if _, ok := s.Tokens[c.TokenID]; !ok {
-				return fmt.Errorf("unknown token %q", c.TokenID)
-			}
-			if from.Balances[c.TokenID] < c.Amount {
-				return fmt.Errorf("insufficient %s balance to lock", c.TokenID)
+		if err := s.assertTokenBalance(from, c.TokenID, c.Amount); err != nil {
+			return err
+		}
+		if c.Template == types.TemplateAMM {
+			if err := s.assertTokenBalance(from, c.TokenB, c.AmountB); err != nil {
+				return err
 			}
 		}
 		// Les fonds quittent le créateur et sont verrouillés dans le contrat.
 		from.Balances[c.TokenID] -= c.Amount
 		id := tx.Hash()
-		s.Contracts[id] = &Contract{
+		ct := &Contract{
 			ID:          id,
 			Template:    c.Template,
 			Creator:     tx.From,
@@ -967,6 +1051,15 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			Status:      "active",
 			CreatedAt:   s.Height + 1,
 		}
+		if c.Template == types.TemplateAMM {
+			from.Balances[c.TokenB] -= c.AmountB
+			ct.TokenB = c.TokenB
+			ct.ReserveB = c.AmountB
+			// Parts LP initiales = réserve A ; 100 % au créateur.
+			ct.TotalShares = c.Amount
+			ct.Shares = map[string]uint64{tx.From: c.Amount}
+		}
+		s.Contracts[id] = ct
 	case types.TxContractExec:
 		c, ok := s.Contracts[tx.ContractID]
 		if !ok {
@@ -1153,6 +1246,81 @@ func (s *State) applyTx(tx *types.Transaction, proposer string, blockTime int64)
 			s.acct(c.Creator).Balances[c.TokenID] += c.Amount - c.Released
 			c.Released = c.Amount
 			c.Status = "cancelled"
+		case c.Template == types.TemplateAMM && tx.Action == types.ActionSwap:
+			// tx.TokenID = jeton ENVOYÉ ; on rend l'autre jeton du pool.
+			var rIn, rOut uint64
+			var tokenIn, tokenOut string
+			switch tx.TokenID {
+			case c.TokenID:
+				tokenIn, tokenOut, rIn, rOut = c.TokenID, c.TokenB, c.Amount, c.ReserveB
+			case c.TokenB:
+				tokenIn, tokenOut, rIn, rOut = c.TokenB, c.TokenID, c.ReserveB, c.Amount
+			default:
+				return fmt.Errorf("amm: %q is not part of this pool", tx.TokenID)
+			}
+			if from.Balances[tokenIn] < tx.Amount {
+				return fmt.Errorf("amm: insufficient %s balance", tokenIn)
+			}
+			out := ammSwapOut(rIn, rOut, tx.Amount)
+			if out == 0 || out >= rOut {
+				return errors.New("amm: output too small or exceeds reserve")
+			}
+			from.Balances[tokenIn] -= tx.Amount
+			from.Balances[tokenOut] += out
+			// Réserves : l'entrée (frais inclus) reste dans le pool.
+			if tx.TokenID == c.TokenID {
+				c.Amount += tx.Amount
+				c.ReserveB -= out
+			} else {
+				c.ReserveB += tx.Amount
+				c.Amount -= out
+			}
+		case c.Template == types.TemplateAMM && tx.Action == types.ActionAdd:
+			// Apport proportionnel : dA = tx.Amount (jeton A) ; dB au pro-rata.
+			dA := tx.Amount
+			dB := ammCeilDiv(dA, c.ReserveB, c.Amount)
+			if dB == 0 {
+				return errors.New("amm: add amount too small")
+			}
+			if from.Balances[c.TokenID] < dA {
+				return fmt.Errorf("amm: insufficient %s balance", c.TokenID)
+			}
+			if from.Balances[c.TokenB] < dB {
+				return fmt.Errorf("amm: insufficient %s balance (need %d)", c.TokenB, dB)
+			}
+			mint := types.MulDiv(c.TotalShares, dA, c.Amount)
+			if mint == 0 {
+				return errors.New("amm: contribution too small to mint LP shares")
+			}
+			from.Balances[c.TokenID] -= dA
+			from.Balances[c.TokenB] -= dB
+			c.Amount += dA
+			c.ReserveB += dB
+			c.TotalShares += mint
+			if c.Shares == nil {
+				c.Shares = map[string]uint64{}
+			}
+			c.Shares[tx.From] += mint
+		case c.Template == types.TemplateAMM && tx.Action == types.ActionRemove:
+			// Brûle des parts LP → rend A et B au pro-rata des réserves.
+			sh := tx.Amount
+			if c.Shares[tx.From] < sh {
+				return errors.New("amm: not enough LP shares")
+			}
+			dA := types.MulDiv(c.Amount, sh, c.TotalShares)
+			dB := types.MulDiv(c.ReserveB, sh, c.TotalShares)
+			if dA == 0 && dB == 0 {
+				return errors.New("amm: share amount too small")
+			}
+			c.Amount -= dA
+			c.ReserveB -= dB
+			c.TotalShares -= sh
+			c.Shares[tx.From] -= sh
+			if c.Shares[tx.From] == 0 {
+				delete(c.Shares, tx.From)
+			}
+			from.Balances[c.TokenID] += dA
+			from.Balances[c.TokenB] += dB
 		default:
 			return fmt.Errorf("action %q not valid for template %q", tx.Action, c.Template)
 		}

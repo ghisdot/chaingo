@@ -176,6 +176,12 @@ en cours · `[ ]` planifié.
 - [x] **Template DAO** (gouvernance on-chain) : trésorerie partagée, membres, propositions
       de paiement votées POUR/CONTRE, exécution au quorum, rejet auto si quorum
       inatteignable. CLI + studio + tests.
+- [x] **Templates presale, timelock, airdrop, streaming** : vente à prix fixe, blocage
+      daté, distribution en parts égales, flux linéaire annulable — déployables et
+      opérables depuis le studio (tests inclus).
+- [x] **Template AMM / pool de swap** : pool à produit constant (x·y=k, frais 0,3 %)
+      entre deux jetons — swap, ajout/retrait de liquidité (parts LP). Donne un marché
+      et un prix aux tokens. State + studio + tests.
 - [x] **Déploiement en un appel** API / une commande (`chaingo contract …`).
 - [x] **Moteur WASM** (contrats arbitraires en WebAssembly, façon ETH/BNB) — **câblé en
       consensus sur testnet/devnet** (`internal/wasmvm`, runtime wazero Go pur). Tx

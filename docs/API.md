@@ -20,7 +20,7 @@ des signatures ML-DSA-65 des transactions.
 | `GET /v1/search?q=<terme>` | recherche universelle : détecte hauteur / hash bloc / hash tx / adresse / symbole de token → renvoie `{type, ref, url}` |
 | `GET /v1/validators` | set actif : stake, délégations, blocs proposés, récompenses |
 | `GET /v1/tokens` · `GET /v1/tokens/{symbole}` | registre des tokens no-code |
-| `GET /v1/contracts` · `GET /v1/contracts/{id}` | smart contracts no-code (vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming) : statut, montants verrouillés/libérés, propositions |
+| `GET /v1/contracts` · `GET /v1/contracts/{id}` | smart contracts no-code (vesting, escrow, multisig, dao, presale, timelock, airdrop, streaming, amm) : statut, montants verrouillés/libérés, propositions |
 | `GET /v1/mempool` | taille de la file |
 | `GET /v1/genesis` | document de genèse — sert à rejoindre le réseau |
 
@@ -70,7 +70,7 @@ Corps = transaction **signée**. Tous les montants en ucgo (1 CGO = 10⁹ ucgo).
     "logo_uri": "https://…/logo.png", "description": "…", "website": "https://…"  // métadonnées (optionnel)
   },
   "contract": {                       // contract_create uniquement :
-    "template": "vesting",            // vesting | escrow | multisig | dao | presale | timelock | airdrop | streaming
+    "template": "vesting",            // vesting | escrow | multisig | dao | presale | timelock | airdrop | streaming | amm
     "token_id": "CGO", "amount": 100000000000,
     "beneficiary": "cg…", "start_ms": 1781300000000, "end_ms": 1783900000000, // vesting/timelock/streaming
     "seller": "cg…", "arbiter": "cg…",// escrow
@@ -78,7 +78,7 @@ Corps = transaction **signée**. Tous les montants en ucgo (1 CGO = 10⁹ ucgo).
     "price": 500000000                // presale : ucgo par unité de base du token vendu
   },
   "contract_id": "9066d8ac…",         // contract_exec : hash de la tx de création
-  "action": "claim",                  // contract_exec : claim | release | refund | propose | approve | reject | buy | cancel
+  "action": "claim",                  // contract_exec : claim | release | refund | propose | approve | reject | buy | cancel | swap | add | remove
   "proposal": 0,                      // multisig/dao approve|reject : index de proposition
   "timestamp": 1781234567890,
   "signature": "<base64>"             // ML-DSA-65 sur le JSON canonique sans `signature`
