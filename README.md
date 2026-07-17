@@ -55,6 +55,8 @@ Pas besoin d'installer quoi que ce soit. Tout passe par le navigateur :
 - [Guide de contribution](CONTRIBUTING.md) — règles du projet, processus,
   invariants à respecter (crypto post-quantique, déterminisme).
 - [Feuille de route](ROADMAP.md) — ce qui est livré, ce qui reste.
+- **[Quickstart développeur](docs/DEV-QUICKSTART.md)** — lire la chaîne et
+  envoyer des tx signées en quelques minutes (+ [dApp d'exemple](examples/dapp/pulse)).
 - [Référence API](docs/API.md) — pour développer des clients ou intégrer.
 - **[Rapport de revue de sécurité](docs/SECURITY-REVIEW.md)** — self-audit interne
   + dossier de preuve (consensus, état, anonymat zk-STARK), reproductible.

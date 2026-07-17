@@ -47,6 +47,8 @@ No install needed. Everything runs in the browser:
 - [Contributing guide](CONTRIBUTING.md) — project rules, process, invariants
   to respect (post-quantum crypto, determinism).
 - [Roadmap](ROADMAP.md) — what's shipped, what's left.
+- **[Developer quickstart](docs/DEV-QUICKSTART.en.md)** — read the chain and
+  send signed txs in minutes (+ [example dApp](examples/dapp/pulse)).
 - [API reference](docs/API.en.md) — for building clients or integrating.
 - **[Security review report](docs/SECURITY-REVIEW.en.md)** — internal self-audit +
   reproducible proof dossier (consensus, state, zk-STARK anonymity).

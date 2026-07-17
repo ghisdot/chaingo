@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChainGO Pulse — example dApp</title>
+<!--
+  ChainGO Pulse — a minimal, dependency-free example dApp.
+
+  It talks to a ChainGO node's public REST API (no keys, read-only) and shows
+  live network stats, recent blocks, and an address balance lookup. Fork it as a
+  starting point. To SIGN and SEND transactions, see docs/DEV-QUICKSTART.md
+  (post-quantum signing lives in the SDKs / the wallet WASM module).
+
+  Run it: open this file in a browser, or serve the folder
+  (`python3 -m http.server`), then point it at any node (default below).
+-->
+<style>
+  :root{--bg:#0b0f17;--card:#131b2c;--border:#1f2a40;--text:#e6edf6;--muted:#8b9bb4;--cyan:#22d3ee;--violet:#8b5cf6;--green:#34d399;--amber:#fbbf24;--red:#f87171}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,sans-serif;line-height:1.5}
+  .wrap{max-width:900px;margin:0 auto;padding:24px 18px}
+  h1{font-size:1.5rem;margin-bottom:2px}
+  h1 span{background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .muted{color:var(--muted);font-size:.85rem}
+  .bar{display:flex;gap:8px;align-items:center;margin:16px 0;flex-wrap:wrap}
+  input{padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:#0f1522;color:var(--text);font-size:.9rem}
+  button{cursor:pointer;padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--text);font-weight:600}
+  .pill{font-size:.78rem;padding:4px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+  .pill.ok{color:var(--green);border-color:rgba(52,211,153,.4)}
+  .pill.ko{color:var(--red);border-color:rgba(248,113,113,.4)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
+  .stat .v{font-size:1.5rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .stat .v.burn{color:var(--amber)} .stat .v.accent{color:var(--cyan)}
+  .stat .l{font-size:.76rem;color:var(--muted);text-transform:uppercase;margin-top:2px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0}
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-size:.74rem;text-transform:uppercase}
+  td.mono{font-family:ui-monospace,monospace;font-size:.78rem}
+  a{color:var(--cyan);text-decoration:none}
+  footer{color:var(--muted);font-size:.8rem;text-align:center;padding:24px 0}
+  code{font-family:ui-monospace,monospace;background:#0f1522;padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ChainGO <span>Pulse</span></h1>
+  <p class="muted">A minimal example dApp — reads a ChainGO node's public REST API. <a href="https://github.com/ghisdot/chaingo/blob/main/docs/DEV-QUICKSTART.md">Dev quickstart →</a></p>
+
+  <div class="bar">
+    <span class="muted">Node:</span>
+    <input id="node" style="flex:1;min-width:220px" placeholder="https://node.chaingo.org">
+    <button onclick="save()">Connect</button>
+    <span id="net" class="pill">…</span>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="v accent" id="sHeight">—</div><div class="l">Block height</div></div>
+    <div class="stat"><div class="v" id="sFinal">—</div><div class="l">Finalized</div></div>
+    <div class="stat"><div class="v" id="sSupply">—</div><div class="l">Supply (CGO)</div></div>
+    <div class="stat"><div class="v burn" id="sBurn">—</div><div class="l">Burned (CGO)</div></div>
+    <div class="stat"><div class="v" id="sVals">—</div><div class="l">Validators</div></div>
+    <div class="stat"><div class="v" id="sPool">—</div><div class="l">Pending tx</div></div>
+  </div>
+
+  <div class="card">
+    <div class="bar" style="margin:0 0 8px">
+      <b style="flex:1">Address balance</b>
+      <input id="addr" style="flex:2;min-width:200px" placeholder="cg…">
+      <button onclick="lookup()">Look up</button>
+    </div>
+    <div id="acct" class="muted">Enter a <code>cg…</code> address to see its balances and nonce.</div>
+  </div>
+
+  <div class="card">
+    <b>Recent blocks</b>
+    <div id="blocks"><p class="muted" style="margin-top:8px">—</p></div>
+  </div>
+
+  <footer>Example dApp · <a href="https://github.com/ghisdot/chaingo">github.com/ghisdot/chaingo</a> · Apache 2.0</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let node = localStorage.getItem("pulse_node") || defaultNode();
+
+function defaultNode(){
+  const h = location.hostname;
+  if (h === "chaingo.org" || h === "www.chaingo.org") return "https://node.chaingo.org";
+  if (location.protocol === "file:") return "http://127.0.0.1:8545";
+  return location.origin;
+}
+function save(){ node = $("node").value.trim().replace(/\/$/, ""); localStorage.setItem("pulse_node", node); refresh(); }
+
+async function api(path){
+  const r = await fetch(node + path);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+const nf = n => Number(n).toLocaleString("en-US");
+const cgo = ucgo => (Number(ucgo) / 1e9).toLocaleString("en-US", { maximumFractionDigits: 4 });
+
+async function refresh(){
+  try{
+    const s = await api("/v1/status");
+    $("net").className = "pill ok";
+    $("net").textContent = "● " + s.chain_id + " · " + s.pq_signature;
+    $("sHeight").textContent = nf(s.height);
+    $("sFinal").textContent  = nf(s.finalized_height);
+    $("sSupply").textContent = cgo(s.supply.total);
+    $("sBurn").textContent   = cgo(s.supply.burned);
+    $("sVals").textContent   = nf(s.validators);
+    $("sPool").textContent   = nf(s.mempool);
+    loadBlocks(s.height);
+  }catch(e){
+    $("net").className = "pill ko";
+    $("net").textContent = "● offline";
+  }
+}
+
+async function loadBlocks(height){
+  const rows = [];
+  for (let h = height; h > Math.max(0, height - 8); h--){
+    try{
+      const b = await api("/v1/blocks/" + h);
+      const hdr = b.header || b;
+      rows.push(`<tr><td>#${nf(hdr.height)}</td><td>${(b.txs||[]).length} tx</td>
+        <td class="mono">${(hdr.proposer||"").slice(0,12)}…</td>
+        <td class="mono">${(b.hash||hdr.state_root||"").slice(0,14)}…</td></tr>`);
+    }catch{}
+  }
+  $("blocks").innerHTML = rows.length
+    ? `<table><tr><th>Height</th><th>Txs</th><th>Proposer</th><th>Hash</th></tr>${rows.join("")}</table>`
+    : `<p class="muted" style="margin-top:8px">No blocks yet.</p>`;
+}
+
+async function lookup(){
+  const a = $("addr").value.trim();
+  if (!a) return;
+  try{
+    const acc = await api("/v1/accounts/" + a);
+    const bals = Object.entries(acc.balances || {})
+      .map(([k, v]) => `<tr><td><b>${k}</b></td><td>${k === "CGO" ? cgo(v) : nf(v)}</td></tr>`).join("");
+    $("acct").innerHTML = `<div class="mono" style="margin-bottom:6px">${a}</div>
+      <table><tr><th>Token</th><th>Balance</th></tr>${bals || '<tr><td colspan=2 class="muted">no balances</td></tr>'}</table>
+      <p class="muted" style="margin-top:6px">nonce: ${acc.nonce || 0}</p>`;
+  }catch(e){
+    $("acct").innerHTML = `<span style="color:var(--red)">Not found / ${e.message}</span>`;
+  }
+}
+
+// init
+$("node").value = node;
+refresh();
+setInterval(refresh, 5000); // live poll
+</script>
+</body>
+</html>
